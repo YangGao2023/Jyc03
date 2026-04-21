@@ -1,0 +1,410 @@
+import { existsSync, readFileSync } from "node:fs";
+import path from "node:path";
+
+type TaskCard = {
+  id: string;
+  title: string;
+  owner: string;
+  priority: string;
+  status: string;
+  source: string;
+  blockedBy: string;
+  nextAction: string;
+  notes: string;
+  createdAt: string;
+  updatedAt: string;
+};
+
+type EventItem = {
+  stamp: string;
+  actor: string;
+  type: string;
+  task: string;
+  result: string;
+};
+
+function safeRead(filePath: string) {
+  return existsSync(filePath) ? readFileSync(filePath, "utf8") : "";
+}
+
+function getSortValue(value: string) {
+  const normalized = value.trim();
+  const parsed = Date.parse(normalized.replace(" ", "T"));
+  return Number.isNaN(parsed) ? normalized : parsed;
+}
+
+function parseTaskQueue(raw: string): TaskCard[] {
+  return raw
+    .split(/\r?\n(?=### \[TASK-)/)
+    .filter((block) => /^### \[TASK-\d+\]/.test(block.trim()))
+    .map((block) => {
+      const lines = block.split(/\r?\n/);
+      const heading = lines[0] || "";
+      const match = heading.match(/^### \[(TASK-\d+)\]\s+(.+)$/);
+      const getField = (name: string) => lines.find((line) => line.trim().startsWith(`- ${name}:`))?.split(":").slice(1).join(":").trim() || "-";
+      return {
+        id: match?.[1] || "TASK-???",
+        title: match?.[2] || "未命名任务",
+        owner: getField("owner"),
+        priority: getField("priority"),
+        status: getField("status"),
+        source: getField("source"),
+        blockedBy: getField("blocked_by"),
+        nextAction: getField("next_action"),
+        notes: getField("notes"),
+        createdAt: getField("created_at"),
+        updatedAt: getField("updated_at"),
+      };
+    });
+}
+
+function parseEventStream(raw: string): EventItem[] {
+  return raw
+    .split(/\r?\n/)
+    .filter((line) => line.trim().startsWith("- ["))
+    .map((line) => {
+      const match = line.match(/^\- \[(.+?)\]\s+actor=(.+?)\s+type=(.+?)\s+task=(.+?)\s+result=(.+)$/);
+      return {
+        stamp: match?.[1] || "未知时间",
+        actor: match?.[2] || "未知",
+        type: match?.[3] || "unknown",
+        task: match?.[4] || "-",
+        result: match?.[5] || line.trim(),
+      };
+    });
+}
+
+function statusTone(value: string) {
+  const normalized = value.trim().toLowerCase();
+  if (["in_progress", "进行中"].includes(normalized)) return "bg-sky-100 text-sky-800";
+  if (["done", "已完成"].includes(normalized)) return "bg-emerald-100 text-emerald-800";
+  if (["blocked", "阻塞"].includes(normalized)) return "bg-rose-100 text-rose-800";
+  if (["new", "待开始"].includes(normalized)) return "bg-amber-100 text-amber-800";
+  if (["claimed", "已认领"].includes(normalized)) return "bg-violet-100 text-violet-800";
+  return "bg-slate-100 text-slate-700";
+}
+
+function displayStatus(value: string) {
+  const normalized = value.trim().toLowerCase();
+  if (normalized === "in_progress") return "进行中";
+  if (normalized === "done") return "已完成";
+  if (normalized === "blocked") return "阻塞";
+  if (normalized === "new") return "待开始";
+  if (normalized === "claimed") return "已认领";
+  return value;
+}
+
+function displayEventType(value: string) {
+  const normalized = value.trim().toLowerCase();
+  if (normalized === "status_change") return "状态变更";
+  if (normalized === "task_created") return "任务创建";
+  if (normalized === "task_claimed") return "任务认领";
+  if (normalized === "handoff") return "交接";
+  if (normalized === "decision") return "决策";
+  if (normalized === "blocked") return "阻塞";
+  if (normalized === "completed") return "完成";
+  if (normalized === "unknown") return "未知事件";
+  return value;
+}
+
+export default async function DashboardTasksPage({
+  searchParams,
+}: {
+  searchParams?: Promise<{ taskFilter?: string }>;
+}) {
+  const resolvedSearchParams = (await searchParams) ?? {};
+  const taskFilter = ["in_progress", "todo", "blocked", "all"].includes(resolvedSearchParams.taskFilter || "")
+    ? resolvedSearchParams.taskFilter || "in_progress"
+    : "in_progress";
+
+  const taskPath = path.join(process.cwd(), "..", "共享协作区", "任务", "任务队列.md");
+  const eventPath = path.join(process.cwd(), "..", "共享协作区", "日志", "事件流.md");
+  const tasks = parseTaskQueue(safeRead(taskPath)).sort((a, b) => {
+    const left = getSortValue(a.updatedAt);
+    const right = getSortValue(b.updatedAt);
+    if (typeof left === "number" && typeof right === "number") return right - left;
+    return String(right).localeCompare(String(left));
+  });
+  const events = parseEventStream(safeRead(eventPath));
+
+  const filterCounts = {
+    in_progress: tasks.filter((task) => task.status === "in_progress").length,
+    todo: tasks.filter((task) => ["new", "claimed"].includes(task.status)).length,
+    blocked: tasks.filter((task) => task.status === "blocked").length,
+    all: tasks.filter((task) => task.status !== "done").length,
+  };
+
+  const visibleTasks = taskFilter === "all"
+    ? tasks.filter((task) => task.status !== "done")
+    : taskFilter === "blocked"
+      ? tasks.filter((task) => task.status === "blocked")
+      : taskFilter === "todo"
+        ? tasks.filter((task) => ["new", "claimed"].includes(task.status))
+        : tasks.filter((task) => task.status === "in_progress");
+
+  const emptyStateLabel = taskFilter === "blocked"
+    ? "当前没有阻塞任务"
+    : taskFilter === "todo"
+      ? "当前没有待处理任务"
+      : taskFilter === "all"
+        ? "当前没有未完成任务"
+        : "当前没有进行中的任务";
+
+  return (
+    <div className="rounded-[30px] border border-white/10 bg-[linear-gradient(180deg,_rgba(15,23,42,0.98),_rgba(3,7,18,0.98))] p-4 shadow-2xl">
+          <div className="rounded-[24px] border border-white/10 bg-white/5 p-4">
+            <div className="flex flex-wrap items-center justify-between gap-3">
+              <div>
+                <p className="text-[11px] uppercase tracking-[0.28em] text-sky-300">Owner Backend · Tasks</p>
+                <h1 className="mt-2 text-2xl font-semibold text-white">任务执行台</h1>
+                <p className="mt-2 max-w-3xl text-sm leading-6 text-slate-300">这一页只看正式任务，不把记忆和系统信号混在一起。重点是当前谁在做、卡在哪里、下一步是什么。</p>
+              </div>
+              <a href="/dashboard" className="rounded-2xl border border-white/10 bg-white px-4 py-2 text-sm font-semibold text-slate-950">返回后台</a>
+            </div>
+
+            <form action="/api/task-create" method="POST" className="mt-4 rounded-2xl border border-white/10 bg-white/5 p-4">
+              <input type="hidden" name="returnTo" value={`/dashboard/tasks?taskFilter=${taskFilter}`} />
+              <div className="flex flex-wrap items-center justify-between gap-3">
+                <div>
+                  <p className="text-sm font-semibold text-white">新增正式任务</p>
+                  <p className="mt-1 text-xs text-slate-300">直接从任务台写入任务队列和事件流。</p>
+                </div>
+              </div>
+              <div className="mt-4 grid gap-3 md:grid-cols-2 xl:grid-cols-4">
+                <label className="text-xs font-medium text-slate-200">
+                  标题
+                  <input name="title" className="mt-1 w-full rounded-xl border border-white/10 bg-slate-900/80 px-3 py-2 text-sm text-white outline-none" placeholder="比如：接真实产品照片到前台" />
+                </label>
+                <label className="text-xs font-medium text-slate-200">
+                  负责人
+                  <select name="owner" defaultValue="待定" className="mt-1 w-full rounded-xl border border-white/10 bg-slate-900/80 px-3 py-2 text-sm text-white outline-none">
+                    {["待定", "阿三", "阿本", "小四", "西风", "零号"].map((owner) => (
+                      <option key={owner} value={owner}>{owner}</option>
+                    ))}
+                  </select>
+                </label>
+                <label className="text-xs font-medium text-slate-200">
+                  优先级
+                  <select name="priority" defaultValue="P2" className="mt-1 w-full rounded-xl border border-white/10 bg-slate-900/80 px-3 py-2 text-sm text-white outline-none">
+                    {["P0", "P1", "P2", "P3"].map((priority) => (
+                      <option key={priority} value={priority}>{priority}</option>
+                    ))}
+                  </select>
+                </label>
+                <label className="text-xs font-medium text-slate-200">
+                  来源
+                  <input name="source" defaultValue="老板后台新增任务" className="mt-1 w-full rounded-xl border border-white/10 bg-slate-900/80 px-3 py-2 text-sm text-white outline-none" />
+                </label>
+              </div>
+              <div className="mt-3 grid gap-3 md:grid-cols-[1.3fr_0.7fr]">
+                <label className="text-xs font-medium text-slate-200">
+                  下一步
+                  <input name="nextAction" defaultValue="待补充" className="mt-1 w-full rounded-xl border border-white/10 bg-slate-900/80 px-3 py-2 text-sm text-white outline-none" />
+                </label>
+                <label className="text-xs font-medium text-slate-200">
+                  备注
+                  <input name="notes" className="mt-1 w-full rounded-xl border border-white/10 bg-slate-900/80 px-3 py-2 text-sm text-white outline-none" placeholder="可留空" />
+                </label>
+              </div>
+              <button className="mt-4 rounded-2xl bg-white px-4 py-2 text-sm font-semibold text-slate-950 transition hover:bg-slate-100">
+                新建任务
+              </button>
+            </form>
+
+            <div className="mt-4 flex flex-wrap gap-2">
+              {[
+                ["in_progress", "进行中"],
+                ["todo", "待处理"],
+                ["blocked", "阻塞"],
+                ["all", "全部未完成"],
+              ].map(([value, label]) => {
+                const active = taskFilter === value;
+                return (
+                  <a
+                    key={value}
+                    href={`/dashboard/tasks?taskFilter=${value}`}
+                    className={`rounded-full border px-3 py-1.5 text-xs font-semibold transition ${
+                      active ? "border-white bg-white text-slate-950" : "border-white/10 bg-white/5 text-slate-200 hover:bg-white/10"
+                    }`}
+                  >
+                    {label} · {filterCounts[value as keyof typeof filterCounts]}
+                  </a>
+                );
+              })}
+            </div>
+          </div>
+
+          <div className="mt-4 grid gap-4 xl:grid-cols-[1.05fr_0.95fr]">
+            <section className="rounded-[24px] bg-white p-4 text-slate-900 shadow-sm">
+              <div className="flex items-center justify-between gap-3">
+                <div>
+                  <p className="text-sm font-medium text-sky-700">当前任务</p>
+                  <p className="mt-1 text-sm text-slate-500">按状态筛选后的正式任务列表</p>
+                </div>
+                <span className="rounded-full bg-slate-900 px-3 py-1 text-xs font-semibold text-white">{visibleTasks.length} / {tasks.length} 条</span>
+              </div>
+
+              <div className="mt-4 grid gap-3">
+                {visibleTasks.length > 0 ? visibleTasks.map((task) => {
+                  const relatedEvents = events.filter((event) => event.task === task.id).slice(-2).reverse();
+                  return (
+                    <div key={task.id} className="rounded-2xl border border-slate-200 bg-slate-50 p-4">
+                      <div className="flex flex-wrap items-center justify-between gap-3">
+                        <div>
+                          <p className="text-sm font-semibold text-slate-900">{task.id} · {task.title}</p>
+                          <p className="mt-1 text-xs text-slate-500">负责人：{task.owner}</p>
+                        </div>
+                        <div className="flex flex-wrap gap-2">
+                          <span className={`rounded-full px-2.5 py-0.5 text-[11px] font-semibold ${statusTone(task.priority)}`}>{task.priority}</span>
+                          <span className={`rounded-full px-2.5 py-0.5 text-[11px] font-semibold ${statusTone(task.status)}`}>{displayStatus(task.status)}</span>
+                        </div>
+                      </div>
+                      <p className="mt-3 text-sm leading-6 text-slate-600">来源：{task.source}</p>
+                      <p className="mt-1 text-sm leading-6 text-slate-600">下一步：{task.nextAction}</p>
+                      {task.notes && task.notes !== "-" ? <p className="mt-1 text-sm leading-6 text-slate-600">备注：{task.notes}</p> : null}
+                      <p className="mt-1 text-xs text-slate-500">创建时间：{task.createdAt}</p>
+                      <p className="mt-1 text-xs text-slate-500">最近更新：{task.updatedAt}</p>
+                      {task.blockedBy && task.blockedBy !== "-" ? (
+                        task.status === "blocked" ? (
+                          <p className="mt-2 text-sm leading-6 text-rose-700">阻塞原因：{task.blockedBy}</p>
+                        ) : (
+                          <div className="mt-3 rounded-2xl border border-slate-200 bg-white p-3">
+                            <p className="text-[11px] font-semibold uppercase tracking-[0.2em] text-slate-500">系统备注</p>
+                            <p className="mt-2 text-sm leading-6 text-slate-600">{task.blockedBy}</p>
+                          </div>
+                        )
+                      ) : null}
+                      <div className="mt-3 rounded-2xl border border-slate-200 bg-white p-3">
+                        <p className="text-[11px] font-semibold uppercase tracking-[0.2em] text-slate-500">最近动作 · {relatedEvents.length} 条</p>
+                        {relatedEvents.length > 0 ? (
+                          <div className="mt-2 space-y-2">
+                            {relatedEvents.map((event, index) => (
+                              <div key={`${event.stamp}-${index}`} className="rounded-xl bg-slate-50 px-3 py-2 text-xs text-slate-600">
+                                <span className="font-medium text-slate-800">{displayEventType(event.type)}</span>
+                                <span className="mx-2 text-slate-400">·</span>
+                                <span>{event.result}</span>
+                                <span className="mx-2 text-slate-300">·</span>
+                                <span>{event.actor}</span>
+                                <span className="mx-2 text-slate-300">·</span>
+                                <span className="text-slate-400">{event.stamp}</span>
+                              </div>
+                            ))}
+                          </div>
+                        ) : (
+                          <div className="mt-2 rounded-xl bg-slate-50 px-3 py-2 text-xs text-slate-500">暂无最近动作</div>
+                        )}
+                      </div>
+
+                      <form action="/api/task-owner" method="POST" className="mt-3 flex flex-wrap items-center gap-2 rounded-2xl border border-slate-200 bg-white p-3">
+                        <input type="hidden" name="taskId" value={task.id} />
+                        <input type="hidden" name="returnTo" value={`/dashboard/tasks?taskFilter=${taskFilter}`} />
+                        <span className="text-xs font-semibold text-slate-600">负责人</span>
+                        <select name="owner" defaultValue={task.owner} className="rounded-xl border border-slate-200 bg-slate-50 px-3 py-1.5 text-xs font-medium text-slate-700 outline-none">
+                          {["阿三", "阿本", "小四", "西风", "零号", "待定"].map((owner) => (
+                            <option key={owner} value={owner}>{owner}</option>
+                          ))}
+                        </select>
+                        <button type="submit" className="rounded-full border border-slate-200 bg-slate-50 px-3 py-1.5 text-xs font-medium text-slate-700 transition hover:bg-slate-100">
+                          更新负责人
+                        </button>
+                      </form>
+
+                      <form action="/api/task-status" method="POST" className="mt-3 flex flex-wrap gap-2">
+                        <input type="hidden" name="taskId" value={task.id} />
+                        <input type="hidden" name="returnTo" value={`/dashboard/tasks?taskFilter=${taskFilter}`} />
+                        {[
+                          ["new", "待开始"],
+                          ["claimed", "已认领"],
+                          ["in_progress", "进行中"],
+                          ["blocked", "阻塞"],
+                          ["done", "已完成"],
+                        ].map(([value, label]) => {
+                          const isActive = task.status === value;
+                          return (
+                            <button
+                              key={value}
+                              type="submit"
+                              name="status"
+                              value={value}
+                              disabled={isActive}
+                              className={`rounded-full border px-3 py-1.5 text-xs font-medium transition ${
+                                isActive
+                                  ? `${statusTone(value)} cursor-default border-transparent`
+                                  : "border-slate-200 bg-white text-slate-700 hover:bg-slate-100"
+                              }`}
+                            >
+                              {isActive ? `当前：${label}` : label}
+                            </button>
+                          );
+                        })}
+                      </form>
+
+                      <form action="/api/task-meta" method="POST" className="mt-3 rounded-2xl border border-slate-200 bg-white p-3">
+                        <input type="hidden" name="taskId" value={task.id} />
+                        <input type="hidden" name="returnTo" value={`/dashboard/tasks?taskFilter=${taskFilter}`} />
+                        <div className="grid gap-3 sm:grid-cols-2">
+                          <label className="text-xs font-medium text-slate-600">
+                            下一步
+                            <input
+                              name="nextAction"
+                              defaultValue={task.nextAction === "-" ? "" : task.nextAction}
+                              className="mt-1 w-full rounded-xl border border-slate-200 bg-slate-50 px-3 py-2 text-xs text-slate-700 outline-none"
+                            />
+                          </label>
+                          <label className="text-xs font-medium text-slate-600">
+                            备注 / 阻塞说明
+                            <input
+                              name="blockedBy"
+                              defaultValue={task.blockedBy === "-" ? "" : task.blockedBy}
+                              placeholder="没有就留空"
+                              className="mt-1 w-full rounded-xl border border-slate-200 bg-slate-50 px-3 py-2 text-xs text-slate-700 outline-none"
+                            />
+                          </label>
+                        </div>
+                        <button type="submit" className="mt-3 rounded-full border border-slate-200 bg-slate-50 px-3 py-1.5 text-xs font-medium text-slate-700 transition hover:bg-slate-100">
+                          更新任务说明
+                        </button>
+                      </form>
+                    </div>
+                  );
+                }) : (
+                  <div className="rounded-2xl border border-dashed border-slate-200 bg-slate-50 px-4 py-6 text-sm text-slate-500">{emptyStateLabel}</div>
+                )}
+              </div>
+            </section>
+
+            <section className="space-y-4">
+              <div className="rounded-[24px] bg-white p-4 text-slate-900 shadow-sm">
+                <p className="text-sm font-medium text-sky-700">任务判断规则</p>
+                <div className="mt-4 grid gap-3 sm:grid-cols-2">
+                  {[
+                    ["正式任务", "必须进入任务队列，不能把所有聊天都算成执行中"],
+                    ["进行中", "已经明确 owner 并有下一步动作"],
+                    ["阻塞", "必须写出卡点，而不是只写稍等"],
+                    ["待处理", "还没真正进入执行，但已经进入正式管理"],
+                  ].map(([title, desc]) => (
+                    <div key={title} className="rounded-2xl border border-slate-200 bg-slate-50 p-4">
+                      <p className="text-sm font-semibold text-slate-900">{title}</p>
+                      <p className="mt-2 text-sm leading-6 text-slate-600">{desc}</p>
+                    </div>
+                  ))}
+                </div>
+              </div>
+
+              <div className="rounded-[24px] bg-white p-4 text-slate-900 shadow-sm">
+                <div className="flex items-center justify-between gap-3">
+                  <div>
+                    <p className="text-sm font-medium text-sky-700">下一步入口</p>
+                    <p className="mt-1 text-sm text-slate-500">任务台之外的常用跳转</p>
+                  </div>
+                </div>
+                <div className="mt-4 grid gap-3 sm:grid-cols-2">
+                  <a href="/dashboard/overview" className="rounded-2xl border border-slate-200 bg-slate-50 p-4 text-sm font-semibold text-slate-900">回总览页</a>
+                  <a href="/dashboard/system" className="rounded-2xl border border-slate-200 bg-slate-50 p-4 text-sm font-semibold text-slate-900">看系统页</a>
+                </div>
+              </div>
+            </section>
+          </div>
+    </div>
+  );
+}

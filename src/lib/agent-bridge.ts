@@ -1,5 +1,5 @@
 import crypto from "node:crypto";
-import { kv } from "@vercel/kv";
+import { createClient } from "redis";
 
 export type BridgeMessage = {
   id: string;
@@ -13,6 +13,7 @@ export type BridgeMessage = {
 
 const NONCE_TTL_SECONDS = 60 * 5;
 const MAX_SKEW_MS = 1000 * 60 * 5;
+let redisPromise: Promise<ReturnType<typeof createClient>> | null = null;
 
 function requiredEnv(name: string) {
   const value = process.env[name];
@@ -26,6 +27,14 @@ export function bridgeSecret() {
   return requiredEnv("AGENT_BRIDGE_HMAC_SECRET");
 }
 
+async function redis() {
+  if (!redisPromise) {
+    const client = createClient({ url: requiredEnv("REDIS_URL") });
+    redisPromise = client.connect().then(() => client);
+  }
+  return redisPromise;
+}
+
 function queueKey(name: "inbox" | "outbox") {
   return `agent-bridge:${name}`;
 }
@@ -35,11 +44,14 @@ function nonceKey(nonce: string) {
 }
 
 export async function readQueue(name: "inbox" | "outbox") {
-  return (await kv.get<BridgeMessage[]>(queueKey(name))) ?? [];
+  const client = await redis();
+  const raw = await client.get(queueKey(name));
+  return raw ? (JSON.parse(raw) as BridgeMessage[]) : [];
 }
 
 export async function writeQueue(name: "inbox" | "outbox", messages: BridgeMessage[]) {
-  await kv.set(queueKey(name), messages);
+  const client = await redis();
+  await client.set(queueKey(name), JSON.stringify(messages));
 }
 
 export async function enqueueMessage(name: "inbox" | "outbox", message: Omit<BridgeMessage, "id" | "createdAt"> & Partial<Pick<BridgeMessage, "id" | "createdAt">>) {
@@ -86,20 +98,20 @@ export async function verifyBridgeRequest(request: Request) {
     throw new Error("Timestamp outside allowed window");
   }
 
-  const replay = await kv.set(nonceKey(nonce), "1", { nx: true, ex: NONCE_TTL_SECONDS });
-  if (replay !== "OK") {
-    throw new Error("Replay detected");
-  }
-
   const bodyText = request.method === "GET" || request.method === "HEAD" ? "" : await request.text();
   const payload = [timestamp, nonce, request.method.toUpperCase(), new URL(request.url).pathname, bodyText].join(".");
   const expected = crypto.createHmac("sha256", bridgeSecret()).update(payload).digest("hex");
   if (signature.length !== expected.length) {
     throw new Error("Invalid signature");
   }
-
   if (!crypto.timingSafeEqual(Buffer.from(signature, "utf8"), Buffer.from(expected, "utf8"))) {
     throw new Error("Invalid signature");
+  }
+
+  const client = await redis();
+  const replay = await client.set(nonceKey(nonce), "1", { NX: true, EX: NONCE_TTL_SECONDS });
+  if (replay !== "OK") {
+    throw new Error("Replay detected");
   }
 
   return { bodyText };

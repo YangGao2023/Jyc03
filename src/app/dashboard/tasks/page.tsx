@@ -1,5 +1,6 @@
 import { DashboardCard, DashboardCardTitle, DashboardPageHeader } from "../components";
 import { EVENT_STREAM_PATH, TASK_QUEUE_PATH, getSortValue, parseEventStream, parseTaskQueue, safeRead } from "@/lib/task-board";
+import { parseTodoBoard, readTodoBoard } from "@/lib/todo-board";
 
 function statusTone(value: string) {
   const normalized = value.trim().toLowerCase();
@@ -54,6 +55,8 @@ export default async function DashboardTasksPage({
     return String(right).localeCompare(String(left));
   });
   const events = parseEventStream(safeRead(EVENT_STREAM_PATH));
+  const todos = parseTodoBoard(readTodoBoard());
+  const activeTodos = todos.filter((todo) => todo.section === "active");
 
   const filterCounts = {
     in_progress: tasks.filter((task) => task.status === "in_progress").length,
@@ -308,6 +311,47 @@ export default async function DashboardTasksPage({
             </DashboardCard>
 
             <section className="space-y-4">
+              <DashboardCard>
+                <DashboardCardTitle
+                  title="TODO 联动"
+                  desc="把老板视角的开放待办，提升成正式任务"
+                  right={<span className="rounded-full bg-slate-900 px-3 py-1 text-xs font-semibold text-white">{activeTodos.length} 条</span>}
+                />
+                <div className="mt-4 grid gap-3">
+                  {activeTodos.slice(0, 6).map((todo) => {
+                    const linkedCount = tasks.filter((task) => `${task.source} ${task.notes} ${task.title}`.includes(todo.id)).length;
+                    return (
+                      <div key={todo.id} className="rounded-2xl border border-slate-200 bg-slate-50 p-4">
+                        <div className="flex flex-wrap items-start justify-between gap-3">
+                          <div>
+                            <p className="text-sm font-semibold text-slate-900">{todo.id} · {todo.title}</p>
+                            <p className="mt-1 text-xs text-slate-500">{todo.status}</p>
+                          </div>
+                          <span className="rounded-full bg-white px-3 py-1 text-xs font-semibold text-slate-700">已挂任务 {linkedCount}</span>
+                        </div>
+                        {todo.goal !== "-" ? <p className="mt-3 text-sm leading-6 text-slate-600">目标：{todo.goal}</p> : null}
+                        {todo.nextStep !== "-" ? <p className="mt-1 text-sm leading-6 text-slate-600">下一步：{todo.nextStep}</p> : null}
+                        <form action="/api/task-create" method="POST" className="mt-3">
+                          <input type="hidden" name="title" value={`${todo.title}`} />
+                          <input type="hidden" name="owner" value="待定" />
+                          <input type="hidden" name="priority" value="P2" />
+                          <input type="hidden" name="source" value={`TODO.md / ${todo.id}`} />
+                          <input type="hidden" name="nextAction" value={todo.nextStep !== "-" ? todo.nextStep : "待补充"} />
+                          <input type="hidden" name="notes" value={todo.goal !== "-" ? `来自 ${todo.id}；目标：${todo.goal}` : `来自 ${todo.id}`} />
+                          <input type="hidden" name="returnTo" value={`/dashboard/tasks?taskFilter=${taskFilter}`} />
+                          <button type="submit" className="rounded-full border border-slate-200 bg-white px-3 py-1.5 text-xs font-medium text-slate-700 transition hover:bg-slate-100">
+                            提升成正式任务
+                          </button>
+                        </form>
+                      </div>
+                    );
+                  })}
+                  {activeTodos.length === 0 ? (
+                    <div className="rounded-2xl border border-dashed border-slate-200 bg-slate-50 px-4 py-6 text-sm text-slate-500">当前没有进行中的 TODO 条目</div>
+                  ) : null}
+                </div>
+              </DashboardCard>
+
               <DashboardCard>
                 <DashboardCardTitle title="任务判断规则" />
                 <div className="mt-4 grid gap-3 sm:grid-cols-2">

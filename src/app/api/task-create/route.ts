@@ -1,15 +1,5 @@
-import { readFileSync, writeFileSync } from "node:fs";
-import path from "node:path";
 import { NextResponse } from "next/server";
-
-const TASK_QUEUE_PATH = path.join(process.cwd(), "..", "共享协作区", "任务", "任务队列.md");
-const EVENT_STREAM_PATH = path.join(process.cwd(), "..", "共享协作区", "日志", "事件流.md");
-
-function nextTaskId(raw: string) {
-  const ids = [...raw.matchAll(/### \[TASK-(\d+)\]/g)].map((match) => Number(match[1]));
-  const max = ids.length > 0 ? Math.max(...ids) : 0;
-  return `TASK-${String(max + 1).padStart(3, "0")}`;
-}
+import { appendEvent, nextTaskId, nowStamp, readTaskQueue, writeTaskQueue } from "@/lib/task-board";
 
 export async function POST(request: Request) {
   const formData = await request.formData();
@@ -25,9 +15,9 @@ export async function POST(request: Request) {
     return NextResponse.json({ ok: false, error: "Missing title" }, { status: 400 });
   }
 
-  const raw = readFileSync(TASK_QUEUE_PATH, "utf8");
+  const raw = readTaskQueue();
   const taskId = nextTaskId(raw);
-  const stamp = new Date().toISOString().slice(0, 16).replace("T", " ");
+  const stamp = nowStamp();
   const status = owner !== "待定" ? "claimed" : "new";
   const block = [
     `### [${taskId}] ${title}`,
@@ -42,11 +32,8 @@ export async function POST(request: Request) {
     `- notes: ${notes}`,
   ].join("\n");
 
-  writeFileSync(TASK_QUEUE_PATH, raw.trimEnd() + `\n\n${block}\n`, "utf8");
-
-  const eventRaw = readFileSync(EVENT_STREAM_PATH, "utf8");
-  const entry = `- [${stamp}] actor=阿三 type=decision task=${taskId} result=created task; owner=${owner}; priority=${priority}; next=${nextAction}`;
-  writeFileSync(EVENT_STREAM_PATH, eventRaw.trimEnd() + `\n${entry}\n`, "utf8");
+  writeTaskQueue(raw.trimEnd() + `\n\n${block}\n`);
+  appendEvent(taskId, "task_created", `created task; owner=${owner}; priority=${priority}; next=${nextAction}`);
 
   return new NextResponse(null, {
     status: 303,

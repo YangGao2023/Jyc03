@@ -1,79 +1,5 @@
-import { existsSync, readFileSync } from "node:fs";
-import path from "node:path";
 import { DashboardCard, DashboardCardTitle, DashboardPageHeader } from "../components";
-
-type TaskCard = {
-  id: string;
-  title: string;
-  owner: string;
-  priority: string;
-  status: string;
-  source: string;
-  blockedBy: string;
-  nextAction: string;
-  notes: string;
-  createdAt: string;
-  updatedAt: string;
-};
-
-type EventItem = {
-  stamp: string;
-  actor: string;
-  type: string;
-  task: string;
-  result: string;
-};
-
-function safeRead(filePath: string) {
-  return existsSync(filePath) ? readFileSync(filePath, "utf8") : "";
-}
-
-function getSortValue(value: string) {
-  const normalized = value.trim();
-  const parsed = Date.parse(normalized.replace(" ", "T"));
-  return Number.isNaN(parsed) ? normalized : parsed;
-}
-
-function parseTaskQueue(raw: string): TaskCard[] {
-  return raw
-    .split(/\r?\n(?=### \[TASK-)/)
-    .filter((block) => /^### \[TASK-\d+\]/.test(block.trim()))
-    .map((block) => {
-      const lines = block.split(/\r?\n/);
-      const heading = lines[0] || "";
-      const match = heading.match(/^### \[(TASK-\d+)\]\s+(.+)$/);
-      const getField = (name: string) => lines.find((line) => line.trim().startsWith(`- ${name}:`))?.split(":").slice(1).join(":").trim() || "-";
-      return {
-        id: match?.[1] || "TASK-???",
-        title: match?.[2] || "未命名任务",
-        owner: getField("owner"),
-        priority: getField("priority"),
-        status: getField("status"),
-        source: getField("source"),
-        blockedBy: getField("blocked_by"),
-        nextAction: getField("next_action"),
-        notes: getField("notes"),
-        createdAt: getField("created_at"),
-        updatedAt: getField("updated_at"),
-      };
-    });
-}
-
-function parseEventStream(raw: string): EventItem[] {
-  return raw
-    .split(/\r?\n/)
-    .filter((line) => line.trim().startsWith("- ["))
-    .map((line) => {
-      const match = line.match(/^\- \[(.+?)\]\s+actor=(.+?)\s+type=(.+?)\s+task=(.+?)\s+result=(.+)$/);
-      return {
-        stamp: match?.[1] || "未知时间",
-        actor: match?.[2] || "未知",
-        type: match?.[3] || "unknown",
-        task: match?.[4] || "-",
-        result: match?.[5] || line.trim(),
-      };
-    });
-}
+import { EVENT_STREAM_PATH, TASK_QUEUE_PATH, getSortValue, parseEventStream, parseTaskQueue, safeRead } from "@/lib/task-board";
 
 function statusTone(value: string) {
   const normalized = value.trim().toLowerCase();
@@ -82,6 +8,7 @@ function statusTone(value: string) {
   if (["blocked", "阻塞"].includes(normalized)) return "bg-rose-100 text-rose-800";
   if (["new", "待开始"].includes(normalized)) return "bg-amber-100 text-amber-800";
   if (["claimed", "已认领"].includes(normalized)) return "bg-violet-100 text-violet-800";
+  if (["dropped", "已放弃"].includes(normalized)) return "bg-slate-200 text-slate-700";
   return "bg-slate-100 text-slate-700";
 }
 
@@ -92,6 +19,7 @@ function displayStatus(value: string) {
   if (normalized === "blocked") return "阻塞";
   if (normalized === "new") return "待开始";
   if (normalized === "claimed") return "已认领";
+  if (normalized === "dropped") return "已放弃";
   return value;
 }
 
@@ -119,15 +47,13 @@ export default async function DashboardTasksPage({
     ? resolvedSearchParams.taskFilter || "in_progress"
     : "in_progress";
 
-  const taskPath = path.join(process.cwd(), "..", "共享协作区", "任务", "任务队列.md");
-  const eventPath = path.join(process.cwd(), "..", "共享协作区", "日志", "事件流.md");
-  const tasks = parseTaskQueue(safeRead(taskPath)).sort((a, b) => {
+  const tasks = parseTaskQueue(safeRead(TASK_QUEUE_PATH)).sort((a, b) => {
     const left = getSortValue(a.updatedAt);
     const right = getSortValue(b.updatedAt);
     if (typeof left === "number" && typeof right === "number") return right - left;
     return String(right).localeCompare(String(left));
   });
-  const events = parseEventStream(safeRead(eventPath));
+  const events = parseEventStream(safeRead(EVENT_STREAM_PATH));
 
   const filterCounts = {
     in_progress: tasks.filter((task) => task.status === "in_progress").length,
@@ -316,6 +242,7 @@ export default async function DashboardTasksPage({
                           ["in_progress", "进行中"],
                           ["blocked", "阻塞"],
                           ["done", "已完成"],
+                          ["dropped", "已放弃"],
                         ].map(([value, label]) => {
                           const isActive = task.status === value;
                           return (
@@ -340,7 +267,7 @@ export default async function DashboardTasksPage({
                       <form action="/api/task-meta" method="POST" className="mt-3 rounded-2xl border border-slate-200 bg-white p-3">
                         <input type="hidden" name="taskId" value={task.id} />
                         <input type="hidden" name="returnTo" value={`/dashboard/tasks?taskFilter=${taskFilter}`} />
-                        <div className="grid gap-3 sm:grid-cols-2">
+                        <div className="grid gap-3 sm:grid-cols-2 xl:grid-cols-3">
                           <label className="text-xs font-medium text-slate-600">
                             下一步
                             <input
@@ -350,11 +277,20 @@ export default async function DashboardTasksPage({
                             />
                           </label>
                           <label className="text-xs font-medium text-slate-600">
-                            备注 / 阻塞说明
+                            阻塞说明
                             <input
                               name="blockedBy"
                               defaultValue={task.blockedBy === "-" ? "" : task.blockedBy}
                               placeholder="没有就留空"
+                              className="mt-1 w-full rounded-xl border border-slate-200 bg-slate-50 px-3 py-2 text-xs text-slate-700 outline-none"
+                            />
+                          </label>
+                          <label className="text-xs font-medium text-slate-600 xl:col-span-1 sm:col-span-2">
+                            备注
+                            <input
+                              name="notes"
+                              defaultValue={task.notes === "-" ? "" : task.notes}
+                              placeholder="补充说明"
                               className="mt-1 w-full rounded-xl border border-slate-200 bg-slate-50 px-3 py-2 text-xs text-slate-700 outline-none"
                             />
                           </label>

@@ -141,7 +141,7 @@ export default async function DashboardPage() {
               <div className="flex items-center justify-between gap-3">
                 <div>
                   <p className="text-sm font-medium text-sky-700">工作区入口</p>
-                  <p className="mt-1 text-sm text-slate-500">从首页分流，不再把四个区堆在同一页里</p>
+                  <p className="mt-1 text-sm text-slate-500">从首页分流，不再把 {workspaceLinks.length} 个区堆在同一页里</p>
                 </div>
                 <span className="rounded-full bg-slate-900 px-3 py-1 text-xs font-semibold text-white">{workspaceLinks.length} 区</span>
               </div>

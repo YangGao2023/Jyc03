@@ -1,5 +1,6 @@
 import { existsSync, readFileSync } from "node:fs";
 import path from "node:path";
+import { DashboardCard, DashboardCardTitle, DashboardPageHeader } from "../components";
 
 function safeRead(filePath: string) {
   return existsSync(filePath) ? readFileSync(filePath, "utf8") : "文件不存在";
@@ -51,14 +52,12 @@ export default async function DashboardMemoryPage() {
   return (
     <div className="rounded-[30px] border border-white/10 bg-[linear-gradient(180deg,_rgba(15,23,42,0.98),_rgba(3,7,18,0.98))] p-4 shadow-2xl">
           <div className="rounded-[24px] border border-white/10 bg-white/5 p-4">
-            <div className="flex flex-wrap items-center justify-between gap-3">
-              <div>
-                <p className="text-[11px] uppercase tracking-[0.28em] text-sky-300">Owner Backend · Memory</p>
-                <h1 className="mt-2 text-2xl font-semibold text-white">记忆工作台</h1>
-                <p className="mt-2 max-w-3xl text-sm leading-6 text-slate-300">这一页只放老板最常看的共享资料，不把系统状态和正式任务掺进来。重点是 TODO、会议、待接手任务和共享长期记忆。</p>
-              </div>
-              <a href="/dashboard" className="rounded-2xl border border-white/10 bg-white px-4 py-2 text-sm font-semibold text-slate-950">返回后台</a>
-            </div>
+            <DashboardPageHeader
+              eyebrow="Owner Backend · Memory"
+              title="记忆工作台"
+              description="这一页只放老板最常看的共享资料，不把系统状态和正式任务掺进来。重点是 TODO、会议、待接手任务和共享长期记忆。"
+              right={<a href="/dashboard" className="rounded-2xl border border-white/10 bg-white px-4 py-2 text-sm font-semibold text-slate-950">返回后台</a>}
+            />
 
             <div className="mt-4 grid gap-3 md:grid-cols-2 xl:grid-cols-4">
               {panels.map((panel) => (
@@ -76,20 +75,18 @@ export default async function DashboardMemoryPage() {
 
           <div className="mt-4 grid gap-4 xl:grid-cols-2">
             {panels.map((panel) => (
-              <section key={panel.label} className="rounded-[24px] bg-white p-4 text-slate-900 shadow-sm">
-                <div className="flex items-center justify-between gap-3">
-                  <div>
+              <DashboardCard key={panel.label}>
+                <DashboardCardTitle
+                  title={panel.label}
+                  desc={panel.file}
+                  right={
                     <div className="flex items-center gap-2">
-                      <p className="text-sm font-medium text-sky-700">{panel.label}</p>
                       {isMissing(panel.content) ? <span className="rounded-full bg-rose-100 px-2.5 py-0.5 text-[11px] font-semibold text-rose-800">缺失</span> : null}
+                      {countLines(panel.content) > previewLines ? <span className="rounded-full bg-amber-100 px-3 py-1 text-xs font-semibold text-amber-800">已截断</span> : null}
+                      <span className="rounded-full bg-slate-900 px-3 py-1 text-xs font-semibold text-white">{Math.min(previewLines, countLines(panel.content))} / {countLines(panel.content)} 行</span>
                     </div>
-                    <p className="mt-1 text-xs text-slate-500">{panel.file}</p>
-                  </div>
-                  <div className="flex items-center gap-2">
-                    {countLines(panel.content) > previewLines ? <span className="rounded-full bg-amber-100 px-3 py-1 text-xs font-semibold text-amber-800">已截断</span> : null}
-                    <span className="rounded-full bg-slate-900 px-3 py-1 text-xs font-semibold text-white">{Math.min(previewLines, countLines(panel.content))} / {countLines(panel.content)} 行</span>
-                  </div>
-                </div>
+                  }
+                />
 
                 <div className="mt-4 overflow-x-auto rounded-2xl border border-slate-200 bg-slate-50 p-4 text-xs leading-6">
                   {clipLines(panel.content, previewLines).map((line, index) => (
@@ -98,12 +95,12 @@ export default async function DashboardMemoryPage() {
                     </div>
                   ))}
                 </div>
-              </section>
+              </DashboardCard>
             ))}
           </div>
 
-          <div className="mt-4 rounded-[24px] bg-white p-4 text-slate-900 shadow-sm">
-            <p className="text-sm font-medium text-sky-700">记忆页用途</p>
+          <DashboardCard className="mt-4">
+            <DashboardCardTitle title="记忆页用途" />
             <div className="mt-4 grid gap-3 sm:grid-cols-3">
               {[
                 ["看 TODO", "回答还有什么没做"],
@@ -116,7 +113,7 @@ export default async function DashboardMemoryPage() {
                 </div>
               ))}
             </div>
-          </div>
+          </DashboardCard>
     </div>
   );
 }

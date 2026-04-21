@@ -1,5 +1,6 @@
 import { existsSync, readFileSync } from "node:fs";
 import path from "node:path";
+import { DashboardCard, DashboardCardTitle, DashboardPageHeader } from "../components";
 
 type TaskCard = {
   id: string;
@@ -101,6 +102,7 @@ function displayEventType(value: string) {
   if (normalized === "task_claimed") return "任务认领";
   if (normalized === "handoff") return "交接";
   if (normalized === "decision") return "决策";
+  if (normalized === "memory_promoted") return "记忆提升";
   if (normalized === "blocked") return "阻塞";
   if (normalized === "completed") return "完成";
   if (normalized === "unknown") return "未知事件";
@@ -153,14 +155,12 @@ export default async function DashboardTasksPage({
   return (
     <div className="rounded-[30px] border border-white/10 bg-[linear-gradient(180deg,_rgba(15,23,42,0.98),_rgba(3,7,18,0.98))] p-4 shadow-2xl">
           <div className="rounded-[24px] border border-white/10 bg-white/5 p-4">
-            <div className="flex flex-wrap items-center justify-between gap-3">
-              <div>
-                <p className="text-[11px] uppercase tracking-[0.28em] text-sky-300">Owner Backend · Tasks</p>
-                <h1 className="mt-2 text-2xl font-semibold text-white">任务执行台</h1>
-                <p className="mt-2 max-w-3xl text-sm leading-6 text-slate-300">这一页只看正式任务，不把记忆和系统信号混在一起。重点是当前谁在做、卡在哪里、下一步是什么。</p>
-              </div>
-              <a href="/dashboard" className="rounded-2xl border border-white/10 bg-white px-4 py-2 text-sm font-semibold text-slate-950">返回后台</a>
-            </div>
+            <DashboardPageHeader
+              eyebrow="Owner Backend · Tasks"
+              title="任务执行台"
+              description="这一页只看正式任务，不把记忆和系统信号混在一起。重点是当前谁在做、卡在哪里、下一步是什么。"
+              right={<a href="/dashboard" className="rounded-2xl border border-white/10 bg-white px-4 py-2 text-sm font-semibold text-slate-950">返回后台</a>}
+            />
 
             <form action="/api/task-create" method="POST" className="mt-4 rounded-2xl border border-white/10 bg-white/5 p-4">
               <input type="hidden" name="returnTo" value={`/dashboard/tasks?taskFilter=${taskFilter}`} />
@@ -235,14 +235,12 @@ export default async function DashboardTasksPage({
           </div>
 
           <div className="mt-4 grid gap-4 xl:grid-cols-[1.05fr_0.95fr]">
-            <section className="rounded-[24px] bg-white p-4 text-slate-900 shadow-sm">
-              <div className="flex items-center justify-between gap-3">
-                <div>
-                  <p className="text-sm font-medium text-sky-700">当前任务</p>
-                  <p className="mt-1 text-sm text-slate-500">按状态筛选后的正式任务列表</p>
-                </div>
-                <span className="rounded-full bg-slate-900 px-3 py-1 text-xs font-semibold text-white">{visibleTasks.length} / {tasks.length} 条</span>
-              </div>
+            <DashboardCard>
+              <DashboardCardTitle
+                title="当前任务"
+                desc="按状态筛选后的正式任务列表"
+                right={<span className="rounded-full bg-slate-900 px-3 py-1 text-xs font-semibold text-white">{visibleTasks.length} / {tasks.length} 条</span>}
+              />
 
               <div className="mt-4 grid gap-3">
                 {visibleTasks.length > 0 ? visibleTasks.map((task) => {
@@ -371,11 +369,11 @@ export default async function DashboardTasksPage({
                   <div className="rounded-2xl border border-dashed border-slate-200 bg-slate-50 px-4 py-6 text-sm text-slate-500">{emptyStateLabel}</div>
                 )}
               </div>
-            </section>
+            </DashboardCard>
 
             <section className="space-y-4">
-              <div className="rounded-[24px] bg-white p-4 text-slate-900 shadow-sm">
-                <p className="text-sm font-medium text-sky-700">任务判断规则</p>
+              <DashboardCard>
+                <DashboardCardTitle title="任务判断规则" />
                 <div className="mt-4 grid gap-3 sm:grid-cols-2">
                   {[
                     ["正式任务", "必须进入任务队列，不能把所有聊天都算成执行中"],
@@ -389,20 +387,15 @@ export default async function DashboardTasksPage({
                     </div>
                   ))}
                 </div>
-              </div>
+              </DashboardCard>
 
-              <div className="rounded-[24px] bg-white p-4 text-slate-900 shadow-sm">
-                <div className="flex items-center justify-between gap-3">
-                  <div>
-                    <p className="text-sm font-medium text-sky-700">下一步入口</p>
-                    <p className="mt-1 text-sm text-slate-500">任务台之外的常用跳转</p>
-                  </div>
-                </div>
+              <DashboardCard>
+                <DashboardCardTitle title="下一步入口" desc="任务台之外的常用跳转" />
                 <div className="mt-4 grid gap-3 sm:grid-cols-2">
                   <a href="/dashboard/overview" className="rounded-2xl border border-slate-200 bg-slate-50 p-4 text-sm font-semibold text-slate-900">回总览页</a>
                   <a href="/dashboard/system" className="rounded-2xl border border-slate-200 bg-slate-50 p-4 text-sm font-semibold text-slate-900">看系统页</a>
                 </div>
-              </div>
+              </DashboardCard>
             </section>
           </div>
     </div>

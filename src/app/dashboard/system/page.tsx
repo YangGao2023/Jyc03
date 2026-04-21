@@ -86,6 +86,8 @@ function parseEventStream(raw: string): EventItem[] {
 function tone(type: string) {
   if (type === "status_change") return "bg-sky-100 text-sky-800";
   if (type === "task_created") return "bg-cyan-100 text-cyan-800";
+  if (type === "task_claimed") return "bg-fuchsia-100 text-fuchsia-800";
+  if (type === "memory_promoted") return "bg-indigo-100 text-indigo-800";
   if (type === "blocked") return "bg-rose-100 text-rose-800";
   if (type === "handoff") return "bg-violet-100 text-violet-800";
   if (type === "decision") return "bg-amber-100 text-amber-800";
@@ -100,6 +102,7 @@ function displayEventType(value: string) {
   if (normalized === "task_claimed") return "任务认领";
   if (normalized === "handoff") return "交接";
   if (normalized === "decision") return "决策";
+  if (normalized === "memory_promoted") return "记忆提升";
   if (normalized === "blocked") return "阻塞";
   if (normalized === "completed") return "完成";
   if (normalized === "unknown") return "未知事件";

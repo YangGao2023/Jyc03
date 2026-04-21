@@ -32,7 +32,7 @@ const agents: AgentSpec[] = [
   {
     key: "xiaosi",
     name: "小四",
-    role: "CAD / drawing / research",
+    role: "CAD / 出图 / 调研",
     profile: "Xiaosi",
     configPath: path.join(homedir(), ".openclaw-Xiaosi", "openclaw.json"),
     fallbackPort: 18790,
@@ -90,6 +90,7 @@ export default async function DashboardPage() {
   const taskCount = countMatches(taskRaw, /^### \[TASK-/);
   const blockedCount = taskRaw.split(/\r?\n/).filter((line) => line.includes("- status: blocked")).length;
   const eventCount = eventRaw.split(/\r?\n/).filter((line) => line.trim().startsWith("- [")).length;
+  const recentEventCount = Math.min(eventCount, 10);
 
   const liveAgents = await Promise.all(
     agents.map(async (agent) => {
@@ -126,11 +127,11 @@ export default async function DashboardPage() {
               </div>
               <div className="rounded-2xl border border-white/10 bg-white/5 p-4">
                 <p className="text-[11px] uppercase tracking-[0.2em] text-slate-400">阻塞</p>
-                <p className="mt-2 text-2xl font-semibold text-white">{blockedCount}</p>
+                <p className="mt-2 text-2xl font-semibold text-white">{blockedCount} / {taskCount}</p>
               </div>
               <div className="rounded-2xl border border-white/10 bg-white/5 p-4">
-                <p className="text-[11px] uppercase tracking-[0.2em] text-slate-400">事件记录</p>
-                <p className="mt-2 text-2xl font-semibold text-white">{eventCount}</p>
+                <p className="text-[11px] uppercase tracking-[0.2em] text-slate-400">最近事件</p>
+                <p className="mt-2 text-2xl font-semibold text-white">{recentEventCount} / {eventCount}</p>
               </div>
             </div>
           </div>

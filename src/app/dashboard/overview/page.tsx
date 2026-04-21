@@ -35,6 +35,7 @@ function parseRecentTasks(raw: string) {
         source: getField("source"),
         blockedBy: getField("blocked_by"),
         nextAction: getField("next_action"),
+        notes: getField("notes"),
         createdAt: getField("created_at"),
         updatedAt: getField("updated_at"),
       };
@@ -48,10 +49,35 @@ function parseRecentTasks(raw: string) {
     .slice(0, 6);
 }
 
+function displayEventType(value: string) {
+  const normalized = value.trim().toLowerCase();
+  if (normalized === "status_change") return "状态变更";
+  if (normalized === "task_created") return "任务创建";
+  if (normalized === "task_claimed") return "任务认领";
+  if (normalized === "memory_promoted") return "记忆提升";
+  if (normalized === "handoff") return "交接";
+  if (normalized === "decision") return "决策";
+  if (normalized === "blocked") return "阻塞";
+  if (normalized === "completed") return "完成";
+  if (normalized === "unknown") return "未知事件";
+  return value;
+}
+
 function parseRecentEvents(raw: string) {
   return raw
     .split(/\r?\n/)
     .filter((line) => line.trim().startsWith("- ["))
+    .map((line) =>
+      line
+        .trim()
+        .replace(/^-\s+/, "")
+        .replace(/^\[(.+?)\]/, "时间：$1")
+        .replace(/\sactor=/g, " · 执行人：")
+        .replace(/\stype=(\S+)/g, (_, type) => ` · 类型：${displayEventType(type)}`)
+        .replace(/\stask=/g, " · 任务编号：")
+        .replace(/\sresult=/g, " · 结果：")
+        .replace(/`/g, ""),
+    )
     .slice(-5)
     .reverse();
 }
@@ -146,8 +172,15 @@ export default async function DashboardOverviewPage() {
                     <p className="mt-1 text-xs text-slate-500">来源：{task.source}</p>
                     <p className="mt-1 text-xs text-slate-500">创建时间：{task.createdAt}</p>
                     <p className="mt-1 text-xs text-slate-500">最近更新：{task.updatedAt}</p>
-                    {task.blockedBy && task.blockedBy !== "-" ? <p className="mt-2 text-sm leading-6 text-rose-700">阻塞原因：{task.blockedBy}</p> : null}
+                    {task.blockedBy && task.blockedBy !== "-" ? (
+                      task.status === "blocked" ? (
+                        <p className="mt-2 text-sm leading-6 text-rose-700">阻塞原因：{task.blockedBy}</p>
+                      ) : (
+                        <p className="mt-2 text-sm leading-6 text-slate-600">系统备注：{task.blockedBy}</p>
+                      )
+                    ) : null}
                     <p className="mt-2 text-sm leading-6 text-slate-600">下一步：{task.nextAction}</p>
+                    {task.notes && task.notes !== "-" ? <p className="mt-1 text-sm leading-6 text-slate-600">备注：{task.notes}</p> : null}
                   </div>
                 )) : (
                   <div className="rounded-2xl border border-dashed border-slate-200 bg-slate-50 px-4 py-6 text-sm text-slate-500">暂无任务记录</div>

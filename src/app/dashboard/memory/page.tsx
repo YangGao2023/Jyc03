@@ -1,6 +1,8 @@
 import { existsSync, readFileSync } from "node:fs";
 import path from "node:path";
 import { DashboardCard, DashboardCardTitle, DashboardPageHeader } from "../components";
+import { TASK_QUEUE_PATH, parseTaskQueue } from "@/lib/task-board";
+import { TODO_PATH, parseTodoBoard, readTodoBoard } from "@/lib/todo-board";
 
 function safeRead(filePath: string) {
   return existsSync(filePath) ? readFileSync(filePath, "utf8") : "文件不存在";
@@ -39,7 +41,7 @@ function lineTone(line: string) {
 }
 
 const docs = [
-  ["TODO", path.join(process.cwd(), "..", "共享协作区", "任务", "TODO.md")],
+  ["TODO", TODO_PATH],
   ["错峰会议", path.join(process.cwd(), "..", "共享协作区", "交接", "错峰会议.md")],
   ["待接手任务", path.join(process.cwd(), "..", "共享协作区", "任务", "待接手任务.md")],
   ["共享长期记忆", path.join(process.cwd(), "..", "共享协作区", "记忆", "共享长期记忆.md")],
@@ -48,6 +50,10 @@ const docs = [
 export default async function DashboardMemoryPage() {
   const panels = docs.map(([label, file]) => ({ label, file, content: safeRead(file) }));
   const previewLines = 18;
+  const todoItems = parseTodoBoard(readTodoBoard());
+  const activeTodos = todoItems.filter((todo) => todo.section === "active");
+  const completedTodos = todoItems.filter((todo) => todo.section === "completed");
+  const tasks = parseTaskQueue(safeRead(TASK_QUEUE_PATH));
 
   return (
     <div className="rounded-[30px] border border-white/10 bg-[linear-gradient(180deg,_rgba(15,23,42,0.98),_rgba(3,7,18,0.98))] p-4 shadow-2xl">
@@ -68,10 +74,46 @@ export default async function DashboardMemoryPage() {
                   </div>
                   <p className="mt-2 text-sm leading-6 text-slate-300">{panel.file.replace(`${process.cwd()}\\..\\`, "")}</p>
                   <p className="mt-2 text-xs text-slate-400">共 {countLines(panel.content)} 行</p>
+                  {panel.label === "TODO" ? <p className="mt-1 text-xs text-slate-400">进行中 {activeTodos.length} · 已完成 {completedTodos.length}</p> : null}
                 </div>
               ))}
             </div>
           </div>
+
+          <DashboardCard className="mt-4">
+            <DashboardCardTitle
+              title="TODO 焦点"
+              desc="这一层是老板视角的开放待办，不等于已经进入正式执行队列。"
+              right={<span className="rounded-full bg-slate-900 px-3 py-1 text-xs font-semibold text-white">进行中 {activeTodos.length} · 已完成 {completedTodos.length}</span>}
+            />
+            <div className="mt-4 grid gap-3 xl:grid-cols-2">
+              {activeTodos.slice(0, 6).map((todo) => {
+                const linkedTasks = tasks.filter((task) => `${task.source} ${task.notes} ${task.title}`.includes(todo.id));
+                return (
+                  <div key={todo.id} className="rounded-2xl border border-slate-200 bg-slate-50 p-4">
+                    <div className="flex flex-wrap items-start justify-between gap-3">
+                      <div>
+                        <p className="text-sm font-semibold text-slate-900">{todo.id} · {todo.title}</p>
+                        <p className="mt-1 text-xs text-slate-500">{todo.status}</p>
+                      </div>
+                      <span className="rounded-full bg-white px-3 py-1 text-xs font-semibold text-slate-700">正式任务 {linkedTasks.length}</span>
+                    </div>
+                    {todo.goal !== "-" ? <p className="mt-3 text-sm leading-6 text-slate-600">目标：{todo.goal}</p> : null}
+                    {todo.nextStep !== "-" ? <p className="mt-1 text-sm leading-6 text-slate-600">下一步：{todo.nextStep}</p> : null}
+                    <div className="mt-3 flex flex-wrap gap-2">
+                      <a href="/dashboard/tasks" className="rounded-full border border-slate-200 bg-white px-3 py-1.5 text-xs font-medium text-slate-700 transition hover:bg-slate-100">去任务台</a>
+                      {linkedTasks.slice(0, 2).map((task) => (
+                        <span key={task.id} className="rounded-full bg-slate-900 px-3 py-1 text-xs font-semibold text-white">{task.id}</span>
+                      ))}
+                    </div>
+                  </div>
+                );
+              })}
+              {activeTodos.length === 0 ? (
+                <div className="rounded-2xl border border-dashed border-slate-200 bg-slate-50 px-4 py-6 text-sm text-slate-500">当前没有进行中的 TODO 条目</div>
+              ) : null}
+            </div>
+          </DashboardCard>
 
           <div className="mt-4 grid gap-4 xl:grid-cols-2">
             {panels.map((panel) => (

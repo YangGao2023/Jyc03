@@ -1,5 +1,6 @@
 import { existsSync, readFileSync } from "node:fs";
 import path from "node:path";
+import { DashboardCard, DashboardCardTitle, DashboardPageHeader } from "../components";
 
 function safeRead(filePath: string) {
   return existsSync(filePath) ? readFileSync(filePath, "utf8") : "";
@@ -97,14 +98,12 @@ export default async function DashboardOverviewPage() {
   return (
     <div className="rounded-[30px] border border-white/10 bg-[linear-gradient(180deg,_rgba(15,23,42,0.98),_rgba(3,7,18,0.98))] p-4 shadow-2xl">
           <div className="rounded-[24px] border border-white/10 bg-white/5 p-4">
-            <div className="flex flex-wrap items-center justify-between gap-3">
-              <div>
-                <p className="text-[11px] uppercase tracking-[0.28em] text-sky-300">Owner Backend · Overview</p>
-                <h1 className="mt-2 text-2xl font-semibold text-white">总览页</h1>
-                <p className="mt-2 max-w-3xl text-sm leading-6 text-slate-300">这一页只回答老板最先想知道的几件事：现在有多少事在跑、哪里卡住了、谁该接手、最近系统到底做了什么。</p>
-              </div>
-              <a href="/dashboard" className="rounded-2xl border border-white/10 bg-white px-4 py-2 text-sm font-semibold text-slate-950">返回后台</a>
-            </div>
+            <DashboardPageHeader
+              eyebrow="Owner Backend · Overview"
+              title="总览页"
+              description="这一页只回答老板最先想知道的几件事：现在有多少事在跑、哪里卡住了、谁该接手、最近系统到底做了什么。"
+              right={<a href="/dashboard" className="rounded-2xl border border-white/10 bg-white px-4 py-2 text-sm font-semibold text-slate-950">返回后台</a>}
+            />
 
             <div className="mt-4 grid gap-3 md:grid-cols-2 xl:grid-cols-4">
               <div className="rounded-2xl border border-white/10 bg-white/5 p-4">
@@ -127,17 +126,12 @@ export default async function DashboardOverviewPage() {
           </div>
 
           <div className="mt-4 grid gap-4 xl:grid-cols-[1.05fr_0.95fr]">
-            <section className="rounded-[24px] bg-white p-4 text-slate-900 shadow-sm">
-              <div className="flex items-center justify-between gap-3">
-                <div>
-                  <p className="text-sm font-medium text-sky-700">当前任务焦点</p>
-                  <p className="mt-1 text-sm text-slate-500">老板首页先看最近几条正式任务</p>
-                </div>
-                <div className="flex items-center gap-2">
-                  <span className="rounded-full bg-slate-900 px-3 py-1 text-xs font-semibold text-white">{recentTasks.length} / {taskCount} 条</span>
-                  <a href="/dashboard/tasks" className="rounded-full border border-slate-200 px-3 py-1 text-xs font-semibold text-slate-700">打开任务页</a>
-                </div>
-              </div>
+            <DashboardCard>
+              <DashboardCardTitle
+                title="当前任务焦点"
+                desc="老板首页先看最近几条正式任务"
+                right={<div className="flex items-center gap-2"><span className="rounded-full bg-slate-900 px-3 py-1 text-xs font-semibold text-white">{recentTasks.length} / {taskCount} 条</span><a href="/dashboard/tasks" className="rounded-full border border-slate-200 px-3 py-1 text-xs font-semibold text-slate-700">打开任务页</a></div>}
+              />
 
               <div className="mt-4 grid gap-3">
                 {recentTasks.length > 0 ? recentTasks.map((task, index) => (
@@ -159,20 +153,15 @@ export default async function DashboardOverviewPage() {
                   <div className="rounded-2xl border border-dashed border-slate-200 bg-slate-50 px-4 py-6 text-sm text-slate-500">暂无任务记录</div>
                 )}
               </div>
-            </section>
+            </DashboardCard>
 
             <section className="space-y-4">
-              <div className="rounded-[24px] bg-white p-4 text-slate-900 shadow-sm">
-                <div className="flex items-center justify-between gap-3">
-                  <div>
-                    <p className="text-sm font-medium text-sky-700">最近事件</p>
-                    <p className="mt-1 text-sm text-slate-500">先看最新动作，不用先钻系统页</p>
-                  </div>
-                  <div className="flex items-center gap-2">
-                    <span className="rounded-full bg-slate-900 px-3 py-1 text-xs font-semibold text-white">{recentEvents.length} / {totalEventCount} 条</span>
-                    <a href="/dashboard/system" className="rounded-full border border-slate-200 px-3 py-1 text-xs font-semibold text-slate-700">打开系统页</a>
-                  </div>
-                </div>
+              <DashboardCard>
+                <DashboardCardTitle
+                  title="最近事件"
+                  desc="先看最新动作，不用先钻系统页"
+                  right={<div className="flex items-center gap-2"><span className="rounded-full bg-slate-900 px-3 py-1 text-xs font-semibold text-white">{recentEvents.length} / {totalEventCount} 条</span><a href="/dashboard/system" className="rounded-full border border-slate-200 px-3 py-1 text-xs font-semibold text-slate-700">打开系统页</a></div>}
+                />
 
                 <div className="mt-4 space-y-3">
                   {recentEvents.length > 0 ? recentEvents.map((line, index) => (
@@ -183,10 +172,10 @@ export default async function DashboardOverviewPage() {
                     <div className="rounded-2xl border border-dashed border-slate-200 bg-slate-50 px-4 py-6 text-sm text-slate-500">暂无事件记录</div>
                   )}
                 </div>
-              </div>
+              </DashboardCard>
 
-              <div className="rounded-[24px] bg-white p-4 text-slate-900 shadow-sm">
-                <p className="text-sm font-medium text-sky-700">老板入口建议</p>
+              <DashboardCard>
+                <DashboardCardTitle title="老板入口建议" />
                 <div className="mt-4 grid gap-3 sm:grid-cols-3">
                   {[
                     ["先看总览", "判断今天有没有需要你立刻介入的地方"],
@@ -199,7 +188,7 @@ export default async function DashboardOverviewPage() {
                     </div>
                   ))}
                 </div>
-              </div>
+              </DashboardCard>
             </section>
           </div>
     </div>

@@ -16,6 +16,7 @@ SHARED_SECRET = os.environ.get("AGENT_BRIDGE_HMAC_SECRET", "")
 POLL_INTERVAL = int(os.environ.get("AGENT_BRIDGE_POLL_INTERVAL", "10"))
 LIMIT = int(os.environ.get("AGENT_BRIDGE_LIMIT", "10"))
 HANDLER_COMMAND = os.environ.get("AGENT_BRIDGE_HANDLER_COMMAND", "").strip()
+RECIPIENT = os.environ.get("AGENT_BRIDGE_RECIPIENT", "").strip()
 LOG_PATH = Path(os.environ.get("AGENT_BRIDGE_LOG", "./state/agent-bridge-outbox.jsonl"))
 AUDIO_DIR = Path(os.environ.get("AGENT_BRIDGE_AUDIO_DIR", "./state/agent-bridge-audio"))
 OPENAI_API_KEY = os.environ.get("OPENAI_API_KEY", "")
@@ -217,7 +218,10 @@ def main():
 
     while True:
         try:
-            query = urllib.parse.urlencode({"limit": LIMIT, "consume": 1})
+            query_data = {"limit": LIMIT, "consume": 1}
+            if RECIPIENT:
+                query_data["to"] = RECIPIENT
+            query = urllib.parse.urlencode(query_data)
             result = request_json("GET", f"/api/outbox?{query}")
             for message in result.get("messages", []):
                 handle_message(message)

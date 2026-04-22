@@ -7,7 +7,8 @@ export async function GET(request: Request) {
     const url = new URL(request.url);
     const limit = Math.max(1, Math.min(50, Number(url.searchParams.get("limit") || 20)));
     const consume = url.searchParams.get("consume") === "1";
-    const messages = await consumeQueue("outbox", limit, consume);
+    const recipient = url.searchParams.get("to") || url.searchParams.get("recipient") || undefined;
+    const messages = await consumeQueue("outbox", { limit, consume, recipient });
     return NextResponse.json({ ok: true, messages });
   } catch (error) {
     return NextResponse.json({ ok: false, error: error instanceof Error ? error.message : "Bridge read failed" }, { status: 401 });

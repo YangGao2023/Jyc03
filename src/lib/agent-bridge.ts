@@ -11,6 +11,14 @@ export type BridgeMessage = {
   meta?: Record<string, unknown>;
 };
 
+type QueueName = "inbox" | "outbox";
+
+type ConsumeQueueOptions = {
+  limit?: number;
+  consume?: boolean;
+  recipient?: string;
+};
+
 const NONCE_TTL_SECONDS = 60 * 5;
 const MAX_SKEW_MS = 1000 * 60 * 5;
 let redisPromise: Promise<ReturnType<typeof createClient>> | null = null;
@@ -21,6 +29,17 @@ function requiredEnv(name: string) {
     throw new Error(`Missing required env: ${name}`);
   }
   return value;
+}
+
+function normalizeRecipient(value: string | null | undefined) {
+  return String(value || "").trim().toLowerCase();
+}
+
+function matchesRecipient(message: BridgeMessage, recipient?: string) {
+  if (!recipient) {
+    return true;
+  }
+  return normalizeRecipient(message.to) === normalizeRecipient(recipient);
 }
 
 export function bridgeSecret() {
@@ -35,7 +54,7 @@ async function redis() {
   return redisPromise;
 }
 
-function queueKey(name: "inbox" | "outbox") {
+function queueKey(name: QueueName) {
   return `agent-bridge:${name}`;
 }
 
@@ -43,18 +62,21 @@ function nonceKey(nonce: string) {
   return `agent-bridge:nonce:${nonce}`;
 }
 
-export async function readQueue(name: "inbox" | "outbox") {
+export async function readQueue(name: QueueName) {
   const client = await redis();
   const raw = await client.get(queueKey(name));
   return raw ? (JSON.parse(raw) as BridgeMessage[]) : [];
 }
 
-export async function writeQueue(name: "inbox" | "outbox", messages: BridgeMessage[]) {
+export async function writeQueue(name: QueueName, messages: BridgeMessage[]) {
   const client = await redis();
   await client.set(queueKey(name), JSON.stringify(messages));
 }
 
-export async function enqueueMessage(name: "inbox" | "outbox", message: Omit<BridgeMessage, "id" | "createdAt"> & Partial<Pick<BridgeMessage, "id" | "createdAt">>) {
+export async function enqueueMessage(
+  name: QueueName,
+  message: Omit<BridgeMessage, "id" | "createdAt"> & Partial<Pick<BridgeMessage, "id" | "createdAt">>,
+) {
   const nextMessage: BridgeMessage = {
     id: message.id || crypto.randomUUID(),
     createdAt: message.createdAt || new Date().toISOString(),
@@ -71,12 +93,19 @@ export async function enqueueMessage(name: "inbox" | "outbox", message: Omit<Bri
   return nextMessage;
 }
 
-export async function consumeQueue(name: "inbox" | "outbox", limit = 20, consume = false) {
+export async function consumeQueue(name: QueueName, options: ConsumeQueueOptions = {}) {
+  const limit = Math.max(1, Math.min(50, Number(options.limit || 20)));
+  const consume = options.consume === true;
+  const recipient = options.recipient?.trim();
   const queue = await readQueue(name);
-  const items = queue.slice(0, limit);
+  const items = queue.filter((message) => matchesRecipient(message, recipient)).slice(0, limit);
+
   if (consume && items.length > 0) {
-    await writeQueue(name, queue.slice(items.length));
+    const consumedIds = new Set(items.map((item) => item.id));
+    const remaining = queue.filter((message) => !consumedIds.has(message.id));
+    await writeQueue(name, remaining);
   }
+
   return items;
 }
 

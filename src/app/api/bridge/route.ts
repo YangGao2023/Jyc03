@@ -6,6 +6,7 @@ export async function GET() {
     name: "jyc-agent-bridge",
     endpoints: ["/api/inbox", "/api/outbox"],
     auth: "HMAC + timestamp + nonce",
-    storage: "Vercel KV / Redis",
+    delivery: "directed messages via ?to=<agent>",
+    storage: "Redis",
   });
 }

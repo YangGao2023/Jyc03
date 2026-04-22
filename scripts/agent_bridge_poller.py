@@ -80,12 +80,16 @@ def resolve_voice_request(message):
 
     filename = str(meta.get("filename") or f"voice-{message.get('id') or uuid.uuid4().hex}.mp3")
     caption = str(meta.get("caption") or "")
+    title = str(meta.get("title") or caption or message.get("from") or "").strip()
+    performer = str(meta.get("performer") or message.get("from") or "").strip()
 
     return {
         "text": text,
         "chat_id": chat_id,
         "filename": filename,
         "caption": caption,
+        "title": title,
+        "performer": performer,
     }
 
 
@@ -150,13 +154,17 @@ def encode_multipart(fields, files):
     return boundary, body
 
 
-def send_telegram_audio(chat_id: str, audio_path: Path, caption: str = ""):
+def send_telegram_audio(chat_id: str, audio_path: Path, caption: str = "", title: str = "", performer: str = ""):
     if not TELEGRAM_BOT_TOKEN:
         raise RuntimeError("missing TELEGRAM_BOT_TOKEN")
 
     fields = {"chat_id": chat_id}
     if caption:
         fields["caption"] = caption
+    if title:
+        fields["title"] = title
+    if performer:
+        fields["performer"] = performer
 
     boundary, body = encode_multipart(fields, {"audio": audio_path})
     req = urllib.request.Request(
@@ -176,7 +184,13 @@ def maybe_handle_voice(message):
 
     output_path = AUDIO_DIR / voice_request["filename"]
     synthesize_mp3(voice_request["text"], output_path)
-    result = send_telegram_audio(voice_request["chat_id"], output_path, voice_request["caption"])
+    result = send_telegram_audio(
+        voice_request["chat_id"],
+        output_path,
+        voice_request["caption"],
+        voice_request["title"],
+        voice_request["performer"],
+    )
     print(
         f"[bridge][voice] delivered {message.get('id')} to telegram chat {voice_request['chat_id']} -> {output_path}"
     )

@@ -4,6 +4,7 @@ import { homedir } from "node:os";
 import net from "node:net";
 import { DashboardCard, DashboardCardTitle, DashboardPageHeader } from "../components";
 import { readQueue } from "@/lib/agent-bridge";
+import { readAgentStatuses } from "@/lib/agent-status";
 
 const profileSpecs = [
   {
@@ -134,6 +135,27 @@ function displayBridgeKind(value: string) {
   return value || "未知";
 }
 
+function statusBadge(status: string) {
+  const normalized = status.trim().toLowerCase();
+  if (normalized === "busy") return "bg-amber-100 text-amber-800";
+  if (normalized === "blocked") return "bg-rose-100 text-rose-800";
+  if (normalized === "offline") return "bg-slate-200 text-slate-700";
+  return "bg-emerald-100 text-emerald-800";
+}
+
+function displayRelativeAge(iso: string) {
+  const diffMs = Date.now() - Date.parse(iso);
+  const diffMin = Math.max(0, Math.round(diffMs / 60000));
+  if (diffMin < 1) return "刚刚更新";
+  if (diffMin < 60) return `${diffMin} 分钟前`;
+  const diffHour = Math.round(diffMin / 60);
+  return `${diffHour} 小时前`;
+}
+
+function isStale(iso: string) {
+  return Date.now() - Date.parse(iso) > 30 * 60 * 1000;
+}
+
 export default async function DashboardSystemPage() {
   const eventPath = path.join(process.cwd(), "..", "共享协作区", "日志", "事件流.md");
   const rawEvents = safeRead(eventPath);
@@ -141,8 +163,10 @@ export default async function DashboardSystemPage() {
   const events = allEvents.slice(-10).reverse();
   const outboxMessages = await readQueue("outbox").catch(() => []);
   const inboxMessages = await readQueue("inbox").catch(() => []);
+  const agentStatuses = await readAgentStatuses().catch(() => []);
   const recentBridgeMessages = outboxMessages.slice(-8).reverse();
   const recipientSummary = summarizeRecipients(outboxMessages);
+  const staleAgentCount = agentStatuses.filter((item) => isStale(item.updatedAt)).length;
 
   const agents = await Promise.all(
     profileSpecs.map(async (spec) => {
@@ -179,8 +203,9 @@ export default async function DashboardSystemPage() {
             <p className="mt-2 text-2xl font-semibold text-white">{outboxMessages.length}</p>
           </div>
           <div className="rounded-2xl border border-white/10 bg-white/5 p-4">
-            <p className="text-[11px] uppercase tracking-[0.2em] text-slate-400">Bridge Inbox</p>
-            <p className="mt-2 text-2xl font-semibold text-white">{inboxMessages.length}</p>
+            <p className="text-[11px] uppercase tracking-[0.2em] text-slate-400">Agent 心跳</p>
+            <p className="mt-2 text-2xl font-semibold text-white">{agentStatuses.length}</p>
+            <p className="mt-1 text-xs text-slate-400">{staleAgentCount} 个超时未更新</p>
           </div>
         </div>
       </div>
@@ -208,6 +233,10 @@ export default async function DashboardSystemPage() {
             <div className="rounded-2xl border border-slate-200 bg-slate-50 p-4">
               <p className="font-semibold text-sky-700">Bridge 概况</p>
               <p className="mt-2 leading-6">当前 outbox 共 {outboxMessages.length} 条待分发消息，inbox 共 {inboxMessages.length} 条回传消息。这里开始回答“谁在往桥里派单、积压压在谁那里”。</p>
+            </div>
+            <div className="rounded-2xl border border-slate-200 bg-slate-50 p-4">
+              <p className="font-semibold text-rose-700">协作守望</p>
+              <p className="mt-2 leading-6">当前已有 {agentStatuses.length} 个 agent 上报心跳/状态，其中 {staleAgentCount} 个超过 30 分钟未更新。后面零号提醒阿三、阿三提醒零号，就从这层开始落地。</p>
             </div>
             <div className="rounded-2xl border border-slate-200 bg-slate-50 p-4">
               <p className="font-semibold text-emerald-700">会话来源</p>
@@ -238,6 +267,23 @@ export default async function DashboardSystemPage() {
                       <span className="rounded-full bg-slate-900 px-2.5 py-0.5 text-xs font-semibold text-white">{item.count}</span>
                     </div>
                   )) : <div className="rounded-2xl border border-dashed border-slate-200 bg-white px-3 py-4 text-sm text-slate-500">当前没有待分发消息</div>}
+                </div>
+              </div>
+
+              <div className="rounded-2xl border border-slate-200 bg-slate-50 p-4">
+                <p className="text-sm font-semibold text-slate-900">Agent 心跳 / 状态</p>
+                <div className="mt-3 space-y-2">
+                  {agentStatuses.length > 0 ? agentStatuses.map((item) => (
+                    <div key={item.agent} className="rounded-2xl bg-white p-3">
+                      <div className="flex flex-wrap items-center gap-2">
+                        <span className={`rounded-full px-2.5 py-0.5 text-[11px] font-semibold ${statusBadge(item.status)}`}>{item.status}</span>
+                        <span className={`rounded-full px-2.5 py-0.5 text-[11px] font-semibold ${isStale(item.updatedAt) ? "bg-rose-100 text-rose-800" : "bg-slate-100 text-slate-700"}`}>{displayRelativeAge(item.updatedAt)}</span>
+                      </div>
+                      <p className="mt-1 text-sm font-semibold text-slate-900">{item.agent}{item.role ? ` · ${item.role}` : ""}</p>
+                      {item.summary ? <p className="mt-1 text-sm leading-6 text-slate-600">{item.summary}</p> : null}
+                      <p className="mt-1 text-xs text-slate-500">owner: {item.owner || "-"} · backup: {item.backup || "-"} · task: {item.taskId || "-"}</p>
+                    </div>
+                  )) : <div className="rounded-2xl border border-dashed border-slate-200 bg-white px-3 py-4 text-sm text-slate-500">还没有 agent 上报心跳</div>}
                 </div>
               </div>
 

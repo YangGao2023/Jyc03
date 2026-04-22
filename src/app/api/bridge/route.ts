@@ -4,7 +4,7 @@ export async function GET() {
   return NextResponse.json({
     ok: true,
     name: "jyc-agent-bridge",
-    endpoints: ["/api/inbox", "/api/outbox"],
+    endpoints: ["/api/inbox", "/api/outbox", "/api/agent-status"],
     auth: "HMAC + timestamp + nonce",
     delivery: "directed messages via ?to=<agent>",
     storage: "Redis",

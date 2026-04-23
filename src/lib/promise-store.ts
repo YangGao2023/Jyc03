@@ -23,7 +23,8 @@ export type PromiseItem = {
   sourceMessageId?: string;
 };
 
-const PROMISE_KEY = "agent-bridge:promises";
+const PROMISE_KEY = "agent-bridge:v2:promises";
+const LEGACY_PROMISE_KEY = "agent-bridge:promises";
 let redisPromise: Promise<ReturnType<typeof createClient>> | null = null;
 
 type PromiseStoreMap = Record<string, PromiseItem>;
@@ -59,27 +60,36 @@ function parseLegacyPromiseString(raw: string | null): PromiseStoreMap {
   return parsed;
 }
 
-async function readPromiseMap(client: Awaited<ReturnType<typeof redis>>) {
-  const keyType = await client.type(PROMISE_KEY);
+async function readPromiseMapForKey(client: Awaited<ReturnType<typeof redis>>, key: string) {
+  const keyType = await client.type(key);
   if (keyType === "none") {
     return {} as PromiseStoreMap;
   }
 
   if (keyType === "hash") {
-    const raw = await client.hGetAll(PROMISE_KEY);
-    return Object.fromEntries(Object.entries(raw).map(([key, value]) => [key, JSON.parse(value) as PromiseItem]));
+    const raw = await client.hGetAll(key);
+    return Object.fromEntries(Object.entries(raw).map(([entryKey, value]) => [entryKey, JSON.parse(value) as PromiseItem]));
   }
 
   if (keyType === "string") {
-    return parseLegacyPromiseString(await client.get(PROMISE_KEY));
+    return parseLegacyPromiseString(await client.get(key));
   }
 
-  throw new Error(`Unsupported Redis type for ${PROMISE_KEY}: ${keyType}`);
+  throw new Error(`Unsupported Redis type for ${key}: ${keyType}`);
+}
+
+async function readLegacyPromiseMap(client: Awaited<ReturnType<typeof redis>>) {
+  try {
+    return await readPromiseMapForKey(client, LEGACY_PROMISE_KEY);
+  } catch {
+    return {} as PromiseStoreMap;
+  }
 }
 
 export async function readPromises() {
   const client = await redis();
-  const items = Object.values(await readPromiseMap(client));
+  const current = await readPromiseMapForKey(client, PROMISE_KEY);
+  const items = Object.values(Object.keys(current).length > 0 ? current : await readLegacyPromiseMap(client));
   return sortPromises(items);
 }
 
@@ -88,7 +98,7 @@ export async function upsertPromise(input: PromiseItem) {
   const keyType = await client.type(PROMISE_KEY);
 
   if (keyType === "string") {
-    const map = await readPromiseMap(client);
+    const map = await readPromiseMapForKey(client, PROMISE_KEY);
     map[input.id] = input;
     await client.set(PROMISE_KEY, JSON.stringify(map));
     return input;

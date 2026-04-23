@@ -12,7 +12,8 @@ export type AgentStatus = {
   source?: string;
 };
 
-const STATUS_KEY = "agent-bridge:agent-status";
+const STATUS_KEY = "agent-bridge:v2:agent-status";
+const LEGACY_STATUS_KEY = "agent-bridge:agent-status";
 let redisPromise: Promise<ReturnType<typeof createClient>> | null = null;
 
 type StatusStoreMap = Record<string, AgentStatus>;
@@ -50,27 +51,36 @@ function parseLegacyStatusString(raw: string | null): StatusStoreMap {
   return parsed;
 }
 
-async function readStatusMap(client: Awaited<ReturnType<typeof redis>>) {
-  const keyType = await client.type(STATUS_KEY);
+async function readStatusMapForKey(client: Awaited<ReturnType<typeof redis>>, key: string) {
+  const keyType = await client.type(key);
   if (keyType === "none") {
     return {} as StatusStoreMap;
   }
 
   if (keyType === "hash") {
-    const raw = await client.hGetAll(STATUS_KEY);
-    return Object.fromEntries(Object.entries(raw).map(([key, value]) => [key, JSON.parse(value) as AgentStatus]));
+    const raw = await client.hGetAll(key);
+    return Object.fromEntries(Object.entries(raw).map(([entryKey, value]) => [entryKey, JSON.parse(value) as AgentStatus]));
   }
 
   if (keyType === "string") {
-    return parseLegacyStatusString(await client.get(STATUS_KEY));
+    return parseLegacyStatusString(await client.get(key));
   }
 
-  throw new Error(`Unsupported Redis type for ${STATUS_KEY}: ${keyType}`);
+  throw new Error(`Unsupported Redis type for ${key}: ${keyType}`);
+}
+
+async function readLegacyStatusMap(client: Awaited<ReturnType<typeof redis>>) {
+  try {
+    return await readStatusMapForKey(client, LEGACY_STATUS_KEY);
+  } catch {
+    return {} as StatusStoreMap;
+  }
 }
 
 export async function readAgentStatuses() {
   const client = await redis();
-  const items = Object.values(await readStatusMap(client));
+  const current = await readStatusMapForKey(client, STATUS_KEY);
+  const items = Object.values(Object.keys(current).length > 0 ? current : await readLegacyStatusMap(client));
   return sortStatuses(items);
 }
 
@@ -91,7 +101,7 @@ export async function upsertAgentStatus(input: Omit<AgentStatus, "updatedAt"> & 
   const keyType = await client.type(STATUS_KEY);
 
   if (keyType === "string") {
-    const map = await readStatusMap(client);
+    const map = await readStatusMapForKey(client, STATUS_KEY);
     map[nextStatus.agent] = nextStatus;
     await client.set(STATUS_KEY, JSON.stringify(map));
     return nextStatus;

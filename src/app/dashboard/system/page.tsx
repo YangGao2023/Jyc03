@@ -221,6 +221,26 @@ function isStale(iso: string) {
   return Date.now() - Date.parse(iso) > 30 * 60 * 1000;
 }
 
+function keepLatestResultPerCommand(messages: Awaited<ReturnType<typeof readQueue>>) {
+  const latestResultByCommandId = new Map<string, (typeof messages)[number]>();
+
+  for (const message of messages) {
+    const commandId = String(message.meta?.commandId || "").trim();
+    if (String(message.kind || "").toLowerCase() !== "result" || !commandId) {
+      continue;
+    }
+    latestResultByCommandId.set(commandId, message);
+  }
+
+  return messages.filter((message) => {
+    const commandId = String(message.meta?.commandId || "").trim();
+    if (String(message.kind || "").toLowerCase() !== "result" || !commandId) {
+      return true;
+    }
+    return latestResultByCommandId.get(commandId)?.id === message.id;
+  });
+}
+
 export default async function DashboardSystemPage() {
   const eventPath = path.join(process.cwd(), "..", "共享协作区", "日志", "事件流.md");
   const rawEvents = safeRead(eventPath);
@@ -228,11 +248,12 @@ export default async function DashboardSystemPage() {
   const events = allEvents.slice(-10).reverse();
   const outboxMessages = await readQueue("outbox").catch(() => []);
   const inboxMessages = await readQueue("inbox").catch(() => []);
+  const visibleInboxMessages = keepLatestResultPerCommand(inboxMessages);
   const agentStatuses = await readAgentStatuses().catch(() => []);
   const recentBridgeMessages = outboxMessages.slice(-5).reverse();
-  const recentInboxMessages = inboxMessages.slice(-5).reverse();
+  const recentInboxMessages = visibleInboxMessages.slice(-5).reverse();
   const olderBridgeMessages = outboxMessages.slice(0, Math.max(0, outboxMessages.length - 5)).reverse();
-  const olderInboxMessages = inboxMessages.slice(0, Math.max(0, inboxMessages.length - 5)).reverse();
+  const olderInboxMessages = visibleInboxMessages.slice(0, Math.max(0, visibleInboxMessages.length - 5)).reverse();
   const recipientSummary = summarizeRecipients(outboxMessages);
   const staleAgentCount = agentStatuses.filter((item) => isStale(item.updatedAt)).length;
 
@@ -318,7 +339,7 @@ export default async function DashboardSystemPage() {
           <div className="mt-4 grid gap-3 text-sm text-slate-600">
             <div className="rounded-2xl border border-slate-200 bg-slate-50 p-4">
               <p className="font-semibold text-sky-700">Bridge 概况</p>
-              <p className="mt-2 leading-6">当前 outbox 共 {outboxMessages.length} 条待分发消息，inbox 共 {inboxMessages.length} 条回传消息。这里开始回答“谁在往桥里派单、积压压在谁那里”。</p>
+              <p className="mt-2 leading-6">当前 outbox 共 {outboxMessages.length} 条待分发消息，inbox 共 {visibleInboxMessages.length} 条可见回传消息。这里开始回答“谁在往桥里派单、积压压在谁那里”。</p>
             </div>
             <div className="rounded-2xl border border-slate-200 bg-slate-50 p-4">
               <p className="font-semibold text-rose-700">协作守望</p>
@@ -339,7 +360,7 @@ export default async function DashboardSystemPage() {
           <DashboardCardTitle
             title="桥接派单 / 回执视图"
             desc="老板现在既能看到谁往桥里发了什么，也能看到 agent 回写了什么。"
-            right={<div className="flex items-center gap-2"><span className="rounded-full bg-slate-900 px-3 py-1 text-xs font-semibold text-white">outbox {outboxMessages.length} 条 · inbox {inboxMessages.length} 条</span><a href="/dashboard?section=system" className="rounded-full border border-slate-200 px-3 py-1 text-xs font-semibold text-slate-700">旧版 system 面板</a></div>}
+            right={<div className="flex items-center gap-2"><span className="rounded-full bg-slate-900 px-3 py-1 text-xs font-semibold text-white">outbox {outboxMessages.length} 条 · inbox {visibleInboxMessages.length} 条</span><a href="/dashboard?section=system" className="rounded-full border border-slate-200 px-3 py-1 text-xs font-semibold text-slate-700">旧版 system 面板</a></div>}
           />
 
           <div className="mt-4 grid gap-4 xl:grid-cols-[0.72fr_1.28fr]">
@@ -438,7 +459,7 @@ export default async function DashboardSystemPage() {
               <div className="rounded-2xl border border-slate-200 bg-emerald-50/60 p-4">
                 <div className="sticky top-0 z-10 -mx-4 -mt-4 mb-3 flex items-center justify-between gap-3 rounded-t-2xl border-b border-emerald-200 bg-emerald-50/95 px-4 py-4 backdrop-blur">
                   <p className="text-sm font-semibold text-slate-900">回执箱，Agent 回给老板的执行结果</p>
-                  <span className="rounded-full bg-emerald-600 px-2.5 py-0.5 text-xs font-semibold text-white">{inboxMessages.length} 条</span>
+                  <span className="rounded-full bg-emerald-600 px-2.5 py-0.5 text-xs font-semibold text-white">{visibleInboxMessages.length} 条</span>
                 </div>
                 <div className="space-y-3 overflow-y-auto pr-1 2xl:max-h-[70vh]">
                   {recentInboxMessages.length > 0 ? (

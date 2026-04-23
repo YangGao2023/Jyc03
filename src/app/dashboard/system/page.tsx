@@ -207,8 +207,10 @@ export default async function DashboardSystemPage() {
   const outboxMessages = await readQueue("outbox").catch(() => []);
   const inboxMessages = await readQueue("inbox").catch(() => []);
   const agentStatuses = await readAgentStatuses().catch(() => []);
-  const recentBridgeMessages = outboxMessages.slice(-8).reverse();
-  const recentInboxMessages = inboxMessages.slice(-8).reverse();
+  const recentBridgeMessages = outboxMessages.slice(-5).reverse();
+  const recentInboxMessages = inboxMessages.slice(-5).reverse();
+  const olderBridgeMessages = outboxMessages.slice(0, Math.max(0, outboxMessages.length - 5)).reverse();
+  const olderInboxMessages = inboxMessages.slice(0, Math.max(0, inboxMessages.length - 5)).reverse();
   const recipientSummary = summarizeRecipients(outboxMessages);
   const staleAgentCount = agentStatuses.filter((item) => isStale(item.updatedAt)).length;
 
@@ -373,17 +375,39 @@ export default async function DashboardSystemPage() {
                   <span className="rounded-full bg-slate-900 px-2.5 py-0.5 text-xs font-semibold text-white">{outboxMessages.length} 条</span>
                 </div>
                 <div className="space-y-3 overflow-y-auto pr-1 2xl:max-h-[70vh]">
-                  {recentBridgeMessages.length > 0 ? recentBridgeMessages.map((message, index) => (
-                    <div key={`${message.id}-${index}`} className="rounded-2xl border border-slate-200 bg-white p-4">
-                      <div className="flex flex-wrap items-center gap-2">
-                        <span className="text-xs text-slate-500">{formatEasternTime(message.createdAt)}</span>
-                        <span className="rounded-full bg-sky-100 px-2.5 py-0.5 text-[11px] font-semibold text-sky-800">{displayBridgeKind(message.kind)}</span>
-                        <span className="rounded-full bg-slate-200 px-2.5 py-0.5 text-[11px] font-semibold text-slate-700">{message.from} → {message.to}</span>
-                      </div>
-                      <p className="mt-2 text-sm leading-6 text-slate-700">{message.text}</p>
-                      {message.meta ? <pre className="mt-3 overflow-x-auto rounded-2xl bg-slate-950/95 p-3 text-[11px] leading-5 text-slate-100">{JSON.stringify(message.meta, null, 2)}</pre> : null}
-                    </div>
-                  )) : (
+                  {recentBridgeMessages.length > 0 ? (
+                    <>
+                      {recentBridgeMessages.map((message, index) => (
+                        <div key={`${message.id}-${index}`} className="rounded-2xl border border-slate-200 bg-white p-4">
+                          <div className="flex flex-wrap items-center gap-2">
+                            <span className="text-xs text-slate-500">{formatEasternTime(message.createdAt)}</span>
+                            <span className="rounded-full bg-sky-100 px-2.5 py-0.5 text-[11px] font-semibold text-sky-800">{displayBridgeKind(message.kind)}</span>
+                            <span className="rounded-full bg-slate-200 px-2.5 py-0.5 text-[11px] font-semibold text-slate-700">{message.from} → {message.to}</span>
+                          </div>
+                          <p className="mt-2 text-sm leading-6 text-slate-700">{message.text}</p>
+                          {message.meta ? <pre className="mt-3 overflow-x-auto rounded-2xl bg-slate-950/95 p-3 text-[11px] leading-5 text-slate-100">{JSON.stringify(message.meta, null, 2)}</pre> : null}
+                        </div>
+                      ))}
+                      {olderBridgeMessages.length > 0 ? (
+                        <details className="rounded-2xl border border-dashed border-slate-300 bg-white/80 p-4">
+                          <summary className="cursor-pointer text-sm font-semibold text-slate-700">展开全部（另外 {olderBridgeMessages.length} 条）</summary>
+                          <div className="mt-3 space-y-3">
+                            {olderBridgeMessages.map((message, index) => (
+                              <div key={`${message.id}-older-${index}`} className="rounded-2xl border border-slate-200 bg-white p-4">
+                                <div className="flex flex-wrap items-center gap-2">
+                                  <span className="text-xs text-slate-500">{formatEasternTime(message.createdAt)}</span>
+                                  <span className="rounded-full bg-sky-100 px-2.5 py-0.5 text-[11px] font-semibold text-sky-800">{displayBridgeKind(message.kind)}</span>
+                                  <span className="rounded-full bg-slate-200 px-2.5 py-0.5 text-[11px] font-semibold text-slate-700">{message.from} → {message.to}</span>
+                                </div>
+                                <p className="mt-2 text-sm leading-6 text-slate-700">{message.text}</p>
+                                {message.meta ? <pre className="mt-3 overflow-x-auto rounded-2xl bg-slate-950/95 p-3 text-[11px] leading-5 text-slate-100">{JSON.stringify(message.meta, null, 2)}</pre> : null}
+                              </div>
+                            ))}
+                          </div>
+                        </details>
+                      ) : null}
+                    </>
+                  ) : (
                     <div className="rounded-2xl border border-dashed border-slate-200 bg-white px-4 py-6 text-sm text-slate-500">当前没有待分发 bridge 消息</div>
                   )}
                 </div>
@@ -395,17 +419,39 @@ export default async function DashboardSystemPage() {
                   <span className="rounded-full bg-emerald-600 px-2.5 py-0.5 text-xs font-semibold text-white">{inboxMessages.length} 条</span>
                 </div>
                 <div className="space-y-3 overflow-y-auto pr-1 2xl:max-h-[70vh]">
-                  {recentInboxMessages.length > 0 ? recentInboxMessages.map((message, index) => (
-                    <div key={`${message.id}-${index}`} className="rounded-2xl border border-emerald-200 bg-white p-4">
-                      <div className="flex flex-wrap items-center gap-2">
-                        <span className="text-xs text-slate-500">{formatEasternTime(message.createdAt)}</span>
-                        <span className="rounded-full bg-emerald-100 px-2.5 py-0.5 text-[11px] font-semibold text-emerald-800">{displayBridgeKind(message.kind)}</span>
-                        <span className="rounded-full bg-slate-200 px-2.5 py-0.5 text-[11px] font-semibold text-slate-700">{message.from} → {message.to}</span>
-                      </div>
-                      <p className="mt-2 text-sm leading-6 text-slate-700">{message.text}</p>
-                      {message.meta ? <pre className="mt-3 overflow-x-auto rounded-2xl bg-slate-950/95 p-3 text-[11px] leading-5 text-slate-100">{JSON.stringify(message.meta, null, 2)}</pre> : null}
-                    </div>
-                  )) : (
+                  {recentInboxMessages.length > 0 ? (
+                    <>
+                      {recentInboxMessages.map((message, index) => (
+                        <div key={`${message.id}-${index}`} className="rounded-2xl border border-emerald-200 bg-white p-4">
+                          <div className="flex flex-wrap items-center gap-2">
+                            <span className="text-xs text-slate-500">{formatEasternTime(message.createdAt)}</span>
+                            <span className="rounded-full bg-emerald-100 px-2.5 py-0.5 text-[11px] font-semibold text-emerald-800">{displayBridgeKind(message.kind)}</span>
+                            <span className="rounded-full bg-slate-200 px-2.5 py-0.5 text-[11px] font-semibold text-slate-700">{message.from} → {message.to}</span>
+                          </div>
+                          <p className="mt-2 text-sm leading-6 text-slate-700">{message.text}</p>
+                          {message.meta ? <pre className="mt-3 overflow-x-auto rounded-2xl bg-slate-950/95 p-3 text-[11px] leading-5 text-slate-100">{JSON.stringify(message.meta, null, 2)}</pre> : null}
+                        </div>
+                      ))}
+                      {olderInboxMessages.length > 0 ? (
+                        <details className="rounded-2xl border border-dashed border-emerald-300 bg-white/80 p-4">
+                          <summary className="cursor-pointer text-sm font-semibold text-emerald-800">展开全部（另外 {olderInboxMessages.length} 条）</summary>
+                          <div className="mt-3 space-y-3">
+                            {olderInboxMessages.map((message, index) => (
+                              <div key={`${message.id}-older-${index}`} className="rounded-2xl border border-emerald-200 bg-white p-4">
+                                <div className="flex flex-wrap items-center gap-2">
+                                  <span className="text-xs text-slate-500">{formatEasternTime(message.createdAt)}</span>
+                                  <span className="rounded-full bg-emerald-100 px-2.5 py-0.5 text-[11px] font-semibold text-emerald-800">{displayBridgeKind(message.kind)}</span>
+                                  <span className="rounded-full bg-slate-200 px-2.5 py-0.5 text-[11px] font-semibold text-slate-700">{message.from} → {message.to}</span>
+                                </div>
+                                <p className="mt-2 text-sm leading-6 text-slate-700">{message.text}</p>
+                                {message.meta ? <pre className="mt-3 overflow-x-auto rounded-2xl bg-slate-950/95 p-3 text-[11px] leading-5 text-slate-100">{JSON.stringify(message.meta, null, 2)}</pre> : null}
+                              </div>
+                            ))}
+                          </div>
+                        </details>
+                      ) : null}
+                    </>
+                  ) : (
                     <div className="rounded-2xl border border-dashed border-emerald-200 bg-white px-4 py-6 text-sm text-slate-500">当前还没有回写到 inbox 的执行结果</div>
                   )}
                 </div>

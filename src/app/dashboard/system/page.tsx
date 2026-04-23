@@ -2,9 +2,11 @@ import { existsSync, readFileSync } from "node:fs";
 import path from "node:path";
 import { homedir } from "node:os";
 import net from "node:net";
+import { revalidatePath } from "next/cache";
 import { DashboardCard, DashboardCardTitle, DashboardPageHeader } from "../components";
-import { readQueue } from "@/lib/agent-bridge";
+import { enqueueMessage, readQueue } from "@/lib/agent-bridge";
 import { readAgentStatuses } from "@/lib/agent-status";
+import { appendEvent } from "@/lib/event-store";
 
 const profileSpecs = [
   {
@@ -42,6 +44,36 @@ type BridgeRecipientSummary = {
   recipient: string;
   count: number;
 };
+
+async function sendCommandAction(formData: FormData) {
+  "use server";
+
+  const to = String(formData.get("to") || "").trim();
+  const text = String(formData.get("text") || "").trim();
+  const kind = String(formData.get("kind") || "command").trim() || "command";
+
+  if (!to || !text) {
+    return;
+  }
+
+  const message = await enqueueMessage("outbox", {
+    from: "YANG",
+    to,
+    text,
+    kind,
+    meta: { source: "owner-dashboard" },
+  });
+
+  await appendEvent({
+    actor: "YANG",
+    target: to,
+    type: "promise_created",
+    result: "ok",
+    summary: `Owner sent ${kind} command via website: ${message.text}`,
+  });
+
+  revalidatePath("/dashboard/system");
+}
 
 function safeRead(filePath: string) {
   return existsSync(filePath) ? readFileSync(filePath, "utf8") : "";
@@ -188,6 +220,17 @@ export default async function DashboardSystemPage() {
           description="这一页开始真正回答老板最想知道的系统问题：谁在线，桥里现在堆了什么消息，谁在往谁那里派单。"
           right={<a href="/dashboard" className="rounded-2xl border border-white/10 bg-white px-4 py-2 text-sm font-semibold text-slate-950">返回后台</a>}
         />
+
+        <form action={sendCommandAction} className="mt-4 grid gap-3 rounded-[24px] border border-white/10 bg-white/5 p-4 md:grid-cols-[180px_140px_1fr_auto]">
+          <input name="to" placeholder="发给谁，例如 阿三 / 零号 / 阿本" className="rounded-xl border border-white/10 bg-slate-950/60 px-3 py-2 text-sm text-white outline-none placeholder:text-slate-400" required />
+          <select name="kind" className="rounded-xl border border-white/10 bg-slate-950/60 px-3 py-2 text-sm text-white outline-none">
+            <option value="command">command</option>
+            <option value="text">text</option>
+            <option value="voice">voice</option>
+          </select>
+          <input name="text" placeholder="直接给 Agent 的命令内容" className="rounded-xl border border-white/10 bg-slate-950/60 px-3 py-2 text-sm text-white outline-none placeholder:text-slate-400" required />
+          <button type="submit" className="rounded-2xl bg-white px-4 py-2 text-sm font-semibold text-slate-950">网站直接发命令</button>
+        </form>
 
         <div className="mt-4 grid gap-3 md:grid-cols-2 xl:grid-cols-4">
           <div className="rounded-2xl border border-white/10 bg-white/5 p-4">

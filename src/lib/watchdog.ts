@@ -1,8 +1,8 @@
 import { enqueueMessage, readQueue } from "@/lib/agent-bridge";
 import { readAgentStatuses } from "@/lib/agent-status";
-import { readPromises } from "@/lib/promise-store";
+import { readPromises, upsertPromise } from "@/lib/promise-store";
 import { readProofs } from "@/lib/proof-store";
-import { makeWakeId, readWakeQueue, upsertWakeItem } from "@/lib/wake-store";
+import { readWakeQueue, upsertWakeItem } from "@/lib/wake-store";
 
 export type WatchdogAlert = {
   kind: "stale_agent" | "overdue_promise" | "blocked_promise" | "missing_proof" | "pending_wake";
@@ -12,6 +12,12 @@ export type WatchdogAlert = {
   target?: string;
   relatedId?: string;
 };
+
+const RETIRED_AGENTS = new Set(["阿本", "小四", "test"]);
+
+function isRetiredAgent(agent: string | undefined) {
+  return RETIRED_AGENTS.has(String(agent || "").trim());
+}
 
 export async function computeWatchdogAlerts() {
   const [agentStatuses, promises, proofs, wakeItems] = await Promise.all([
@@ -25,6 +31,9 @@ export async function computeWatchdogAlerts() {
   const alerts: WatchdogAlert[] = [];
 
   for (const item of agentStatuses) {
+    if (isRetiredAgent(item.agent) || ["dead", "archived"].includes(String(item.status || "").toLowerCase())) {
+      continue;
+    }
     const updatedAt = Date.parse(item.updatedAt || "");
     if (Number.isFinite(updatedAt) && now - updatedAt > 30 * 60 * 1000) {
       alerts.push({
@@ -90,10 +99,11 @@ export async function computeWatchdogAlerts() {
 }
 
 export async function runWatchdogActions() {
-  const [alerts, wakeItems, outbox] = await Promise.all([
+  const [alerts, wakeItems, outbox, promises] = await Promise.all([
     computeWatchdogAlerts(),
     readWakeQueue().catch(() => []),
     readQueue("outbox").catch(() => []),
+    readPromises().catch(() => []),
   ]);
 
   const actions: string[] = [];
@@ -101,6 +111,53 @@ export async function runWatchdogActions() {
   for (const alert of alerts) {
     if (!alert.relatedId || !alert.target) {
       continue;
+    }
+
+    if (alert.kind === "stale_agent") {
+      const ownedPromises = promises.filter(
+        (item) => item.owner === alert.target && ["promised", "acknowledged", "in_progress", "blocked"].includes(item.status),
+      );
+      for (const item of ownedPromises) {
+        if (!item.backup || isRetiredAgent(item.backup)) {
+          continue;
+        }
+        await upsertPromise({
+          ...item,
+          owner: item.backup,
+          status: "handed_off",
+          blockedReason: `watchdog stale handoff from ${alert.target}`,
+          latestProgressAt: new Date().toISOString(),
+        });
+
+        const wakeId = `WAKE-STALE-HANDOFF-${item.id}-${item.backup}`;
+        const hasWake = wakeItems.some((wake) => wake.id === wakeId);
+        if (!hasWake) {
+          await upsertWakeItem({
+            id: wakeId,
+            targetAgent: item.backup,
+            kind: "stale_owner_handoff",
+            relatedId: item.id,
+            priority: "high",
+            createdAt: new Date().toISOString(),
+            note: `owner ${alert.target} stale, watchdog handed this promise to backup`,
+          });
+          actions.push(`wake:stale-backup:${wakeId}`);
+        }
+
+        const hasMessage = outbox.some(
+          (msg) => msg.kind === "watchdog_stale_handoff" && msg.to === item.backup && msg.meta?.relatedId === item.id,
+        );
+        if (!hasMessage) {
+          await enqueueMessage("outbox", {
+            from: "watchdog",
+            to: item.backup,
+            kind: "watchdog_stale_handoff",
+            text: `${item.title} owner stale, backup takeover required`,
+            meta: { relatedId: item.id, staleOwner: alert.target },
+          });
+          actions.push(`outbox:stale-backup:${item.id}`);
+        }
+      }
     }
 
     if (alert.kind === "overdue_promise") {

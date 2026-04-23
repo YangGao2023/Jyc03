@@ -33,8 +33,8 @@ async function redis() {
 
 export async function readAgentStatuses() {
   const client = await redis();
-  const raw = await client.get(STATUS_KEY);
-  const items = raw ? (JSON.parse(raw) as AgentStatus[]) : [];
+  const raw = await client.hGetAll(STATUS_KEY);
+  const items = Object.values(raw).map((value) => JSON.parse(value) as AgentStatus);
   return items.sort((a, b) => Date.parse(b.updatedAt) - Date.parse(a.updatedAt));
 }
 
@@ -51,11 +51,7 @@ export async function upsertAgentStatus(input: Omit<AgentStatus, "updatedAt"> & 
     updatedAt: input.updatedAt || new Date().toISOString(),
   };
 
-  const items = await readAgentStatuses();
-  const filtered = items.filter((item) => item.agent !== nextStatus.agent);
-  filtered.push(nextStatus);
-
   const client = await redis();
-  await client.set(STATUS_KEY, JSON.stringify(filtered));
+  await client.hSet(STATUS_KEY, nextStatus.agent, JSON.stringify(nextStatus));
   return nextStatus;
 }

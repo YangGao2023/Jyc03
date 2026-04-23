@@ -1,7 +1,8 @@
+import { enqueueMessage, readQueue } from "@/lib/agent-bridge";
 import { readAgentStatuses } from "@/lib/agent-status";
 import { readPromises } from "@/lib/promise-store";
 import { readProofs } from "@/lib/proof-store";
-import { readWakeQueue } from "@/lib/wake-store";
+import { makeWakeId, readWakeQueue, upsertWakeItem } from "@/lib/wake-store";
 
 export type WatchdogAlert = {
   kind: "stale_agent" | "overdue_promise" | "blocked_promise" | "missing_proof" | "pending_wake";
@@ -42,7 +43,7 @@ export async function computeWatchdogAlerts() {
         kind: "blocked_promise",
         level: "error",
         title: `${item.title} 已阻塞`,
-        detail: item.blockedReason || "Promise 当前处于 blocked 状态。",
+        detail: `${item.blockedReason || "Promise 当前处于 blocked 状态。"}${item.backup ? ` backup=${item.backup}` : ""}`,
         target: item.owner,
         relatedId: item.id,
       });
@@ -86,4 +87,89 @@ export async function computeWatchdogAlerts() {
   }
 
   return alerts;
+}
+
+export async function runWatchdogActions() {
+  const [alerts, wakeItems, outbox] = await Promise.all([
+    computeWatchdogAlerts(),
+    readWakeQueue().catch(() => []),
+    readQueue("outbox").catch(() => []),
+  ]);
+
+  const actions: string[] = [];
+
+  for (const alert of alerts) {
+    if (!alert.relatedId || !alert.target) {
+      continue;
+    }
+
+    if (alert.kind === "overdue_promise") {
+      const wakeId = `WAKE-OVERDUE-${alert.relatedId}-${alert.target}`;
+      const hasWake = wakeItems.some((item) => item.id === wakeId);
+      if (!hasWake) {
+        await upsertWakeItem({
+          id: wakeId,
+          targetAgent: alert.target,
+          kind: "overdue_followup",
+          relatedId: alert.relatedId,
+          priority: "high",
+          createdAt: new Date().toISOString(),
+          note: alert.detail,
+        });
+        actions.push(`wake:${wakeId}`);
+      }
+
+      const hasMessage = outbox.some(
+        (item) => item.kind === "watchdog_overdue" && item.to === alert.target && item.meta?.relatedId === alert.relatedId,
+      );
+      if (!hasMessage) {
+        await enqueueMessage("outbox", {
+          from: "watchdog",
+          to: alert.target,
+          kind: "watchdog_overdue",
+          text: alert.title,
+          meta: { relatedId: alert.relatedId, detail: alert.detail },
+        });
+        actions.push(`outbox:owner:${alert.relatedId}`);
+      }
+    }
+
+    if (alert.kind === "blocked_promise") {
+      const backupMatch = alert.detail.match(/backup=([^,\s]+)/i);
+      const backup = backupMatch?.[1]?.trim();
+      if (!backup) {
+        continue;
+      }
+      const wakeId = `WAKE-BLOCKED-${alert.relatedId}-${backup}`;
+      const hasWake = wakeItems.some((item) => item.id === wakeId);
+      if (!hasWake) {
+        await upsertWakeItem({
+          id: wakeId,
+          targetAgent: backup,
+          kind: "blocked_handoff",
+          relatedId: alert.relatedId,
+          priority: "high",
+          createdAt: new Date().toISOString(),
+          note: alert.detail,
+        });
+        actions.push(`wake:backup:${wakeId}`);
+      }
+
+      const hasMessage = outbox.some(
+        (item) => item.kind === "watchdog_blocked" && item.to === backup && item.meta?.relatedId === alert.relatedId,
+      );
+      if (!hasMessage) {
+        await enqueueMessage("outbox", {
+          from: "watchdog",
+          to: backup,
+          kind: "watchdog_blocked",
+          text: alert.title,
+          meta: { relatedId: alert.relatedId, detail: alert.detail },
+        });
+        actions.push(`outbox:backup:${alert.relatedId}`);
+      }
+    }
+  }
+
+  return { alerts, actions };
 }

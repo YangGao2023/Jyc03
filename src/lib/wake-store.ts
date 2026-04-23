@@ -31,17 +31,19 @@ async function redis() {
 
 export async function readWakeQueue() {
   const client = await redis();
-  const raw = await client.get(WAKE_KEY);
-  const items = raw ? (JSON.parse(raw) as WakeItem[]) : [];
+  const raw = await client.hGetAll(WAKE_KEY);
+  const items = Object.values(raw).map((value) => JSON.parse(value) as WakeItem);
   return items.sort((a, b) => Date.parse(b.createdAt) - Date.parse(a.createdAt));
 }
 
-export async function appendWakeItem(input: WakeItem) {
-  const items = await readWakeQueue();
-  items.push(input);
+export async function upsertWakeItem(input: WakeItem) {
   const client = await redis();
-  await client.set(WAKE_KEY, JSON.stringify(items));
+  await client.hSet(WAKE_KEY, input.id, JSON.stringify(input));
   return input;
+}
+
+export async function appendWakeItem(input: WakeItem) {
+  return upsertWakeItem(input);
 }
 
 export function makeWakeId() {

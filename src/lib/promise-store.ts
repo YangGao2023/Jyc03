@@ -42,17 +42,14 @@ async function redis() {
 
 export async function readPromises() {
   const client = await redis();
-  const raw = await client.get(PROMISE_KEY);
-  const items = raw ? (JSON.parse(raw) as PromiseItem[]) : [];
+  const raw = await client.hGetAll(PROMISE_KEY);
+  const items = Object.values(raw).map((value) => JSON.parse(value) as PromiseItem);
   return items.sort((a, b) => Date.parse(b.createdAt) - Date.parse(a.createdAt));
 }
 
 export async function upsertPromise(input: PromiseItem) {
-  const items = await readPromises();
-  const filtered = items.filter((item) => item.id !== input.id);
-  filtered.push(input);
   const client = await redis();
-  await client.set(PROMISE_KEY, JSON.stringify(filtered));
+  await client.hSet(PROMISE_KEY, input.id, JSON.stringify(input));
   return input;
 }
 

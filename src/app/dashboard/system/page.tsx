@@ -285,7 +285,7 @@ export default async function DashboardSystemPage() {
             <p className="mt-2 text-2xl font-semibold text-white">{events.length} / {allEvents.length}</p>
           </div>
           <div className="rounded-2xl border border-white/10 bg-white/5 p-4">
-            <p className="text-[11px] uppercase tracking-[0.2em] text-slate-400">Bridge Outbox</p>
+            <p className="text-[11px] uppercase tracking-[0.2em] text-slate-400">桥接发出箱</p>
             <p className="mt-2 text-2xl font-semibold text-white">{outboxMessages.length}</p>
           </div>
           <div className="rounded-2xl border border-white/10 bg-white/5 p-4">
@@ -337,7 +337,7 @@ export default async function DashboardSystemPage() {
 
         <DashboardCard>
           <DashboardCardTitle
-            title="Bridge 派单 / 回执视图"
+            title="桥接派单 / 回执视图"
             desc="老板现在既能看到谁往桥里发了什么，也能看到 agent 回写了什么。"
             right={<div className="flex items-center gap-2"><span className="rounded-full bg-slate-900 px-3 py-1 text-xs font-semibold text-white">outbox {outboxMessages.length} 条 · inbox {inboxMessages.length} 条</span><a href="/dashboard?section=system" className="rounded-full border border-slate-200 px-3 py-1 text-xs font-semibold text-slate-700">旧版 system 面板</a></div>}
           />
@@ -393,7 +393,7 @@ export default async function DashboardSystemPage() {
             <div className="grid gap-3 2xl:grid-cols-2">
               <div className="rounded-2xl border border-slate-200 bg-slate-50 p-4">
                 <div className="sticky top-0 z-10 -mx-4 -mt-4 mb-3 flex items-center justify-between gap-3 rounded-t-2xl border-b border-slate-200 bg-slate-50/95 px-4 py-4 backdrop-blur">
-                  <p className="text-sm font-semibold text-slate-900">Outbox，网站发给 Agent 的命令</p>
+                  <p className="text-sm font-semibold text-slate-900">发出箱，网站发给 Agent 的命令</p>
                   <span className="rounded-full bg-slate-900 px-2.5 py-0.5 text-xs font-semibold text-white">{outboxMessages.length} 条</span>
                 </div>
                 <div className="space-y-3 overflow-y-auto pr-1 2xl:max-h-[70vh]">
@@ -437,7 +437,7 @@ export default async function DashboardSystemPage() {
 
               <div className="rounded-2xl border border-slate-200 bg-emerald-50/60 p-4">
                 <div className="sticky top-0 z-10 -mx-4 -mt-4 mb-3 flex items-center justify-between gap-3 rounded-t-2xl border-b border-emerald-200 bg-emerald-50/95 px-4 py-4 backdrop-blur">
-                  <p className="text-sm font-semibold text-slate-900">Inbox，Agent 回给老板的执行结果</p>
+                  <p className="text-sm font-semibold text-slate-900">回执箱，Agent 回给老板的执行结果</p>
                   <span className="rounded-full bg-emerald-600 px-2.5 py-0.5 text-xs font-semibold text-white">{inboxMessages.length} 条</span>
                 </div>
                 <div className="space-y-3 overflow-y-auto pr-1 2xl:max-h-[70vh]">

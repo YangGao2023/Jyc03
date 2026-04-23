@@ -208,6 +208,7 @@ export default async function DashboardSystemPage() {
   const inboxMessages = await readQueue("inbox").catch(() => []);
   const agentStatuses = await readAgentStatuses().catch(() => []);
   const recentBridgeMessages = outboxMessages.slice(-8).reverse();
+  const recentInboxMessages = inboxMessages.slice(-8).reverse();
   const recipientSummary = summarizeRecipients(outboxMessages);
   const staleAgentCount = agentStatuses.filter((item) => isStale(item.updatedAt)).length;
 
@@ -312,9 +313,9 @@ export default async function DashboardSystemPage() {
 
         <DashboardCard>
           <DashboardCardTitle
-            title="Bridge 派单视图"
-            desc="老板终于能直接看到：谁往桥里发了什么，当前积压压在谁那里。"
-            right={<div className="flex items-center gap-2"><span className="rounded-full bg-slate-900 px-3 py-1 text-xs font-semibold text-white">outbox {outboxMessages.length} 条</span><a href="/dashboard?section=system" className="rounded-full border border-slate-200 px-3 py-1 text-xs font-semibold text-slate-700">旧版 system 面板</a></div>}
+            title="Bridge 派单 / 回执视图"
+            desc="老板现在既能看到谁往桥里发了什么，也能看到 agent 回写了什么。"
+            right={<div className="flex items-center gap-2"><span className="rounded-full bg-slate-900 px-3 py-1 text-xs font-semibold text-white">outbox {outboxMessages.length} 条 · inbox {inboxMessages.length} 条</span><a href="/dashboard?section=system" className="rounded-full border border-slate-200 px-3 py-1 text-xs font-semibold text-slate-700">旧版 system 面板</a></div>}
           />
 
           <div className="mt-4 grid gap-4 xl:grid-cols-[0.72fr_1.28fr]">
@@ -366,19 +367,49 @@ export default async function DashboardSystemPage() {
             </div>
 
             <div className="space-y-3">
-              {recentBridgeMessages.length > 0 ? recentBridgeMessages.map((message, index) => (
-                <div key={`${message.id}-${index}`} className="rounded-2xl border border-slate-200 bg-slate-50 p-4">
-                  <div className="flex flex-wrap items-center gap-2">
-                    <span className="text-xs text-slate-500">{formatEasternTime(message.createdAt)}</span>
-                    <span className="rounded-full bg-sky-100 px-2.5 py-0.5 text-[11px] font-semibold text-sky-800">{displayBridgeKind(message.kind)}</span>
-                    <span className="rounded-full bg-slate-200 px-2.5 py-0.5 text-[11px] font-semibold text-slate-700">{message.from} → {message.to}</span>
-                  </div>
-                  <p className="mt-2 text-sm leading-6 text-slate-700">{message.text}</p>
-                  {message.meta ? <pre className="mt-3 overflow-x-auto rounded-2xl bg-slate-950/95 p-3 text-[11px] leading-5 text-slate-100">{JSON.stringify(message.meta, null, 2)}</pre> : null}
+              <div className="rounded-2xl border border-slate-200 bg-slate-50 p-4">
+                <div className="flex items-center justify-between gap-3">
+                  <p className="text-sm font-semibold text-slate-900">Outbox，网站发给 Agent 的命令</p>
+                  <span className="rounded-full bg-slate-900 px-2.5 py-0.5 text-xs font-semibold text-white">{outboxMessages.length} 条</span>
                 </div>
-              )) : (
-                <div className="rounded-2xl border border-dashed border-slate-200 bg-slate-50 px-4 py-6 text-sm text-slate-500">当前没有待分发 bridge 消息</div>
-              )}
+                <div className="mt-3 space-y-3">
+                  {recentBridgeMessages.length > 0 ? recentBridgeMessages.map((message, index) => (
+                    <div key={`${message.id}-${index}`} className="rounded-2xl border border-slate-200 bg-white p-4">
+                      <div className="flex flex-wrap items-center gap-2">
+                        <span className="text-xs text-slate-500">{formatEasternTime(message.createdAt)}</span>
+                        <span className="rounded-full bg-sky-100 px-2.5 py-0.5 text-[11px] font-semibold text-sky-800">{displayBridgeKind(message.kind)}</span>
+                        <span className="rounded-full bg-slate-200 px-2.5 py-0.5 text-[11px] font-semibold text-slate-700">{message.from} → {message.to}</span>
+                      </div>
+                      <p className="mt-2 text-sm leading-6 text-slate-700">{message.text}</p>
+                      {message.meta ? <pre className="mt-3 overflow-x-auto rounded-2xl bg-slate-950/95 p-3 text-[11px] leading-5 text-slate-100">{JSON.stringify(message.meta, null, 2)}</pre> : null}
+                    </div>
+                  )) : (
+                    <div className="rounded-2xl border border-dashed border-slate-200 bg-white px-4 py-6 text-sm text-slate-500">当前没有待分发 bridge 消息</div>
+                  )}
+                </div>
+              </div>
+
+              <div className="rounded-2xl border border-slate-200 bg-emerald-50/60 p-4">
+                <div className="flex items-center justify-between gap-3">
+                  <p className="text-sm font-semibold text-slate-900">Inbox，Agent 回给老板的执行结果</p>
+                  <span className="rounded-full bg-emerald-600 px-2.5 py-0.5 text-xs font-semibold text-white">{inboxMessages.length} 条</span>
+                </div>
+                <div className="mt-3 space-y-3">
+                  {recentInboxMessages.length > 0 ? recentInboxMessages.map((message, index) => (
+                    <div key={`${message.id}-${index}`} className="rounded-2xl border border-emerald-200 bg-white p-4">
+                      <div className="flex flex-wrap items-center gap-2">
+                        <span className="text-xs text-slate-500">{formatEasternTime(message.createdAt)}</span>
+                        <span className="rounded-full bg-emerald-100 px-2.5 py-0.5 text-[11px] font-semibold text-emerald-800">{displayBridgeKind(message.kind)}</span>
+                        <span className="rounded-full bg-slate-200 px-2.5 py-0.5 text-[11px] font-semibold text-slate-700">{message.from} → {message.to}</span>
+                      </div>
+                      <p className="mt-2 text-sm leading-6 text-slate-700">{message.text}</p>
+                      {message.meta ? <pre className="mt-3 overflow-x-auto rounded-2xl bg-slate-950/95 p-3 text-[11px] leading-5 text-slate-100">{JSON.stringify(message.meta, null, 2)}</pre> : null}
+                    </div>
+                  )) : (
+                    <div className="rounded-2xl border border-dashed border-emerald-200 bg-white px-4 py-6 text-sm text-slate-500">当前还没有回写到 inbox 的执行结果</div>
+                  )}
+                </div>
+              </div>
             </div>
           </div>
         </DashboardCard>

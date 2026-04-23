@@ -175,7 +175,29 @@ function displayBridgeKind(value: string) {
   if (normalized === "voice") return "语音任务";
   if (normalized === "command") return "命令";
   if (normalized === "text") return "文本";
+  if (normalized === "receipt") return "已收到";
+  if (normalized === "result") return "已完成";
+  if (normalized === "error") return "失败";
   return value || "未知";
+}
+
+function bridgeKindBadge(value: string) {
+  const normalized = value.trim().toLowerCase();
+  if (normalized === "result") return "bg-emerald-100 text-emerald-800";
+  if (normalized === "receipt") return "bg-amber-100 text-amber-800";
+  if (normalized === "error") return "bg-rose-100 text-rose-800";
+  if (normalized === "voice") return "bg-fuchsia-100 text-fuchsia-800";
+  if (normalized === "command") return "bg-sky-100 text-sky-800";
+  if (normalized === "text") return "bg-slate-200 text-slate-700";
+  return "bg-slate-100 text-slate-700";
+}
+
+function bridgeCardTone(value: string, fallback: string) {
+  const normalized = value.trim().toLowerCase();
+  if (normalized === "result") return "border-emerald-300 bg-emerald-50/40";
+  if (normalized === "receipt") return "border-amber-300 bg-amber-50/40";
+  if (normalized === "error") return "border-rose-300 bg-rose-50/40";
+  return fallback;
 }
 
 function statusBadge(status: string) {
@@ -378,10 +400,10 @@ export default async function DashboardSystemPage() {
                   {recentBridgeMessages.length > 0 ? (
                     <>
                       {recentBridgeMessages.map((message, index) => (
-                        <div key={`${message.id}-${index}`} className="rounded-2xl border border-slate-200 bg-white p-4">
+                        <div key={`${message.id}-${index}`} className={`rounded-2xl border bg-white p-4 ${bridgeCardTone(message.kind, "border-slate-200")}`}>
                           <div className="flex flex-wrap items-center gap-2">
                             <span className="text-xs text-slate-500">{formatEasternTime(message.createdAt)}</span>
-                            <span className="rounded-full bg-sky-100 px-2.5 py-0.5 text-[11px] font-semibold text-sky-800">{displayBridgeKind(message.kind)}</span>
+                            <span className={`rounded-full px-2.5 py-0.5 text-[11px] font-semibold ${bridgeKindBadge(message.kind)}`}>{displayBridgeKind(message.kind)}</span>
                             <span className="rounded-full bg-slate-200 px-2.5 py-0.5 text-[11px] font-semibold text-slate-700">{message.from} → {message.to}</span>
                           </div>
                           <p className="mt-2 text-sm leading-6 text-slate-700">{message.text}</p>
@@ -393,10 +415,10 @@ export default async function DashboardSystemPage() {
                           <summary className="cursor-pointer text-sm font-semibold text-slate-700">展开全部（另外 {olderBridgeMessages.length} 条）</summary>
                           <div className="mt-3 space-y-3">
                             {olderBridgeMessages.map((message, index) => (
-                              <div key={`${message.id}-older-${index}`} className="rounded-2xl border border-slate-200 bg-white p-4">
+                              <div key={`${message.id}-older-${index}`} className={`rounded-2xl border bg-white p-4 ${bridgeCardTone(message.kind, "border-slate-200")}`}>
                                 <div className="flex flex-wrap items-center gap-2">
                                   <span className="text-xs text-slate-500">{formatEasternTime(message.createdAt)}</span>
-                                  <span className="rounded-full bg-sky-100 px-2.5 py-0.5 text-[11px] font-semibold text-sky-800">{displayBridgeKind(message.kind)}</span>
+                                  <span className={`rounded-full px-2.5 py-0.5 text-[11px] font-semibold ${bridgeKindBadge(message.kind)}`}>{displayBridgeKind(message.kind)}</span>
                                   <span className="rounded-full bg-slate-200 px-2.5 py-0.5 text-[11px] font-semibold text-slate-700">{message.from} → {message.to}</span>
                                 </div>
                                 <p className="mt-2 text-sm leading-6 text-slate-700">{message.text}</p>
@@ -422,10 +444,10 @@ export default async function DashboardSystemPage() {
                   {recentInboxMessages.length > 0 ? (
                     <>
                       {recentInboxMessages.map((message, index) => (
-                        <div key={`${message.id}-${index}`} className="rounded-2xl border border-emerald-200 bg-white p-4">
+                        <div key={`${message.id}-${index}`} className={`rounded-2xl border bg-white p-4 ${bridgeCardTone(message.kind, "border-emerald-200")}`}>
                           <div className="flex flex-wrap items-center gap-2">
                             <span className="text-xs text-slate-500">{formatEasternTime(message.createdAt)}</span>
-                            <span className="rounded-full bg-emerald-100 px-2.5 py-0.5 text-[11px] font-semibold text-emerald-800">{displayBridgeKind(message.kind)}</span>
+                            <span className={`rounded-full px-2.5 py-0.5 text-[11px] font-semibold ${bridgeKindBadge(message.kind)}`}>{displayBridgeKind(message.kind)}</span>
                             <span className="rounded-full bg-slate-200 px-2.5 py-0.5 text-[11px] font-semibold text-slate-700">{message.from} → {message.to}</span>
                           </div>
                           <p className="mt-2 text-sm leading-6 text-slate-700">{message.text}</p>
@@ -437,10 +459,10 @@ export default async function DashboardSystemPage() {
                           <summary className="cursor-pointer text-sm font-semibold text-emerald-800">展开全部（另外 {olderInboxMessages.length} 条）</summary>
                           <div className="mt-3 space-y-3">
                             {olderInboxMessages.map((message, index) => (
-                              <div key={`${message.id}-older-${index}`} className="rounded-2xl border border-emerald-200 bg-white p-4">
+                              <div key={`${message.id}-older-${index}`} className={`rounded-2xl border bg-white p-4 ${bridgeCardTone(message.kind, "border-emerald-200")}`}>
                                 <div className="flex flex-wrap items-center gap-2">
                                   <span className="text-xs text-slate-500">{formatEasternTime(message.createdAt)}</span>
-                                  <span className="rounded-full bg-emerald-100 px-2.5 py-0.5 text-[11px] font-semibold text-emerald-800">{displayBridgeKind(message.kind)}</span>
+                                  <span className={`rounded-full px-2.5 py-0.5 text-[11px] font-semibold ${bridgeKindBadge(message.kind)}`}>{displayBridgeKind(message.kind)}</span>
                                   <span className="rounded-full bg-slate-200 px-2.5 py-0.5 text-[11px] font-semibold text-slate-700">{message.from} → {message.to}</span>
                                 </div>
                                 <p className="mt-2 text-sm leading-6 text-slate-700">{message.text}</p>

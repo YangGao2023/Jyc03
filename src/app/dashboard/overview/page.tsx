@@ -1,8 +1,9 @@
 import { existsSync, readFileSync } from "node:fs";
 import path from "node:path";
+import { revalidatePath } from "next/cache";
 import { DashboardCard, DashboardCardTitle, DashboardPageHeader } from "../components";
-import { readPromises } from "@/lib/promise-store";
-import { readProofs } from "@/lib/proof-store";
+import { makePromiseId, readPromises, upsertPromise } from "@/lib/promise-store";
+import { appendProof, makeProofId, readProofs } from "@/lib/proof-store";
 import { readWakeQueue } from "@/lib/wake-store";
 import { computeWatchdogAlerts } from "@/lib/watchdog";
 
@@ -47,6 +48,69 @@ function alertTone(value: string) {
   return value === "error" ? "bg-rose-100 text-rose-800" : "bg-amber-100 text-amber-800";
 }
 
+async function createPromiseAction(formData: FormData) {
+  "use server";
+
+  const title = String(formData.get("title") || "").trim();
+  const owner = String(formData.get("owner") || "").trim();
+  const description = String(formData.get("description") || "").trim();
+  const backup = String(formData.get("backup") || "").trim();
+
+  if (!title || !owner) {
+    return;
+  }
+
+  await upsertPromise({
+    id: makePromiseId(),
+    kind: "owner_created",
+    title,
+    description: description || undefined,
+    owner,
+    backup: backup || undefined,
+    createdBy: "YANG",
+    createdAt: new Date().toISOString(),
+    status: "promised",
+    latestProgressAt: new Date().toISOString(),
+  });
+
+  revalidatePath("/dashboard/overview");
+}
+
+async function completePromiseAction(formData: FormData) {
+  "use server";
+
+  const promiseId = String(formData.get("promiseId") || "").trim();
+  if (!promiseId) {
+    return;
+  }
+
+  const promises = await readPromises();
+  const current = promises.find((item) => item.id === promiseId);
+  if (!current || current.status === "completed") {
+    return;
+  }
+
+  const completedAt = new Date().toISOString();
+  await upsertPromise({
+    ...current,
+    status: "completed",
+    latestProgressAt: completedAt,
+    latestProofSummary: `owner completed at ${completedAt}`,
+    blockedReason: undefined,
+  });
+
+  await appendProof({
+    id: makeProofId(),
+    promiseId,
+    proofType: "owner_completion",
+    createdAt: completedAt,
+    createdBy: "YANG",
+    summary: `Owner marked promise complete: ${current.title}`,
+  });
+
+  revalidatePath("/dashboard/overview");
+}
+
 export default async function DashboardOverviewPage() {
   const todoPath = path.join(process.cwd(), "..", "共享协作区", "任务", "TODO.md");
   const taskPath = path.join(process.cwd(), "..", "共享协作区", "任务", "任务队列.md");
@@ -67,7 +131,8 @@ export default async function DashboardOverviewPage() {
   const handoffCount = countMatches(handoffRaw, /^### /);
   const recentEvents = parseRecentEvents(eventRaw);
   const totalEventCount = countMatches(eventRaw, /^- \[/);
-  const activePromises = promises.filter((item) => !["completed", "expired"].includes(item.status)).length;
+  const openPromises = promises.filter((item) => !["completed", "expired"].includes(item.status));
+  const activePromises = openPromises.length;
   const blockedPromises = promises.filter((item) => item.status === "blocked").length;
   const overduePromises = promises.filter((item) => item.nextCheckAt && Date.parse(item.nextCheckAt) < Date.now() && !["completed", "expired"].includes(item.status)).length;
   const recentProofs = proofs.slice(0, 4);
@@ -92,22 +157,58 @@ export default async function DashboardOverviewPage() {
         </div>
       </div>
 
-      <div className="mt-4 grid gap-4 xl:grid-cols-[1fr_1fr]">
-        <DashboardCard>
-          <DashboardCardTitle title="Watchdog 告警" desc="第一版督战层，开始自动找出 stale / overdue / missing proof。" right={<span className="rounded-full bg-slate-900 px-3 py-1 text-xs font-semibold text-white">{alerts.length} 条</span>} />
-          <div className="mt-4 grid gap-3">
-            {recentAlerts.length > 0 ? recentAlerts.map((item, index) => (
-              <div key={`${item.kind}-${item.relatedId || index}`} className="rounded-2xl border border-slate-200 bg-slate-50 p-4">
-                <div className="flex flex-wrap items-center justify-between gap-2">
-                  <p className="text-sm font-semibold text-slate-900">{item.title}</p>
-                  <span className={`rounded-full px-2.5 py-0.5 text-[11px] font-semibold ${alertTone(item.level)}`}>{item.level}</span>
-                </div>
-                <p className="mt-2 text-sm leading-6 text-slate-600">{item.detail}</p>
-                <p className="mt-1 text-xs text-slate-500">target: {item.target || "-"} · related: {item.relatedId || "-"}</p>
+      <div className="mt-4 grid gap-4 xl:grid-cols-[1.1fr_0.9fr]">
+        <section className="space-y-4">
+          <DashboardCard>
+            <DashboardCardTitle title="Promise 可操作化" desc="先把老板最常用的两刀落地：创建 Promise、标记完成。" right={<span className="rounded-full bg-slate-900 px-3 py-1 text-xs font-semibold text-white">{promises.length} 条</span>} />
+            <form action={createPromiseAction} className="mt-4 grid gap-3 rounded-2xl border border-slate-200 bg-slate-50 p-4 md:grid-cols-2">
+              <input name="title" placeholder="Promise 标题" className="rounded-xl border border-slate-200 bg-white px-3 py-2 text-sm outline-none" required />
+              <input name="owner" placeholder="Owner，例如 阿三 / 零号" className="rounded-xl border border-slate-200 bg-white px-3 py-2 text-sm outline-none" required />
+              <input name="backup" placeholder="Backup，可选" className="rounded-xl border border-slate-200 bg-white px-3 py-2 text-sm outline-none" />
+              <input name="description" placeholder="备注，可选" className="rounded-xl border border-slate-200 bg-white px-3 py-2 text-sm outline-none" />
+              <div className="md:col-span-2 flex justify-end">
+                <button type="submit" className="rounded-2xl bg-slate-950 px-4 py-2 text-sm font-semibold text-white">创建 Promise</button>
               </div>
-            )) : <div className="rounded-2xl border border-dashed border-slate-200 bg-slate-50 px-4 py-6 text-sm text-slate-500">当前没有 watchdog 告警。</div>}
-          </div>
-        </DashboardCard>
+            </form>
+            <div className="mt-4 grid gap-3">
+              {openPromises.length > 0 ? openPromises.slice(0, 6).map((item) => (
+                <div key={item.id} className="rounded-2xl border border-slate-200 bg-white p-4">
+                  <div className="flex flex-wrap items-center justify-between gap-2">
+                    <div>
+                      <p className="text-sm font-semibold text-slate-900">{item.title}</p>
+                      <p className="mt-1 text-xs text-slate-500">{item.id} · owner: {item.owner} · backup: {item.backup || "-"}</p>
+                    </div>
+                    <span className={`rounded-full px-2.5 py-0.5 text-[11px] font-semibold ${promiseTone(item.status)}`}>{item.status}</span>
+                  </div>
+                  {item.description ? <p className="mt-2 text-sm leading-6 text-slate-600">{item.description}</p> : null}
+                  <div className="mt-3 flex flex-wrap items-center justify-between gap-3">
+                    <p className="text-xs text-slate-500">created: {item.createdAt}</p>
+                    <form action={completePromiseAction}>
+                      <input type="hidden" name="promiseId" value={item.id} />
+                      <button type="submit" className="rounded-2xl border border-emerald-200 bg-emerald-50 px-3 py-2 text-sm font-semibold text-emerald-700">标记完成</button>
+                    </form>
+                  </div>
+                </div>
+              )) : <div className="rounded-2xl border border-dashed border-slate-200 bg-slate-50 px-4 py-6 text-sm text-slate-500">当前没有打开中的 Promise。</div>}
+            </div>
+          </DashboardCard>
+
+          <DashboardCard>
+            <DashboardCardTitle title="Watchdog 告警" desc="第一版督战层，开始自动找出 stale / overdue / missing proof。" right={<span className="rounded-full bg-slate-900 px-3 py-1 text-xs font-semibold text-white">{alerts.length} 条</span>} />
+            <div className="mt-4 grid gap-3">
+              {recentAlerts.length > 0 ? recentAlerts.map((item, index) => (
+                <div key={`${item.kind}-${item.relatedId || index}`} className="rounded-2xl border border-slate-200 bg-slate-50 p-4">
+                  <div className="flex flex-wrap items-center justify-between gap-2">
+                    <p className="text-sm font-semibold text-slate-900">{item.title}</p>
+                    <span className={`rounded-full px-2.5 py-0.5 text-[11px] font-semibold ${alertTone(item.level)}`}>{item.level}</span>
+                  </div>
+                  <p className="mt-2 text-sm leading-6 text-slate-600">{item.detail}</p>
+                  <p className="mt-1 text-xs text-slate-500">target: {item.target || "-"} · related: {item.relatedId || "-"}</p>
+                </div>
+              )) : <div className="rounded-2xl border border-dashed border-slate-200 bg-slate-50 px-4 py-6 text-sm text-slate-500">当前没有 watchdog 告警。</div>}
+            </div>
+          </DashboardCard>
+        </section>
 
         <section className="space-y-4">
           <DashboardCard>

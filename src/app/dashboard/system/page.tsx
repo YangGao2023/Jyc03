@@ -366,13 +366,13 @@ export default async function DashboardSystemPage() {
               </div>
             </div>
 
-            <div className="space-y-3">
+            <div className="grid gap-3 2xl:grid-cols-2">
               <div className="rounded-2xl border border-slate-200 bg-slate-50 p-4">
-                <div className="flex items-center justify-between gap-3">
+                <div className="sticky top-0 z-10 -mx-4 -mt-4 mb-3 flex items-center justify-between gap-3 rounded-t-2xl border-b border-slate-200 bg-slate-50/95 px-4 py-4 backdrop-blur">
                   <p className="text-sm font-semibold text-slate-900">Outbox，网站发给 Agent 的命令</p>
                   <span className="rounded-full bg-slate-900 px-2.5 py-0.5 text-xs font-semibold text-white">{outboxMessages.length} 条</span>
                 </div>
-                <div className="mt-3 space-y-3">
+                <div className="space-y-3 overflow-y-auto pr-1 2xl:max-h-[70vh]">
                   {recentBridgeMessages.length > 0 ? recentBridgeMessages.map((message, index) => (
                     <div key={`${message.id}-${index}`} className="rounded-2xl border border-slate-200 bg-white p-4">
                       <div className="flex flex-wrap items-center gap-2">
@@ -390,11 +390,11 @@ export default async function DashboardSystemPage() {
               </div>
 
               <div className="rounded-2xl border border-slate-200 bg-emerald-50/60 p-4">
-                <div className="flex items-center justify-between gap-3">
+                <div className="sticky top-0 z-10 -mx-4 -mt-4 mb-3 flex items-center justify-between gap-3 rounded-t-2xl border-b border-emerald-200 bg-emerald-50/95 px-4 py-4 backdrop-blur">
                   <p className="text-sm font-semibold text-slate-900">Inbox，Agent 回给老板的执行结果</p>
                   <span className="rounded-full bg-emerald-600 px-2.5 py-0.5 text-xs font-semibold text-white">{inboxMessages.length} 条</span>
                 </div>
-                <div className="mt-3 space-y-3">
+                <div className="space-y-3 overflow-y-auto pr-1 2xl:max-h-[70vh]">
                   {recentInboxMessages.length > 0 ? recentInboxMessages.map((message, index) => (
                     <div key={`${message.id}-${index}`} className="rounded-2xl border border-emerald-200 bg-white p-4">
                       <div className="flex flex-wrap items-center gap-2">

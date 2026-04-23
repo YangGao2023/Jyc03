@@ -1,5 +1,6 @@
 import { enqueueMessage, readQueue } from "@/lib/agent-bridge";
 import { readAgentStatuses } from "@/lib/agent-status";
+import { appendEvent } from "@/lib/event-store";
 import { readPromises, upsertPromise } from "@/lib/promise-store";
 import { readProofs } from "@/lib/proof-store";
 import { readWakeQueue, upsertWakeItem } from "@/lib/wake-store";
@@ -109,6 +110,17 @@ export async function runWatchdogActions() {
   const actions: string[] = [];
 
   for (const alert of alerts) {
+    if (alert.kind === "stale_agent" && alert.target) {
+      await appendEvent({
+        actor: "watchdog",
+        target: alert.target,
+        type: "stale_detected",
+        result: "pending",
+        needsOwnerAttention: true,
+        summary: alert.detail,
+      });
+    }
+
     if (!alert.relatedId || !alert.target) {
       continue;
     }

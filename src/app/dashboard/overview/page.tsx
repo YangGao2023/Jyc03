@@ -2,6 +2,7 @@ import { existsSync, readFileSync } from "node:fs";
 import path from "node:path";
 import { revalidatePath } from "next/cache";
 import { DashboardCard, DashboardCardTitle, DashboardPageHeader } from "../components";
+import { appendEvent, readEventChain } from "@/lib/event-store";
 import { makePromiseId, readPromises, upsertPromise } from "@/lib/promise-store";
 import { appendProof, makeProofId, readProofs } from "@/lib/proof-store";
 import { readWakeQueue } from "@/lib/wake-store";
@@ -60,17 +61,28 @@ async function createPromiseAction(formData: FormData) {
     return;
   }
 
+  const createdAt = new Date().toISOString();
+  const itemId = makePromiseId();
   await upsertPromise({
-    id: makePromiseId(),
+    id: itemId,
     kind: "owner_created",
     title,
     description: description || undefined,
     owner,
     backup: backup || undefined,
     createdBy: "YANG",
-    createdAt: new Date().toISOString(),
+    createdAt,
     status: "promised",
-    latestProgressAt: new Date().toISOString(),
+    latestProgressAt: createdAt,
+  });
+
+  await appendEvent({
+    actor: "YANG",
+    target: owner,
+    promiseId: itemId,
+    type: "promise_created",
+    result: "ok",
+    summary: `Owner created promise: ${title}`,
   });
 
   revalidatePath("/dashboard/overview");
@@ -108,6 +120,24 @@ async function completePromiseAction(formData: FormData) {
     summary: `Owner marked promise complete: ${current.title}`,
   });
 
+  await appendEvent({
+    actor: "YANG",
+    target: current.owner,
+    promiseId,
+    type: "promise_completed",
+    result: "ok",
+    summary: `Owner marked complete: ${current.title}`,
+  });
+
+  await appendEvent({
+    actor: "YANG",
+    target: current.owner,
+    promiseId,
+    type: "proof_generated",
+    result: "ok",
+    summary: `Completion proof generated for ${current.title}`,
+  });
+
   revalidatePath("/dashboard/overview");
 }
 
@@ -125,6 +155,7 @@ export default async function DashboardOverviewPage() {
   const proofs = await readProofs().catch(() => []);
   const wakeItems = await readWakeQueue().catch(() => []);
   const alerts = await computeWatchdogAlerts().catch(() => []);
+  const events = await readEventChain().catch(() => []);
 
   const todoCount = countMatches(todoRaw, /^### \[TODO-/);
   const taskCount = countMatches(taskRaw, /^### \[TASK-/);
@@ -138,6 +169,7 @@ export default async function DashboardOverviewPage() {
   const recentProofs = proofs.slice(0, 4);
   const recentWakeItems = wakeItems.slice(0, 4);
   const recentAlerts = alerts.slice(0, 5);
+  const recentEventChain = events.slice(0, 8);
 
   return (
     <div className="rounded-[30px] border border-white/10 bg-[linear-gradient(180deg,_rgba(15,23,42,0.98),_rgba(3,7,18,0.98))] p-4 shadow-2xl">
@@ -190,6 +222,23 @@ export default async function DashboardOverviewPage() {
                   </div>
                 </div>
               )) : <div className="rounded-2xl border border-dashed border-slate-200 bg-slate-50 px-4 py-6 text-sm text-slate-500">当前没有打开中的 Promise。</div>}
+            </div>
+          </DashboardCard>
+
+          <DashboardCard>
+            <DashboardCardTitle title="事件链" desc="老板能直接看到谁触发了谁、挂在哪个 Promise、结果是什么。" right={<span className="rounded-full bg-slate-900 px-3 py-1 text-xs font-semibold text-white">{events.length} 条</span>} />
+            <div className="mt-4 grid gap-3">
+              {recentEventChain.length > 0 ? recentEventChain.map((item) => (
+                <div key={item.id} className="rounded-2xl border border-slate-200 bg-slate-50 p-4">
+                  <div className="flex flex-wrap items-center justify-between gap-2">
+                    <p className="text-sm font-semibold text-slate-900">{item.type}</p>
+                    <span className={`rounded-full px-2.5 py-0.5 text-[11px] font-semibold ${item.result === "ok" ? "bg-emerald-100 text-emerald-800" : item.result === "failed" ? "bg-rose-100 text-rose-800" : "bg-amber-100 text-amber-800"}`}>{item.result}</span>
+                  </div>
+                  <p className="mt-2 text-xs text-slate-500">{item.timestamp} · actor: {item.actor} · target: {item.target || "-"} · promise: {item.promiseId || "-"}</p>
+                  {item.summary ? <p className="mt-2 text-sm leading-6 text-slate-600">{item.summary}</p> : null}
+                  {item.needsOwnerAttention ? <p className="mt-2 text-xs font-semibold text-rose-700">需要老板介入</p> : null}
+                </div>
+              )) : <div className="rounded-2xl border border-dashed border-slate-200 bg-slate-50 px-4 py-6 text-sm text-slate-500">当前还没有事件链记录。</div>}
             </div>
           </DashboardCard>
 

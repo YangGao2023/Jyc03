@@ -7,6 +7,7 @@ import { DashboardCard, DashboardCardTitle, DashboardPageHeader } from "../compo
 import { enqueueMessage, readQueue } from "@/lib/agent-bridge";
 import { readAgentStatuses } from "@/lib/agent-status";
 import { appendEvent } from "@/lib/event-store";
+import { formatEasternTime } from "@/lib/time";
 
 const profileSpecs = [
   {
@@ -45,6 +46,12 @@ type BridgeRecipientSummary = {
   count: number;
 };
 
+const COMMAND_RECIPIENT_OPTIONS = [
+  { value: "阿三", label: "阿三（可执行）" },
+  { value: "阿本", label: "阿本（语音/TTS 线）" },
+  { value: "小四", label: "小四（本地执行线）" },
+] as const;
+
 async function sendCommandAction(formData: FormData) {
   "use server";
 
@@ -53,6 +60,10 @@ async function sendCommandAction(formData: FormData) {
   const kind = String(formData.get("kind") || "command").trim() || "command";
 
   if (!to || !text) {
+    return;
+  }
+
+  if (!COMMAND_RECIPIENT_OPTIONS.some((item) => item.value === to)) {
     return;
   }
 
@@ -221,8 +232,15 @@ export default async function DashboardSystemPage() {
           right={<a href="/dashboard" className="rounded-2xl border border-white/10 bg-white px-4 py-2 text-sm font-semibold text-slate-950">返回后台</a>}
         />
 
-        <form action={sendCommandAction} className="mt-4 grid gap-3 rounded-[24px] border border-white/10 bg-white/5 p-4 md:grid-cols-[180px_140px_1fr_auto]">
-          <input name="to" placeholder="发给谁，例如 阿三 / 零号 / 阿本" className="rounded-xl border border-white/10 bg-slate-950/60 px-3 py-2 text-sm text-white outline-none placeholder:text-slate-400" required />
+        <form action={sendCommandAction} className="mt-4 grid gap-3 rounded-[24px] border border-white/10 bg-white/5 p-4 md:grid-cols-[220px_140px_1fr_auto]">
+          <div className="grid gap-2">
+            <select name="to" defaultValue="阿三" className="rounded-xl border border-white/10 bg-slate-950/60 px-3 py-2 text-sm text-white outline-none" required>
+              {COMMAND_RECIPIENT_OPTIONS.map((item) => (
+                <option key={item.value} value={item.value}>{item.label}</option>
+              ))}
+            </select>
+            <p className="text-[11px] text-slate-400">只显示当前有消费能力的收件人，零号暂不支持网站 outbox 直投。</p>
+          </div>
           <select name="kind" className="rounded-xl border border-white/10 bg-slate-950/60 px-3 py-2 text-sm text-white outline-none">
             <option value="command">command</option>
             <option value="text">text</option>
@@ -351,7 +369,7 @@ export default async function DashboardSystemPage() {
               {recentBridgeMessages.length > 0 ? recentBridgeMessages.map((message, index) => (
                 <div key={`${message.id}-${index}`} className="rounded-2xl border border-slate-200 bg-slate-50 p-4">
                   <div className="flex flex-wrap items-center gap-2">
-                    <span className="text-xs text-slate-500">{message.createdAt}</span>
+                    <span className="text-xs text-slate-500">{formatEasternTime(message.createdAt)}</span>
                     <span className="rounded-full bg-sky-100 px-2.5 py-0.5 text-[11px] font-semibold text-sky-800">{displayBridgeKind(message.kind)}</span>
                     <span className="rounded-full bg-slate-200 px-2.5 py-0.5 text-[11px] font-semibold text-slate-700">{message.from} → {message.to}</span>
                   </div>

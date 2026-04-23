@@ -5,7 +5,8 @@ import { DashboardCard, DashboardCardTitle, DashboardPageHeader } from "../compo
 import { appendEvent, readEventChain } from "@/lib/event-store";
 import { makePromiseId, readPromises, upsertPromise } from "@/lib/promise-store";
 import { appendProof, makeProofId, readProofs } from "@/lib/proof-store";
-import { readWakeQueue } from "@/lib/wake-store";
+import { formatEasternTime } from "@/lib/time";
+import { readWakeQueue, upsertWakeItem } from "@/lib/wake-store";
 import { computeWatchdogAlerts } from "@/lib/watchdog";
 
 function safeRead(filePath: string) {
@@ -83,6 +84,53 @@ async function createPromiseAction(formData: FormData) {
     type: "promise_created",
     result: "ok",
     summary: `Owner created promise: ${title}`,
+  });
+
+  revalidatePath("/dashboard/overview");
+}
+
+async function handoffPromiseAction(formData: FormData) {
+  "use server";
+
+  const promiseId = String(formData.get("promiseId") || "").trim();
+  const nextOwner = String(formData.get("nextOwner") || "").trim();
+  if (!promiseId || !nextOwner) {
+    return;
+  }
+
+  const promises = await readPromises();
+  const current = promises.find((item) => item.id === promiseId);
+  if (!current || current.owner === nextOwner || current.status === "completed") {
+    return;
+  }
+
+  const handedAt = new Date().toISOString();
+  await upsertPromise({
+    ...current,
+    owner: nextOwner,
+    backup: current.owner,
+    status: "handed_off",
+    latestProgressAt: handedAt,
+    blockedReason: undefined,
+  });
+
+  await upsertWakeItem({
+    id: `WAKE-HANDOFF-${promiseId}-${nextOwner}`,
+    targetAgent: nextOwner,
+    kind: "owner_handoff",
+    relatedId: promiseId,
+    priority: "high",
+    createdAt: handedAt,
+    note: `Owner handoff from ${current.owner} to ${nextOwner}`,
+  });
+
+  await appendEvent({
+    actor: "YANG",
+    target: nextOwner,
+    promiseId,
+    type: "owner_handoff",
+    result: "ok",
+    summary: `Owner handoff: ${current.owner} -> ${nextOwner} (${current.title})`,
   });
 
   revalidatePath("/dashboard/overview");
@@ -214,11 +262,18 @@ export default async function DashboardOverviewPage() {
                   </div>
                   {item.description ? <p className="mt-2 text-sm leading-6 text-slate-600">{item.description}</p> : null}
                   <div className="mt-3 flex flex-wrap items-center justify-between gap-3">
-                    <p className="text-xs text-slate-500">created: {item.createdAt}</p>
-                    <form action={completePromiseAction}>
-                      <input type="hidden" name="promiseId" value={item.id} />
-                      <button type="submit" className="rounded-2xl border border-emerald-200 bg-emerald-50 px-3 py-2 text-sm font-semibold text-emerald-700">标记完成</button>
-                    </form>
+                    <p className="text-xs text-slate-500">创建时间：{formatEasternTime(item.createdAt)}</p>
+                    <div className="flex flex-wrap items-center gap-2">
+                      <form action={handoffPromiseAction} className="flex items-center gap-2">
+                        <input type="hidden" name="promiseId" value={item.id} />
+                        <input name="nextOwner" defaultValue={item.backup || ""} placeholder="移交给谁" className="w-32 rounded-xl border border-slate-200 bg-white px-3 py-2 text-sm outline-none" />
+                        <button type="submit" className="rounded-2xl border border-violet-200 bg-violet-50 px-3 py-2 text-sm font-semibold text-violet-700">强制移交</button>
+                      </form>
+                      <form action={completePromiseAction}>
+                        <input type="hidden" name="promiseId" value={item.id} />
+                        <button type="submit" className="rounded-2xl border border-emerald-200 bg-emerald-50 px-3 py-2 text-sm font-semibold text-emerald-700">标记完成</button>
+                      </form>
+                    </div>
                   </div>
                 </div>
               )) : <div className="rounded-2xl border border-dashed border-slate-200 bg-slate-50 px-4 py-6 text-sm text-slate-500">当前没有打开中的 Promise。</div>}
@@ -234,7 +289,7 @@ export default async function DashboardOverviewPage() {
                     <p className="text-sm font-semibold text-slate-900">{item.type}</p>
                     <span className={`rounded-full px-2.5 py-0.5 text-[11px] font-semibold ${item.result === "ok" ? "bg-emerald-100 text-emerald-800" : item.result === "failed" ? "bg-rose-100 text-rose-800" : "bg-amber-100 text-amber-800"}`}>{item.result}</span>
                   </div>
-                  <p className="mt-2 text-xs text-slate-500">{item.timestamp} · actor: {item.actor} · target: {item.target || "-"} · promise: {item.promiseId || "-"}</p>
+                  <p className="mt-2 text-xs text-slate-500">{formatEasternTime(item.timestamp)} · actor: {item.actor} · target: {item.target || "-"} · promise: {item.promiseId || "-"}</p>
                   {item.summary ? <p className="mt-2 text-sm leading-6 text-slate-600">{item.summary}</p> : null}
                   {item.needsOwnerAttention ? <p className="mt-2 text-xs font-semibold text-rose-700">需要老板介入</p> : null}
                 </div>
@@ -285,7 +340,7 @@ export default async function DashboardOverviewPage() {
                     <p className="text-sm font-semibold text-slate-900">{item.proofType}</p>
                     <span className="rounded-full bg-emerald-100 px-2.5 py-0.5 text-[11px] font-semibold text-emerald-800">{item.promiseId}</span>
                   </div>
-                  <p className="mt-2 text-xs text-slate-500">created_by: {item.createdBy || "-"} · created_at: {item.createdAt}</p>
+                  <p className="mt-2 text-xs text-slate-500">created_by: {item.createdBy || "-"} · created_at: {formatEasternTime(item.createdAt)}</p>
                   {item.summary ? <p className="mt-2 text-sm leading-6 text-slate-600">{item.summary}</p> : null}
                 </div>
               )) : <div className="rounded-2xl border border-dashed border-slate-200 bg-slate-50 px-4 py-6 text-sm text-slate-500">还没有 proof 记录。</div>}

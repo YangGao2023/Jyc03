@@ -1,5 +1,6 @@
 import { DashboardCard, DashboardCardTitle, DashboardPageHeader } from "../components";
 import { EVENT_STREAM_PATH, TASK_QUEUE_PATH, getSortValue, parseEventStream, parseTaskQueue, safeRead } from "@/lib/task-board";
+import { formatEasternTime } from "@/lib/time";
 import { parseTodoBoard, readTodoBoard } from "@/lib/todo-board";
 
 function statusTone(value: string) {
@@ -189,8 +190,8 @@ export default async function DashboardTasksPage({
                       <p className="mt-3 text-sm leading-6 text-slate-600">来源：{task.source}</p>
                       <p className="mt-1 text-sm leading-6 text-slate-600">下一步：{task.nextAction}</p>
                       {task.notes && task.notes !== "-" ? <p className="mt-1 text-sm leading-6 text-slate-600">备注：{task.notes}</p> : null}
-                      <p className="mt-1 text-xs text-slate-500">创建时间：{task.createdAt}</p>
-                      <p className="mt-1 text-xs text-slate-500">最近更新：{task.updatedAt}</p>
+                      <p className="mt-1 text-xs text-slate-500">创建时间：{formatEasternTime(task.createdAt)}</p>
+                      <p className="mt-1 text-xs text-slate-500">最近更新：{formatEasternTime(task.updatedAt)}</p>
                       {task.blockedBy && task.blockedBy !== "-" ? (
                         task.status === "blocked" ? (
                           <p className="mt-2 text-sm leading-6 text-rose-700">阻塞原因：{task.blockedBy}</p>

@@ -275,9 +275,18 @@ function extractCommandKindFromSummary(summary: string) {
 }
 
 function summarizeMessageTitle(text: string) {
-  const firstLine = String(text || "").split(/\r?\n/, 1)[0].trim();
-  if (firstLine.length <= 32) return firstLine || "空内容";
-  return `${firstLine.slice(0, 32)}…`;
+  const normalized = String(text || "").replace(/\s+/g, " ").trim();
+  if (!normalized) return "空内容";
+  const firstLine = normalized.split(/\r?\n/, 1)[0].trim();
+  if (firstLine.length <= 36) return firstLine;
+  return `${firstLine.slice(0, 36)}…`;
+}
+
+function emphasizeQuestion(text: string) {
+  const normalized = String(text || "").trim();
+  if (!normalized) return "空内容";
+  if (normalized.length <= 60) return normalized;
+  return `${normalized.slice(0, 60)}…`;
 }
 
 function buildSentHistory(items: Awaited<ReturnType<typeof readEventChain>>, inboxMessages: Awaited<ReturnType<typeof readQueue>>) {
@@ -403,8 +412,8 @@ export default async function DashboardSystemPage() {
             <div className="grid gap-2 sm:grid-cols-2">
               <div className="rounded-xl bg-white px-3 py-2"><span className="font-semibold text-sky-700">Bridge</span> 历史发件 {sentHistory.length}，待消费 {outboxMessages.length}，可见回执 {visibleInboxMessages.length}</div>
               <div className="rounded-xl bg-white px-3 py-2"><span className="font-semibold text-rose-700">守望</span> 心跳 {agentStatuses.length}，超时 {staleAgentCount}，在线 {onlineCount}</div>
-              <div className="rounded-xl bg-white px-3 py-2"><span className="font-semibold text-emerald-700">人工线</span> 看最近聊天 / session，判断谁在被人直接使用</div>
-              <div className="rounded-xl bg-white px-3 py-2"><span className="font-semibold text-amber-700">后台线</span> 看 cron / heartbeat / 后台会话，区分自动线与主聊天线</div>
+              <div className="rounded-xl bg-white px-3 py-2"><span className="font-semibold text-emerald-700">人工线</span> 重点看老板手动发出的命令和回执</div>
+              <div className="rounded-xl bg-white px-3 py-2"><span className="font-semibold text-amber-700">后台线</span> 重点看 cron / heartbeat / 后台会话变化</div>
             </div>
           </div>
         </DashboardCard>
@@ -483,6 +492,7 @@ export default async function DashboardSystemPage() {
                               <span className="rounded-full bg-slate-200 px-2 py-0.5 text-[10px] font-semibold text-slate-700">YANG → {message.to}</span>
                             </div>
                             <p className="mt-1.5 text-xs font-semibold leading-5 text-slate-800">{summarizeMessageTitle(message.text)}</p>
+                            <p className="mt-1 text-[11px] leading-4 text-slate-500">{emphasizeQuestion(message.text)}</p>
                           </summary>
                           <div className="mt-2 space-y-2 border-t border-slate-100 pt-2">
                             <p className="text-xs leading-5 text-slate-700">{message.text}</p>
@@ -490,6 +500,7 @@ export default async function DashboardSystemPage() {
                               <div>目标: {message.to}</div>
                               <div>命令ID: {message.commandId || "旧记录未存"}</div>
                               <div>回执状态: {message.status === "done" ? "已收到结果" : "尚未看到结果"}</div>
+                              <div>显示方式: 标题摘要 + 展开详情</div>
                             </div>
                             {message.relatedInbox ? (
                               <div className="rounded-xl bg-emerald-50 px-2.5 py-2 text-[11px] leading-5 text-slate-700">
@@ -524,6 +535,7 @@ export default async function DashboardSystemPage() {
                               <span className="rounded-full bg-slate-200 px-2 py-0.5 text-[10px] font-semibold text-slate-700">{message.from} → {message.to}</span>
                             </div>
                             <p className="mt-1.5 text-xs font-semibold leading-5 text-slate-800">{summarizeMessageTitle(message.text)}</p>
+                            <p className="mt-1 text-[11px] leading-4 text-slate-500">{emphasizeQuestion(message.text)}</p>
                           </summary>
                           <div className="mt-2 space-y-2 border-t border-emerald-100 pt-2">
                             <p className="text-xs leading-5 text-slate-700">{message.text}</p>

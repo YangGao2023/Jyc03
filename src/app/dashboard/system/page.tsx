@@ -389,56 +389,38 @@ export default async function DashboardSystemPage() {
         </div>
       </div>
 
-      <div className="mt-4 grid gap-4 xl:grid-cols-[0.82fr_1.18fr]">
+      <div className="mt-4 space-y-4">
         <DashboardCard>
-          <DashboardCardTitle title="状态信号" right={<span className="rounded-full bg-slate-900 px-3 py-1 text-xs font-semibold text-white">{onlineCount} 在线 · {offlineCount} 离线</span>} />
-          <div className="mt-4 grid gap-3">
-            {agents.map((agent) => (
-              <div key={agent.key} className="rounded-2xl border border-slate-200 bg-slate-50 p-4">
-                <div className="flex items-center justify-between gap-3">
-                  <div>
-                    <p className="text-sm font-semibold text-slate-900">{agent.name}</p>
-                    <p className="mt-1 text-xs text-slate-500">配置档案：{agent.profile} · 端口：{agent.port}</p>
-                  </div>
-                  <span className={`rounded-full px-3 py-1 text-xs font-semibold ${agent.online ? "bg-emerald-100 text-emerald-800" : "bg-slate-200 text-slate-700"}`}>
-                    {agent.online ? "在线" : "离线"}
-                  </span>
-                </div>
-              </div>
-            ))}
-          </div>
-
-          <div className="mt-4 rounded-2xl border border-slate-200 bg-slate-50 p-3 text-[11px] leading-5 text-slate-600">
-            <div className="grid gap-2 sm:grid-cols-2">
-              <div className="rounded-xl bg-white px-3 py-2"><span className="font-semibold text-sky-700">Bridge</span> 历史发件 {sentHistory.length}，待消费 {outboxMessages.length}，可见回执 {visibleInboxMessages.length}</div>
-              <div className="rounded-xl bg-white px-3 py-2"><span className="font-semibold text-rose-700">守望</span> 心跳 {agentStatuses.length}，超时 {staleAgentCount}，在线 {onlineCount}</div>
-              <div className="rounded-xl bg-white px-3 py-2"><span className="font-semibold text-emerald-700">人工线</span> 重点看老板手动发出的命令和回执</div>
-              <div className="rounded-xl bg-white px-3 py-2"><span className="font-semibold text-amber-700">后台线</span> 重点看 cron / heartbeat / 后台会话变化</div>
-            </div>
-          </div>
-        </DashboardCard>
-
-        <DashboardCard>
-          <DashboardCardTitle
-            title="桥接派单 / 回执视图"
-            desc="老板现在既能看到谁往桥里发了什么，也能看到 agent 回写了什么。"
-            right={<div className="flex items-center gap-2"><span className="rounded-full bg-slate-900 px-3 py-1 text-xs font-semibold text-white">历史发件 {sentHistory.length} 条 · 回执 {visibleInboxMessages.length} 条</span><a href="/dashboard?section=system" className="rounded-full border border-slate-200 px-3 py-1 text-xs font-semibold text-slate-700">旧版 system 面板</a></div>}
-          />
-
-          <div className="mt-4 grid gap-3 xl:grid-cols-[0.62fr_1.38fr]">
-            <div className="space-y-3">
-              <div className="rounded-2xl border border-slate-200 bg-slate-50 p-4">
-                <p className="text-sm font-semibold text-slate-900">按接收人统计</p>
-                <div className="mt-3 space-y-2">
-                  {recipientSummary.length > 0 ? recipientSummary.map((item) => (
-                    <div key={item.recipient} className="flex items-center justify-between rounded-2xl bg-white px-3 py-2 text-sm text-slate-700">
-                      <span>{item.recipient}</span>
-                      <span className="rounded-full bg-slate-900 px-2.5 py-0.5 text-xs font-semibold text-white">{item.count}</span>
+          <DashboardCardTitle title="系统状态" desc="这一层专门回答系统是否在线、谁有心跳、最近有什么系统事件。" right={<span className="rounded-full bg-slate-900 px-3 py-1 text-xs font-semibold text-white">{onlineCount} 在线 · {offlineCount} 离线</span>} />
+          <div className="mt-4 grid gap-4 xl:grid-cols-[1.05fr_0.95fr]">
+            <div>
+              <div className="grid gap-3 md:grid-cols-3">
+                {agents.map((agent) => (
+                  <div key={agent.key} className="rounded-2xl border border-slate-200 bg-slate-50 p-4">
+                    <div className="flex items-center justify-between gap-3">
+                      <div>
+                        <p className="text-sm font-semibold text-slate-900">{agent.name}</p>
+                        <p className="mt-1 text-xs text-slate-500">配置档案：{agent.profile} · 端口：{agent.port}</p>
+                      </div>
+                      <span className={`rounded-full px-3 py-1 text-xs font-semibold ${agent.online ? "bg-emerald-100 text-emerald-800" : "bg-slate-200 text-slate-700"}`}>
+                        {agent.online ? "在线" : "离线"}
+                      </span>
                     </div>
-                  )) : <div className="rounded-2xl border border-dashed border-slate-200 bg-white px-3 py-4 text-sm text-slate-500">当前没有待分发消息</div>}
-                </div>
+                  </div>
+                ))}
               </div>
 
+              <div className="mt-4 rounded-2xl border border-slate-200 bg-slate-50 p-3 text-[11px] leading-5 text-slate-600">
+                <div className="grid gap-2 sm:grid-cols-2 xl:grid-cols-4">
+                  <div className="rounded-xl bg-white px-3 py-2"><span className="font-semibold text-sky-700">Bridge</span> 历史发件 {sentHistory.length}，待消费 {outboxMessages.length}，可见回执 {visibleInboxMessages.length}</div>
+                  <div className="rounded-xl bg-white px-3 py-2"><span className="font-semibold text-rose-700">守望</span> 心跳 {agentStatuses.length}，超时 {staleAgentCount}，在线 {onlineCount}</div>
+                  <div className="rounded-xl bg-white px-3 py-2"><span className="font-semibold text-emerald-700">人工线</span> 重点看老板手动发出的命令和回执</div>
+                  <div className="rounded-xl bg-white px-3 py-2"><span className="font-semibold text-amber-700">后台线</span> 重点看 cron / heartbeat / 后台会话变化</div>
+                </div>
+              </div>
+            </div>
+
+            <div className="space-y-3">
               <div className="rounded-2xl border border-slate-200 bg-slate-50 p-4">
                 <p className="text-sm font-semibold text-slate-900">Agent 心跳 / 状态</p>
                 <div className="mt-3 space-y-2">
@@ -469,6 +451,30 @@ export default async function DashboardSystemPage() {
                       <p className="mt-1 text-sm leading-6 text-slate-600">{event.result}</p>
                     </div>
                   )) : <div className="rounded-2xl border border-dashed border-slate-200 bg-white px-3 py-4 text-sm text-slate-500">暂无事件记录</div>}
+                </div>
+              </div>
+            </div>
+          </div>
+        </DashboardCard>
+
+        <DashboardCard>
+          <DashboardCardTitle
+            title="命令中心 / 回执中心"
+            desc="这一层专门回答老板发了什么、回了什么、还有哪些命令没有回执。"
+            right={<div className="flex items-center gap-2"><span className="rounded-full bg-slate-900 px-3 py-1 text-xs font-semibold text-white">历史发件 {sentHistory.length} 条 · 回执 {visibleInboxMessages.length} 条</span></div>}
+          />
+
+          <div className="mt-4 grid gap-3 xl:grid-cols-[0.62fr_1.38fr]">
+            <div className="space-y-3">
+              <div className="rounded-2xl border border-slate-200 bg-slate-50 p-4">
+                <p className="text-sm font-semibold text-slate-900">按接收人统计</p>
+                <div className="mt-3 space-y-2">
+                  {recipientSummary.length > 0 ? recipientSummary.map((item) => (
+                    <div key={item.recipient} className="flex items-center justify-between rounded-2xl bg-white px-3 py-2 text-sm text-slate-700">
+                      <span>{item.recipient}</span>
+                      <span className="rounded-full bg-slate-900 px-2.5 py-0.5 text-xs font-semibold text-white">{item.count}</span>
+                    </div>
+                  )) : <div className="rounded-2xl border border-dashed border-slate-200 bg-white px-3 py-4 text-sm text-slate-500">当前没有历史发件记录</div>}
                 </div>
               </div>
             </div>

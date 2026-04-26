@@ -1690,8 +1690,6 @@ function NewOrderModal({
 
 // ─── Orders ──────────────────────────────────────────────────────────────────
 
-const ORDER_COLS = ["订单号", "类型", "客户", "描述", "总金额", "下单日期", "状态", "余款", "操作"];
-
 function OrdersSection({
   orders,
   setOrders,
@@ -1707,6 +1705,7 @@ function OrdersSection({
   const [createType, setCreateType] = useState<"定制单" | "批发单" | null>(null);
   const [deleteConfirm, setDeleteConfirm] = useState<string | null>(null);
 
+  const orderListColumns = ["订单号", "类型", "客户", "描述", "总金额", "下单日期", "状态", "余款", "操作"];
   const orderListConfig: SplitTabularSchemaConfig = {
     title: "订单列表",
     filePrefix: "biz-orders",
@@ -1892,7 +1891,7 @@ function OrdersSection({
               <th className="w-9 px-3 py-2.5">
                 <input type="checkbox" disabled className="cursor-not-allowed opacity-40" />
               </th>
-              {ORDER_COLS.map((col) => (
+              {orderListColumns.map((col) => (
                 <th key={col} className="whitespace-nowrap px-3 py-2.5 font-semibold text-slate-600">
                   {col}
                 </th>
@@ -1973,7 +1972,7 @@ function OrdersSection({
             ) : (
               <tr>
                 <td
-                  colSpan={ORDER_COLS.length + 1}
+                  colSpan={orderListColumns.length + 1}
                   className="py-10 text-center text-sm text-slate-400"
                 >
                   当前没有可显示的订单数据

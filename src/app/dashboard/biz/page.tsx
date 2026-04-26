@@ -358,10 +358,7 @@ function OverviewSection({
   const domains = getOverviewDomains(orderSummary, { expenses, payrolls, quotes, clients, suppliers, materials, employees });
 
   function exportOverview() {
-    downloadCsv(`biz-overview-${todayIso()}.csv`, [
-      ["模块", "指标", "值"],
-      ...domains.flatMap((domain) => domain.stats.map((stat) => [domain.title, stat.label, stat.value])),
-    ]);
+    downloadMappedCsv(`biz-overview-${todayIso()}.csv`, ["模块", "指标", "值"], domains.flatMap((domain) => domain.stats.map((stat) => ({ module: domain.title, label: stat.label, value: stat.value }))), (item) => [item.module, item.label, item.value]);
   }
 
   function printOverview() {
@@ -1679,21 +1676,7 @@ function OrdersSection({
   setOrders: React.Dispatch<React.SetStateAction<BizOrder[]>>;
 }) {
   function exportOrders() {
-    const rows = [
-      ["订单号", "类型", "客户", "电话", "总额", "已付", "余款", "状态", "日期"],
-      ...orders.map((item) => [
-        item.order_number,
-        item.order_type,
-        item.client_name,
-        item.phone ?? "",
-        String(item.total_after_tax ?? item.total_price ?? 0),
-        String(item.amount_paid ?? 0),
-        String(item.balance ?? 0),
-        item.status ?? "",
-        item.order_date ?? "",
-      ]),
-    ];
-    downloadCsv(`biz-orders-${todayIso()}.csv`, rows);
+    downloadMappedCsv(`biz-orders-${todayIso()}.csv`, ["订单号", "类型", "客户", "电话", "总额", "已付", "余款", "状态", "日期"], orders, (item) => [item.order_number, item.order_type, item.client_name, item.phone ?? "", String(item.total_after_tax ?? item.total_price ?? 0), String(item.amount_paid ?? 0), String(item.balance ?? 0), item.status ?? "", item.order_date ?? ""]);
   }
   function printOrders() {
     openPrintWindow(buildSimpleTablePrintHTML("订单列表", `共 ${filteredOrders.length} 条`, ["订单号", "类型", "客户", "电话", "总额", "已付", "余款", "状态", "日期"], filteredOrders.map((item) => [item.order_number, item.order_type, item.client_name, item.phone ?? "-", formatMoney(item.total_after_tax ?? item.total_price ?? 0), formatMoney(item.amount_paid ?? 0), formatMoney(item.balance ?? 0), item.status ?? "-", item.order_date ?? "-"])));
@@ -2430,47 +2413,31 @@ function SettingsSection({ settings, setSettings }: { settings: BizSettings; set
     }));
   };
 
+  const settingRows: Array<{ label: string; value: string | number }> = [
+    { label: "公司名称", value: settings.company_name || "-" },
+    { label: "地址", value: settings.address || "-" },
+    { label: "电话", value: settings.phone || "-" },
+    { label: "电子邮箱", value: settings.email || "-" },
+    { label: "网站", value: settings.website || "-" },
+    { label: "税号(BN)", value: settings.tax_number || "-" },
+    { label: "默认税率", value: String(settings.default_tax_rate ?? "-") },
+    { label: "默认货币", value: settings.default_currency || "-" },
+    { label: "财年开始月", value: String(settings.fiscal_start_month ?? "-") },
+    { label: "银行账户", value: settings.bank_account || "-" },
+    { label: "支付宝", value: settings.alipay || "-" },
+    { label: "微信收款", value: settings.wechat_pay || "-" },
+    { label: "其他方式", value: settings.other_payment || "-" },
+    { label: "报价默认有效期", value: String(settings.quote_valid_days ?? "-") },
+    { label: "报价页脚备注", value: settings.quote_footer || "-" },
+    { label: "Logo URL", value: settings.logo_url || "-" },
+  ];
+
   function exportSettings() {
-    downloadCsv(`biz-settings-${todayIso()}.csv`, [
-      ["字段", "值"],
-      ["公司名称", settings.company_name],
-      ["地址", settings.address],
-      ["电话", settings.phone],
-      ["电子邮箱", settings.email],
-      ["网站", settings.website],
-      ["税号(BN)", settings.tax_number],
-      ["默认税率", settings.default_tax_rate],
-      ["默认货币", settings.default_currency],
-      ["财年开始月", settings.fiscal_start_month],
-      ["银行账户", settings.bank_account],
-      ["支付宝", settings.alipay],
-      ["微信收款", settings.wechat_pay],
-      ["其他方式", settings.other_payment],
-      ["报价默认有效期", settings.quote_valid_days],
-      ["报价页脚备注", settings.quote_footer],
-      ["Logo URL", settings.logo_url],
-    ]);
+    downloadMappedCsv(`biz-settings-${todayIso()}.csv`, ["字段", "值"], settingRows, (item) => [item.label, item.value]);
   }
 
   function printSettings() {
-    openPrintWindow(buildSimpleTablePrintHTML("系统设置", "当前业务配置", ["字段", "值"], [
-      ["公司名称", settings.company_name || "-"],
-      ["地址", settings.address || "-"],
-      ["电话", settings.phone || "-"],
-      ["电子邮箱", settings.email || "-"],
-      ["网站", settings.website || "-"],
-      ["税号(BN)", settings.tax_number || "-"],
-      ["默认税率", String(settings.default_tax_rate ?? "-")],
-      ["默认货币", settings.default_currency || "-"],
-      ["财年开始月", String(settings.fiscal_start_month ?? "-")],
-      ["银行账户", settings.bank_account || "-"],
-      ["支付宝", settings.alipay || "-"],
-      ["微信收款", settings.wechat_pay || "-"],
-      ["其他方式", settings.other_payment || "-"],
-      ["报价默认有效期", String(settings.quote_valid_days ?? "-")],
-      ["报价页脚备注", settings.quote_footer || "-"],
-      ["Logo URL", settings.logo_url || "-"],
-    ]));
+    openPrintWindow(buildSimpleTablePrintHTML("系统设置", "当前业务配置", ["字段", "值"], settingRows.map((item) => [item.label, item.value])));
   }
 
   return <div><SectionHeader eyebrow="Configuration" title="系统设置" actions={<><ActionBtn onClick={exportSettings}>↓ 导出设置</ActionBtn><ActionBtn onClick={printSettings}>🖨 打印设置</ActionBtn><ActionBtn tone="success">自动保存中</ActionBtn></>} /><div className="grid gap-4 lg:grid-cols-2"><SettingsGroup title="公司信息"><SettingsField label="公司名称" value={settings.company_name} onChange={(value) => update("company_name", value)} /><SettingsField label="地址" value={settings.address} onChange={(value) => update("address", value)} /><SettingsField label="电话" value={settings.phone} onChange={(value) => update("phone", value)} /><SettingsField label="电子邮箱" value={settings.email} onChange={(value) => update("email", value)} /><SettingsField label="网站" value={settings.website} onChange={(value) => update("website", value)} /></SettingsGroup><SettingsGroup title="税务 & 财务"><SettingsField label="税号 (BN)" value={settings.tax_number} note="Business Number" onChange={(value) => update("tax_number", value)} /><SettingsField label="默认税率" value={String(settings.default_tax_rate)} onChange={(value) => update("default_tax_rate", value)} type="number" /><SettingsField label="默认货币" value={settings.default_currency} onChange={(value) => update("default_currency", value)} /><SettingsField label="财年开始月" value={String(settings.fiscal_start_month)} onChange={(value) => update("fiscal_start_month", value)} type="number" /></SettingsGroup><SettingsGroup title="支付方式"><SettingsField label="银行账户" value={settings.bank_account} onChange={(value) => update("bank_account", value)} /><SettingsField label="支付宝" value={settings.alipay} onChange={(value) => update("alipay", value)} /><SettingsField label="微信收款" value={settings.wechat_pay} onChange={(value) => update("wechat_pay", value)} /><SettingsField label="其他方式" value={settings.other_payment} onChange={(value) => update("other_payment", value)} /></SettingsGroup><SettingsGroup title="报价单模板"><SettingsField label="默认有效期" value={String(settings.quote_valid_days)} note="Days until quote expires" onChange={(value) => update("quote_valid_days", value)} type="number" /><SettingsField label="页脚备注" value={settings.quote_footer} onChange={(value) => update("quote_footer", value)} /><SettingsField label="Logo URL" value={settings.logo_url} note="Used in printed quotes" onChange={(value) => update("logo_url", value)} /></SettingsGroup></div></div>;

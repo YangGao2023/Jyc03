@@ -1,6 +1,5 @@
 import { DashboardCard, DashboardCardTitle, DashboardPageHeader } from "../components";
-import { safeRead } from "@/lib/fs-utils";
-import { EVENT_STREAM_PATH, TASK_QUEUE_PATH, getSortValue, parseEventStream, parseTaskQueue } from "@/lib/task-board";
+import { getSortValue, parseEventStream, parseTaskQueue, readEventStream, readTaskQueue } from "@/lib/task-board";
 import { formatEasternTime } from "@/lib/time";
 import { parseTodoBoard, readTodoBoard } from "@/lib/todo-board";
 
@@ -50,13 +49,13 @@ export default async function DashboardTasksPage({
     ? resolvedSearchParams.taskFilter || "in_progress"
     : "in_progress";
 
-  const tasks = parseTaskQueue(safeRead(TASK_QUEUE_PATH)).sort((a, b) => {
+  const tasks = parseTaskQueue(readTaskQueue()).sort((a, b) => {
     const left = getSortValue(a.updatedAt);
     const right = getSortValue(b.updatedAt);
     if (typeof left === "number" && typeof right === "number") return right - left;
     return String(right).localeCompare(String(left));
   });
-  const events = parseEventStream(safeRead(EVENT_STREAM_PATH));
+  const events = parseEventStream(readEventStream());
   const todos = parseTodoBoard(readTodoBoard());
   const activeTodos = todos.filter((todo) => todo.section === "active");
 

@@ -1,7 +1,7 @@
 import path from "node:path";
 import { DashboardCard, DashboardCardTitle, DashboardPageHeader } from "../components";
 import { safeRead } from "@/lib/fs-utils";
-import { TASK_QUEUE_PATH, parseTaskQueue } from "@/lib/task-board";
+import { parseTaskQueue, readTaskQueue } from "@/lib/task-board";
 import { TODO_PATH, parseTodoBoard, readTodoBoard } from "@/lib/todo-board";
 
 function clipLines(raw: string, lines = 18) {
@@ -49,7 +49,7 @@ export default async function DashboardMemoryPage() {
   const todoItems = parseTodoBoard(readTodoBoard());
   const activeTodos = todoItems.filter((todo) => todo.section === "active");
   const completedTodos = todoItems.filter((todo) => todo.section === "completed");
-  const tasks = parseTaskQueue(safeRead(TASK_QUEUE_PATH));
+  const tasks = parseTaskQueue(readTaskQueue());
 
   return (
     <div className="rounded-[30px] border border-white/10 bg-[linear-gradient(180deg,_rgba(15,23,42,0.98),_rgba(3,7,18,0.98))] p-4 shadow-2xl">

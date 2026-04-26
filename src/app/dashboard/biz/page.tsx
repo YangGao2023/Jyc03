@@ -869,6 +869,12 @@ const DEFAULT_PRINT_SHELL: Required<Pick<PrintShellOptions, "maxWidth" | "bodyPa
   extraStyles: "",
 };
 
+const STANDARD_TABLE_PRINT_STYLES = ".head{display:flex;justify-content:space-between;align-items:flex-end;border-bottom:3px solid #0f172a;padding-bottom:14px;margin-bottom:18px}.title{font-size:28px;font-weight:800}.muted{color:#64748b;font-size:12px}table{width:100%;border-collapse:collapse}";
+
+function buildStandardPrintHeader(title: string, subtitle: string) {
+  return `<div class="head"><div><div class="title">${escHtml(title)}</div><div class="muted">${escHtml(subtitle)}</div></div><div class="muted">Printed ${escHtml(new Date().toLocaleString())}</div></div>`;
+}
+
 function buildPrintShell(title: string, body: string, options?: PrintShellOptions) {
   const config = {
     ...DEFAULT_PRINT_SHELL,
@@ -944,7 +950,7 @@ function buildSimpleTablePrintHTML(title: string, subtitle: string, columns: str
         .join("")
     : `<tr><td colspan="${columns.length}" style="border:1px solid #e2e8f0;padding:18px 8px;text-align:center;color:#64748b;font-size:12px">暂无数据</td></tr>`;
 
-  return buildPrintShell(title, `<div class="head"><div><div class="title">${escHtml(title)}</div><div class="muted">${escHtml(subtitle)}</div></div><div class="muted">Printed ${escHtml(new Date().toLocaleString())}</div></div><table><thead><tr>${headerHtml}</tr></thead><tbody>${bodyHtml}</tbody></table>`, { extraStyles: ".head{display:flex;justify-content:space-between;align-items:flex-end;border-bottom:3px solid #0f172a;padding-bottom:14px;margin-bottom:18px}.title{font-size:28px;font-weight:800}.muted{color:#64748b;font-size:12px}table{width:100%;border-collapse:collapse}" });
+  return buildPrintShell(title, `${buildStandardPrintHeader(title, subtitle)}<table><thead><tr>${headerHtml}</tr></thead><tbody>${bodyHtml}</tbody></table>`, { extraStyles: STANDARD_TABLE_PRINT_STYLES });
 }
 
 function openPrintWindow(html: string) {

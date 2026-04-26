@@ -29,6 +29,14 @@ let redisPromise: Promise<ReturnType<typeof createClient>> | null = null;
 
 type PromiseStoreMap = Record<string, PromiseItem>;
 
+function parsePromiseItem(raw: string): PromiseItem | null {
+  try {
+    return JSON.parse(raw) as PromiseItem;
+  } catch {
+    return null;
+  }
+}
+
 function requiredEnv(name: string) {
   const value = process.env[name];
   if (!value) throw new Error(`Missing required env: ${name}`);
@@ -52,12 +60,16 @@ function parseLegacyPromiseString(raw: string | null): PromiseStoreMap {
     return {};
   }
 
-  const parsed = JSON.parse(raw) as PromiseItem[] | PromiseStoreMap;
-  if (Array.isArray(parsed)) {
-    return Object.fromEntries(parsed.map((item) => [item.id, item]));
-  }
+  try {
+    const parsed = JSON.parse(raw) as PromiseItem[] | PromiseStoreMap;
+    if (Array.isArray(parsed)) {
+      return Object.fromEntries(parsed.map((item) => [item.id, item]));
+    }
 
-  return parsed;
+    return parsed;
+  } catch {
+    return {} as PromiseStoreMap;
+  }
 }
 
 async function readPromiseMapForKey(client: Awaited<ReturnType<typeof redis>>, key: string) {
@@ -68,7 +80,11 @@ async function readPromiseMapForKey(client: Awaited<ReturnType<typeof redis>>, k
 
   if (keyType === "hash") {
     const raw = await client.hGetAll(key);
-    return Object.fromEntries(Object.entries(raw).map(([entryKey, value]) => [entryKey, JSON.parse(value) as PromiseItem]));
+    return Object.fromEntries(
+      Object.entries(raw)
+        .map(([entryKey, value]) => [entryKey, parsePromiseItem(value)] as const)
+        .filter((entry): entry is readonly [string, PromiseItem] => Boolean(entry[1])),
+    );
   }
 
   if (keyType === "string") {

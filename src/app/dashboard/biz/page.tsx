@@ -2141,16 +2141,37 @@ function QuotesSection({ quotes, setQuotes, showcases, setShowcases }: { quotes:
 
 // ─── Settings ────────────────────────────────────────────────────────────────
 
-function SettingsField({ label, value, note }: { label: string; value: string; note?: string; }) {
-  return <div className="flex flex-col gap-1 sm:flex-row sm:items-start sm:gap-6"><label className="w-28 shrink-0 pt-2 text-xs font-semibold text-slate-600">{label}</label><div className="flex-1"><input readOnly value={value} className="h-8 w-full max-w-sm rounded-lg border border-slate-300 bg-slate-50 px-3 text-xs text-slate-600" />{note && <p className="mt-1 text-[11px] text-slate-400">{note}</p>}</div></div>;
+function SettingsField({
+  label,
+  value,
+  note,
+  onChange,
+  type = "text",
+}: {
+  label: string;
+  value: string;
+  note?: string;
+  onChange: (value: string) => void;
+  type?: string;
+}) {
+  return <div className="flex flex-col gap-1 sm:flex-row sm:items-start sm:gap-6"><label className="w-28 shrink-0 pt-2 text-xs font-semibold text-slate-600">{label}</label><div className="flex-1"><input value={value} onChange={(e) => onChange(e.target.value)} type={type} className="h-8 w-full max-w-sm rounded-lg border border-slate-300 bg-white px-3 text-xs text-slate-700 focus:border-blue-400 focus:outline-none" />{note && <p className="mt-1 text-[11px] text-slate-400">{note}</p>}</div></div>;
 }
 
 function SettingsGroup({ title, children }: { title: string; children: React.ReactNode; }) {
   return <div className="rounded-xl border border-slate-200 bg-white p-4"><h3 className="mb-3 border-b border-slate-100 pb-2.5 text-xs font-semibold uppercase tracking-wider text-slate-500">{title}</h3><div className="flex flex-col gap-3.5">{children}</div></div>;
 }
 
-function SettingsSection({ settings }: { settings: BizSettings }) {
-  return <div><SectionHeader eyebrow="Configuration" title="系统设置" actions={<DisabledBtn>保存设置（下一步接后端）</DisabledBtn>} /><div className="grid gap-4 lg:grid-cols-2"><SettingsGroup title="公司信息"><SettingsField label="公司名称" value={settings.company_name} /><SettingsField label="地址" value={settings.address} /><SettingsField label="电话" value={settings.phone} /><SettingsField label="电子邮箱" value={settings.email} /><SettingsField label="网站" value={settings.website} /></SettingsGroup><SettingsGroup title="税务 & 财务"><SettingsField label="税号 (BN)" value={settings.tax_number} note="Business Number" /><SettingsField label="默认税率" value={`${settings.default_tax_rate}%`} /><SettingsField label="默认货币" value={settings.default_currency} /><SettingsField label="财年开始月" value={String(settings.fiscal_start_month)} /></SettingsGroup><SettingsGroup title="支付方式"><SettingsField label="银行账户" value={settings.bank_account} /><SettingsField label="支付宝" value={settings.alipay} /><SettingsField label="微信收款" value={settings.wechat_pay} /><SettingsField label="其他方式" value={settings.other_payment} /></SettingsGroup><SettingsGroup title="报价单模板"><SettingsField label="默认有效期" value={`${settings.quote_valid_days} 天`} note="Days until quote expires" /><SettingsField label="页脚备注" value={settings.quote_footer} /><SettingsField label="Logo URL" value={settings.logo_url} note="Used in printed quotes" /></SettingsGroup></div></div>;
+function SettingsSection({ settings, setSettings }: { settings: BizSettings; setSettings: React.Dispatch<React.SetStateAction<BizSettings>>; }) {
+  const update = (key: keyof BizSettings, value: string) => {
+    setSettings((prev) => ({
+      ...prev,
+      [key]: key === "default_tax_rate" || key === "fiscal_start_month" || key === "quote_valid_days"
+        ? Number(value) || 0
+        : value,
+    }));
+  };
+
+  return <div><SectionHeader eyebrow="Configuration" title="系统设置" actions={<ActionBtn tone="success">自动保存中</ActionBtn>} /><div className="grid gap-4 lg:grid-cols-2"><SettingsGroup title="公司信息"><SettingsField label="公司名称" value={settings.company_name} onChange={(value) => update("company_name", value)} /><SettingsField label="地址" value={settings.address} onChange={(value) => update("address", value)} /><SettingsField label="电话" value={settings.phone} onChange={(value) => update("phone", value)} /><SettingsField label="电子邮箱" value={settings.email} onChange={(value) => update("email", value)} /><SettingsField label="网站" value={settings.website} onChange={(value) => update("website", value)} /></SettingsGroup><SettingsGroup title="税务 & 财务"><SettingsField label="税号 (BN)" value={settings.tax_number} note="Business Number" onChange={(value) => update("tax_number", value)} /><SettingsField label="默认税率" value={String(settings.default_tax_rate)} onChange={(value) => update("default_tax_rate", value)} type="number" /><SettingsField label="默认货币" value={settings.default_currency} onChange={(value) => update("default_currency", value)} /><SettingsField label="财年开始月" value={String(settings.fiscal_start_month)} onChange={(value) => update("fiscal_start_month", value)} type="number" /></SettingsGroup><SettingsGroup title="支付方式"><SettingsField label="银行账户" value={settings.bank_account} onChange={(value) => update("bank_account", value)} /><SettingsField label="支付宝" value={settings.alipay} onChange={(value) => update("alipay", value)} /><SettingsField label="微信收款" value={settings.wechat_pay} onChange={(value) => update("wechat_pay", value)} /><SettingsField label="其他方式" value={settings.other_payment} onChange={(value) => update("other_payment", value)} /></SettingsGroup><SettingsGroup title="报价单模板"><SettingsField label="默认有效期" value={String(settings.quote_valid_days)} note="Days until quote expires" onChange={(value) => update("quote_valid_days", value)} type="number" /><SettingsField label="页脚备注" value={settings.quote_footer} onChange={(value) => update("quote_footer", value)} /><SettingsField label="Logo URL" value={settings.logo_url} note="Used in printed quotes" onChange={(value) => update("logo_url", value)} /></SettingsGroup></div></div>;
 }
 // ─── Sidebar nav ─────────────────────────────────────────────────────────────
 
@@ -2367,7 +2388,7 @@ export default function DashboardBizPage() {
               setPayrolls={setPayrolls}
             />
           )}
-          {section === "settings" && <SettingsSection settings={settings} />}
+          {section === "settings" && <SettingsSection settings={settings} setSettings={setSettings} />}
         </div>
       </div>
     </PageSection>

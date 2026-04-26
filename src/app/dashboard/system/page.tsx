@@ -583,7 +583,7 @@ export default async function DashboardSystemPage() {
           </>
         </form>
 
-        <div className="mt-4 grid gap-2 xl:grid-cols-4">
+        <div className="mt-4 grid gap-2 xl:grid-cols-6">
           <div className="rounded-xl border border-white/10 bg-white/5 px-3 py-2">
             <div className="flex items-center justify-between gap-2">
               <div>
@@ -636,6 +636,24 @@ export default async function DashboardSystemPage() {
                 <p className="mt-0.5 text-base font-semibold text-white">{watchdogAlerts.length}</p>
               </div>
               <span className={`rounded-full px-2 py-0.5 text-[10px] font-semibold ${watchdogAlerts.some((item) => item.level === "error") ? "bg-rose-500/15 text-rose-300" : "bg-amber-500/15 text-amber-300"}`}>{watchdogAlerts.some((item) => item.level === "error") ? "error" : "warn"}</span>
+            </div>
+          </div>
+          <div className="rounded-xl border border-white/10 bg-white/5 px-3 py-2">
+            <div className="flex items-center justify-between gap-2">
+              <div>
+                <p className="text-[10px] text-slate-400">命令回执</p>
+                <p className="mt-0.5 text-base font-semibold text-white">{receiptInboxCards.length}</p>
+              </div>
+              <span className="rounded-full bg-amber-500/15 px-2 py-0.5 text-[10px] font-semibold text-amber-300">已收到</span>
+            </div>
+          </div>
+          <div className="rounded-xl border border-white/10 bg-white/5 px-3 py-2">
+            <div className="flex items-center justify-between gap-2">
+              <div>
+                <p className="text-[10px] text-slate-400">命令结果</p>
+                <p className="mt-0.5 text-base font-semibold text-white">{resultInboxCards.length}</p>
+              </div>
+              <span className="rounded-full bg-emerald-500/15 px-2 py-0.5 text-[10px] font-semibold text-emerald-300">已完成</span>
             </div>
           </div>
         </div>

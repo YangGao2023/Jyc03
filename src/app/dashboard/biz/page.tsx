@@ -2026,45 +2026,22 @@ function FinanceSection({ orders, expenses, setExpenses, cashEntries, setCashEnt
 }) {
   function exportFinance() {
     if (sub === "income") {
-      downloadCsv(`biz-finance-income-${todayIso()}.csv`, [
-        ["订单号", "客户", "金额", "支付方式", "日期", "明细", "类型"],
-        ...paymentRows.map(({ order, record }) => [
-          order.order_number,
-          order.client_name,
-          record.amount,
-          record.method,
-          record.date,
-          record.note ?? "",
-          record.type === "refund" ? "退款" : "收款",
-        ]),
-      ]);
+      downloadMappedCsv(`biz-finance-income-${todayIso()}.csv`, ["订单号", "客户", "金额", "支付方式", "日期", "明细", "类型"], paymentRows, ({ order, record }) => [order.order_number, order.client_name, record.amount, record.method, record.date, record.note ?? "", record.type === "refund" ? "退款" : "收款"]);
       return;
     }
     if (sub === "expense") {
-      downloadCsv(`biz-finance-expense-${todayIso()}.csv`, [
-        ["对象", "明细", "金额", "类型", "付款方式", "日期", "备注"],
-        ...expenses.map((item) => [item.target, item.detail, item.amount, item.expense_type, item.payment_method, item.expense_date, item.remark ?? ""]),
-      ]);
+      downloadMappedCsv(`biz-finance-expense-${todayIso()}.csv`, ["对象", "明细", "金额", "类型", "付款方式", "日期", "备注"], expenses, (item) => [item.target, item.detail, item.amount, item.expense_type, item.payment_method, item.expense_date, item.remark ?? ""]);
       return;
     }
     if (sub === "cash") {
-      downloadCsv(`biz-finance-cash-${todayIso()}.csv`, [
-        ["类型", "金额", "日期", "备注"],
-        ...cashEntries.map((item) => [item.type, item.amount, item.date, item.note ?? ""]),
-      ]);
+      downloadMappedCsv(`biz-finance-cash-${todayIso()}.csv`, ["类型", "金额", "日期", "备注"], cashEntries, (item) => [item.type, item.amount, item.date, item.note ?? ""]);
       return;
     }
     if (sub === "ledger") {
-      downloadCsv(`biz-finance-ledger-${todayIso()}.csv`, [
-        ["月份", "收入", "支出", "净额", "工资", "净利润"],
-        ...ledgerRows.map((item) => [item.month, item.income, item.expense, item.net, item.wage, item.profit]),
-      ]);
+      downloadMappedCsv(`biz-finance-ledger-${todayIso()}.csv`, ["月份", "收入", "支出", "净额", "工资", "净利润"], ledgerRows, (item) => [item.month, item.income, item.expense, item.net, item.wage, item.profit]);
       return;
     }
-    downloadCsv(`biz-finance-receivables-${todayIso()}.csv`, [
-      ["客户", "订单号", "总额", "已付", "余款", "下单日期", "状态"],
-      ...receivableOrders.map((o) => [o.client_name, o.order_number, o.total_after_tax ?? o.total_price ?? 0, o.amount_paid ?? 0, o.balance ?? 0, o.order_date ?? "", o.status ?? ""]),
-    ]);
+    downloadMappedCsv(`biz-finance-receivables-${todayIso()}.csv`, ["客户", "订单号", "总额", "已付", "余款", "下单日期", "状态"], receivableOrders, (o) => [o.client_name, o.order_number, o.total_after_tax ?? o.total_price ?? 0, o.amount_paid ?? 0, o.balance ?? 0, o.order_date ?? "", o.status ?? ""]);
   }
   function printFinance() {
     if (sub === "income") {
@@ -2260,7 +2237,7 @@ function MaterialsSection({ materials, setMaterials, purchases, setPurchases, su
   const [purchaseDraft, setPurchaseDraft] = useState({ supplier: suppliers[0]?.name ?? "", item_name: "", quantity: "", unit: "个", unit_price: "", purchase_date: today, status: "未付款" });
   const lowStockCount = materials.filter((item) => item.stock_quantity <= item.min_stock).length;
   const monthlyPurchase = purchases.filter((item) => item.purchase_date.startsWith(today.slice(0, 7))).reduce((sum, item) => sum + item.total_amount, 0);
-  function exportMaterials() { if (sub === "inventory") { downloadCsv(`biz-materials-${todayIso()}.csv`, [["编码", "名称", "规格", "单位", "库存", "预警库存", "成本单价", "供应商", "最近入库日期", "备注"], ...materials.map((item) => [item.code, item.name, item.specification ?? "", item.unit, item.stock_quantity, item.min_stock, item.purchase_price, item.supplier ?? "", item.last_stock_date ?? "", item.remark ?? ""])]); return; } downloadCsv(`biz-purchases-${todayIso()}.csv`, [["采购单号", "供应商", "品名", "数量", "单位", "单价", "总价", "采购日期", "状态"], ...purchases.map((item) => [item.id, item.supplier, item.item_name, item.quantity, item.unit, item.unit_price, item.total_amount, item.purchase_date, item.status])]); }
+  function exportMaterials() { if (sub === "inventory") { downloadMappedCsv(`biz-materials-${todayIso()}.csv`, ["编码", "名称", "规格", "单位", "库存", "预警库存", "成本单价", "供应商", "最近入库日期", "备注"], materials, (item) => [item.code, item.name, item.specification ?? "", item.unit, item.stock_quantity, item.min_stock, item.purchase_price, item.supplier ?? "", item.last_stock_date ?? "", item.remark ?? ""]); return; } downloadMappedCsv(`biz-purchases-${todayIso()}.csv`, ["采购单号", "供应商", "品名", "数量", "单位", "单价", "总价", "采购日期", "状态"], purchases, (item) => [item.id, item.supplier, item.item_name, item.quantity, item.unit, item.unit_price, item.total_amount, item.purchase_date, item.status]); }
   function printMaterials() { if (sub === "inventory") { openPrintWindow(buildSimpleTablePrintHTML("库存清单", `共 ${materials.length} 条`, ["编码", "名称", "规格", "单位", "库存", "预警库存", "成本单价", "供应商"], materials.map((item) => [item.code, item.name, item.specification ?? "-", item.unit, item.stock_quantity, item.min_stock, formatMoney(item.purchase_price), item.supplier ?? "-"]))); return; } openPrintWindow(buildSimpleTablePrintHTML("采购记录", `共 ${purchases.length} 条`, ["采购单号", "供应商", "品名", "数量", "单价", "总价", "采购日期", "状态"], purchases.map((item) => [item.id, item.supplier, item.item_name, `${item.quantity} ${item.unit}`, formatMoney(item.unit_price), formatMoney(item.total_amount), item.purchase_date, item.status]))); }
   function addMaterial() { if (!materialDraft.name.trim() || !materialDraft.code.trim()) return; setMaterials((prev) => [{ id: `MAT-${String(prev.length + 1).padStart(3, "0")}`, code: materialDraft.code.trim(), name: materialDraft.name.trim(), specification: materialDraft.specification || undefined, unit: materialDraft.unit, stock_quantity: Number(materialDraft.stock_quantity) || 0, min_stock: Number(materialDraft.min_stock) || 0, purchase_price: Number(materialDraft.purchase_price) || 0, supplier: materialDraft.supplier || undefined, last_stock_date: today, remark: materialDraft.remark || undefined }, ...prev]); setMaterialDraft({ code: "", name: "", specification: "", unit: "个", stock_quantity: "", min_stock: "", purchase_price: "", supplier: suppliers[0]?.name ?? "", remark: "" }); }
   function addPurchase() { const quantity = Number(purchaseDraft.quantity) || 0; const unitPrice = Number(purchaseDraft.unit_price) || 0; if (!purchaseDraft.item_name.trim() || quantity <= 0) return; setPurchases((prev) => [{ id: `PO-${new Date().getFullYear()}-${String(prev.length + 1).padStart(3, "0")}`, supplier: purchaseDraft.supplier || "未指定", item_name: purchaseDraft.item_name.trim(), quantity, unit: purchaseDraft.unit, unit_price: unitPrice, total_amount: quantity * unitPrice, purchase_date: purchaseDraft.purchase_date, status: purchaseDraft.status }, ...prev]); setPurchaseDraft({ supplier: suppliers[0]?.name ?? "", item_name: "", quantity: "", unit: "个", unit_price: "", purchase_date: today, status: "未付款" }); }
@@ -2383,7 +2360,7 @@ function EmployeesSection({ employees, setEmployees, payrolls, setPayrolls }: { 
   const pendingSalary = payrolls.filter((item) => item.month === month).reduce((sum, item) => sum + item.net_salary, 0);
   const paidSalary = payrolls.filter((item) => item.month === month && item.payment_status === "已发放").reduce((sum, item) => sum + item.net_salary, 0);
   const contractAlert = employees.filter((item) => item.contract_end && item.contract_end <= contractAlertCutoff).length;
-  function exportEmployees() { if (sub === "staff") { downloadCsv(`biz-employees-${todayIso()}.csv`, [["姓名", "职位", "电话", "入职日期", "合同到期", "月薪", "状态"], ...employees.map((item) => [item.name, item.position ?? "", item.phone ?? "", item.hire_date ?? "", item.contract_end ?? "", item.monthly_salary, item.status])]); return; } downloadCsv(`biz-payrolls-${todayIso()}.csv`, [["月份", "员工", "基本工资", "奖金", "扣款", "实发金额", "支付状态"], ...payrolls.map((item) => [item.month, item.employee_name, item.base_salary, item.bonus, item.deduction, item.net_salary, item.payment_status])]); }
+  function exportEmployees() { if (sub === "staff") { downloadMappedCsv(`biz-employees-${todayIso()}.csv`, ["姓名", "职位", "电话", "入职日期", "合同到期", "月薪", "状态"], employees, (item) => [item.name, item.position ?? "", item.phone ?? "", item.hire_date ?? "", item.contract_end ?? "", item.monthly_salary, item.status]); return; } downloadMappedCsv(`biz-payrolls-${todayIso()}.csv`, ["月份", "员工", "基本工资", "奖金", "扣款", "实发金额", "支付状态"], payrolls, (item) => [item.month, item.employee_name, item.base_salary, item.bonus, item.deduction, item.net_salary, item.payment_status]); }
   function printEmployees() { if (sub === "staff") { openPrintWindow(buildSimpleTablePrintHTML("员工档案", `共 ${employees.length} 条`, ["姓名", "职位", "电话", "入职日期", "合同到期", "月薪", "状态"], employees.map((item) => [item.name, item.position ?? "-", item.phone ?? "-", item.hire_date ?? "-", item.contract_end ?? "-", formatMoney(item.monthly_salary), item.status]))); return; } openPrintWindow(buildSimpleTablePrintHTML("工资记录", `共 ${payrolls.length} 条`, ["月份", "员工", "基本工资", "奖金", "扣款", "实发金额", "支付状态"], payrolls.map((item) => [item.month, item.employee_name, formatMoney(item.base_salary), formatMoney(item.bonus), formatMoney(item.deduction), formatMoney(item.net_salary), item.payment_status]))); }
   function addEmployee() { if (!staffDraft.name.trim()) return; setEmployees((prev) => [{ id: `EMP-${String(prev.length + 1).padStart(3, "0")}`, name: staffDraft.name.trim(), position: staffDraft.position || undefined, phone: staffDraft.phone || undefined, hire_date: staffDraft.hire_date || undefined, contract_end: staffDraft.contract_end || undefined, monthly_salary: Number(staffDraft.monthly_salary) || 0, status: "在职" }, ...prev]); setStaffDraft({ name: "", position: "", phone: "", hire_date: today, contract_end: "", monthly_salary: "" }); }
   function addPayroll() { const base = Number(payrollDraft.base_salary) || 0; const bonus = Number(payrollDraft.bonus) || 0; const deduction = Number(payrollDraft.deduction) || 0; if (!payrollDraft.employee_name || base <= 0) return; setPayrolls((prev) => [{ id: `PAY-${month}-${String(prev.length + 1).padStart(3, "0")}`, month, employee_name: payrollDraft.employee_name, base_salary: base, bonus, deduction, net_salary: base + bonus - deduction, payment_status: payrollDraft.payment_status }, ...prev]); setPayrollDraft({ employee_name: employees[0]?.name ?? "", base_salary: "", bonus: "", deduction: "", payment_status: "未发放" }); }

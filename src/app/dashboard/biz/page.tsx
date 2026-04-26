@@ -68,6 +68,16 @@ function downloadTextFile(filename: string, content: string, type = "text/plain;
   URL.revokeObjectURL(url);
 }
 
+function downloadCsv(filename: string, rows: Array<Array<string | number>>) {
+  downloadTextFile(
+    filename,
+    rows
+      .map((row) => row.map((cell) => `"${String(cell).replaceAll('"', '""')}"`).join(","))
+      .join("\n"),
+    "text/csv;charset=utf-8",
+  );
+}
+
 // ─── primitives ──────────────────────────────────────────────────────────────
 
 function PageSection({ children }: { children: React.ReactNode }) {
@@ -1626,11 +1636,7 @@ function OrdersSection({
         item.order_date ?? "",
       ]),
     ];
-    downloadTextFile(
-      `biz-orders-${todayIso()}.csv`,
-      rows.map((row) => row.map((cell) => `"${String(cell).replaceAll('"', '""')}"`).join(",")).join("\n"),
-      "text/csv;charset=utf-8",
-    );
+    downloadCsv(`biz-orders-${todayIso()}.csv`, rows);
   }
   const [selectedOrder, setSelectedOrder] = useState<BizOrder | null>(null);
   const [typeFilter, setTypeFilter] = useState("全部");
@@ -1957,6 +1963,48 @@ function FinanceSection({ orders, expenses, setExpenses, cashEntries, setCashEnt
   setCashEntries: React.Dispatch<React.SetStateAction<CashEntry[]>>;
   payrolls: PayrollRecord[];
 }) {
+  function exportFinance() {
+    if (sub === "income") {
+      downloadCsv(`biz-finance-income-${todayIso()}.csv`, [
+        ["订单号", "客户", "金额", "支付方式", "日期", "明细", "类型"],
+        ...paymentRows.map(({ order, record }) => [
+          order.order_number,
+          order.client_name,
+          record.amount,
+          record.method,
+          record.date,
+          record.note ?? "",
+          record.type === "refund" ? "退款" : "收款",
+        ]),
+      ]);
+      return;
+    }
+    if (sub === "expense") {
+      downloadCsv(`biz-finance-expense-${todayIso()}.csv`, [
+        ["对象", "明细", "金额", "类型", "付款方式", "日期", "备注"],
+        ...expenses.map((item) => [item.target, item.detail, item.amount, item.expense_type, item.payment_method, item.expense_date, item.remark ?? ""]),
+      ]);
+      return;
+    }
+    if (sub === "cash") {
+      downloadCsv(`biz-finance-cash-${todayIso()}.csv`, [
+        ["类型", "金额", "日期", "备注"],
+        ...cashEntries.map((item) => [item.type, item.amount, item.date, item.note ?? ""]),
+      ]);
+      return;
+    }
+    if (sub === "ledger") {
+      downloadCsv(`biz-finance-ledger-${todayIso()}.csv`, [
+        ["月份", "收入", "支出", "净额", "工资", "净利润"],
+        ...ledgerRows.map((item) => [item.month, item.income, item.expense, item.net, item.wage, item.profit]),
+      ]);
+      return;
+    }
+    downloadCsv(`biz-finance-receivables-${todayIso()}.csv`, [
+      ["客户", "订单号", "总额", "已付", "余款", "下单日期", "状态"],
+      ...receivableOrders.map((o) => [o.client_name, o.order_number, o.total_after_tax ?? o.total_price ?? 0, o.amount_paid ?? 0, o.balance ?? 0, o.order_date ?? "", o.status ?? ""]),
+    ]);
+  }
   const [sub, setSub] = useState<FinanceSub>("income");
   const today = new Date().toISOString().slice(0, 10);
   const [draft, setDraft] = useState<FinanceDraft>({ target: "", detail: "", amount: "", expense_type: "采购", payment_method: "转账", expense_date: today, remark: "" });
@@ -1987,7 +2035,7 @@ function FinanceSection({ orders, expenses, setExpenses, cashEntries, setCashEnt
 
   return (
     <div>
-      <SectionHeader eyebrow="Finance Management" title="收支管理" actions={<ActionBtn tone="primary" onClick={addExpense}>+ 录入支出</ActionBtn>} />
+      <SectionHeader eyebrow="Finance Management" title="收支管理" actions={<><ActionBtn onClick={exportFinance}>↓ 导出当前表</ActionBtn><ActionBtn tone="primary" onClick={addExpense}>+ 录入支出</ActionBtn></>} />
       <StatStrip items={[{ label: "订单收入", value: formatMoney(totalIncome), accent: "text-green-600" }, { label: "支出合计", value: formatMoney(totalExpense), accent: "text-red-600" }, { label: "现金余额", value: formatMoney(cashBalance), accent: "text-sky-600" }, { label: "应收余款", value: formatMoney(totalBalance), accent: "text-amber-600" }, { label: "账面利润", value: formatMoney(totalIncome - totalExpense - payrollAmount), accent: "text-emerald-600" }]} />
       <div className="mb-4 grid gap-4 xl:grid-cols-[1.1fr_2fr]">
         <PanelCard title="新增支出" note="现金付款会自动补一条现金流水。">
@@ -2075,7 +2123,20 @@ function QuotesSection({ quotes, setQuotes, showcases, setShowcases }: { quotes:
   const [showcaseDraft, setShowcaseDraft] = useState({ name: "", category: "窗帘", image_count: "", description: "", status: "待整理" });
   function addQuote() { if (!quoteDraft.client_name.trim() || !quoteDraft.title.trim()) return; setQuotes((prev) => [{ id: `QT-${new Date().getFullYear()}-${String(prev.length + 1).padStart(3, "0")}`, client_name: quoteDraft.client_name.trim(), title: quoteDraft.title.trim(), amount: Number(quoteDraft.amount) || 0, created_at: today, valid_until: quoteDraft.valid_until || today, status: quoteDraft.status }, ...prev]); setQuoteDraft({ client_name: "", title: "", amount: "", valid_until: today, status: "草稿" }); }
   function addShowcase() { if (!showcaseDraft.name.trim()) return; setShowcases((prev) => [{ id: `GAL-${String(prev.length + 1).padStart(3, "0")}`, name: showcaseDraft.name.trim(), category: showcaseDraft.category, image_count: Number(showcaseDraft.image_count) || 0, description: showcaseDraft.description || undefined, created_at: today, status: showcaseDraft.status }, ...prev]); setShowcaseDraft({ name: "", category: "窗帘", image_count: "", description: "", status: "待整理" }); }
-  return <div><SectionHeader eyebrow="Quotes & Showcase" title="报价 & 展示" actions={<ActionBtn tone="primary" onClick={sub === "quotes" ? addQuote : addShowcase}>+ {sub === "quotes" ? "新建报价单" : "新建作品"}</ActionBtn>} /><StatStrip items={[{ label: "草稿", value: String(quotes.filter((item) => item.status === "草稿").length), accent: "text-slate-500" }, { label: "已发出", value: String(quotes.filter((item) => item.status === "已发出").length), accent: "text-blue-600" }, { label: "已成交", value: String(quotes.filter((item) => item.status === "已成交").length), accent: "text-green-600" }, { label: "展示作品", value: String(showcases.length), accent: "text-violet-600" }]} /><SegmentedControl options={[{ key: "quotes", label: "报价单" }, { key: "showcase", label: "作品展示" }]} value={sub} onChange={setSub} />{sub === "quotes" ? <div className="space-y-4"><PanelCard title="新增报价单"><div className="grid gap-2 sm:grid-cols-2 xl:grid-cols-5"><SmallInput value={quoteDraft.client_name} onChange={(v) => setQuoteDraft((d) => ({ ...d, client_name: v }))} placeholder="客户" /><SmallInput value={quoteDraft.title} onChange={(v) => setQuoteDraft((d) => ({ ...d, title: v }))} placeholder="标题 / 项目" /><SmallInput value={quoteDraft.amount} onChange={(v) => setQuoteDraft((d) => ({ ...d, amount: v }))} type="number" placeholder="金额" /><SmallInput value={quoteDraft.valid_until} onChange={(v) => setQuoteDraft((d) => ({ ...d, valid_until: v }))} type="date" /><SmallSelect value={quoteDraft.status} onChange={(v) => setQuoteDraft((d) => ({ ...d, status: v }))} options={["草稿", "已发出", "已成交", "已失效"]} /></div></PanelCard><div className="overflow-x-auto rounded-xl border border-slate-200 bg-white"><table className="w-full text-left text-xs"><thead><tr className="border-b border-slate-200 bg-slate-50"><th className="px-4 py-2.5 font-semibold text-slate-600">报价单号</th><th className="px-4 py-2.5 font-semibold text-slate-600">客户</th><th className="px-4 py-2.5 font-semibold text-slate-600">标题 / 项目</th><th className="px-4 py-2.5 font-semibold text-slate-600">报价金额</th><th className="px-4 py-2.5 font-semibold text-slate-600">创建日期</th><th className="px-4 py-2.5 font-semibold text-slate-600">有效期至</th><th className="px-4 py-2.5 font-semibold text-slate-600">状态</th></tr></thead><tbody>{quotes.map((item) => <tr key={item.id} className="border-b border-slate-100 last:border-b-0"><td className="px-4 py-2.5 font-medium text-slate-700">{item.id}</td><td className="px-4 py-2.5 text-slate-700">{item.client_name}</td><td className="px-4 py-2.5 text-slate-500">{item.title}</td><td className="px-4 py-2.5 text-slate-700">{formatMoney(item.amount)}</td><td className="px-4 py-2.5 text-slate-500">{item.created_at}</td><td className="px-4 py-2.5 text-slate-500">{item.valid_until}</td><td className="px-4 py-2.5 text-slate-600">{item.status}</td></tr>)}</tbody></table></div></div> : <div className="space-y-4"><PanelCard title="新增作品展示"><div className="grid gap-2 sm:grid-cols-2 xl:grid-cols-5"><SmallInput value={showcaseDraft.name} onChange={(v) => setShowcaseDraft((d) => ({ ...d, name: v }))} placeholder="作品名称" /><SmallSelect value={showcaseDraft.category} onChange={(v) => setShowcaseDraft((d) => ({ ...d, category: v }))} options={["窗帘", "隔断", "雨棚", "扶手", "其他"]} /><SmallInput value={showcaseDraft.image_count} onChange={(v) => setShowcaseDraft((d) => ({ ...d, image_count: v }))} type="number" placeholder="图片数" /><SmallInput value={showcaseDraft.description} onChange={(v) => setShowcaseDraft((d) => ({ ...d, description: v }))} placeholder="描述" /><SmallSelect value={showcaseDraft.status} onChange={(v) => setShowcaseDraft((d) => ({ ...d, status: v }))} options={["待整理", "已发布", "隐藏"]} /></div></PanelCard><div className="overflow-x-auto rounded-xl border border-slate-200 bg-white"><table className="w-full text-left text-xs"><thead><tr className="border-b border-slate-200 bg-slate-50"><th className="px-4 py-2.5 font-semibold text-slate-600">作品名称</th><th className="px-4 py-2.5 font-semibold text-slate-600">类别</th><th className="px-4 py-2.5 font-semibold text-slate-600">图片数</th><th className="px-4 py-2.5 font-semibold text-slate-600">描述</th><th className="px-4 py-2.5 font-semibold text-slate-600">创建日期</th><th className="px-4 py-2.5 font-semibold text-slate-600">展示状态</th></tr></thead><tbody>{showcases.map((item) => <tr key={item.id} className="border-b border-slate-100 last:border-b-0"><td className="px-4 py-2.5 font-medium text-slate-700">{item.name}</td><td className="px-4 py-2.5 text-slate-600">{item.category}</td><td className="px-4 py-2.5 text-slate-600">{item.image_count}</td><td className="px-4 py-2.5 text-slate-500">{item.description ?? "-"}</td><td className="px-4 py-2.5 text-slate-500">{item.created_at}</td><td className="px-4 py-2.5 text-slate-600">{item.status}</td></tr>)}</tbody></table></div></div>}</div>;
+  function exportQuotes() {
+    if (sub === "quotes") {
+      downloadCsv(`biz-quotes-${todayIso()}.csv`, [
+        ["报价单号", "客户", "标题", "金额", "创建日期", "有效期至", "状态"],
+        ...quotes.map((item) => [item.id, item.client_name, item.title, item.amount, item.created_at, item.valid_until, item.status]),
+      ]);
+      return;
+    }
+    downloadCsv(`biz-showcase-${todayIso()}.csv`, [
+      ["作品名称", "类别", "图片数", "描述", "创建日期", "状态"],
+      ...showcases.map((item) => [item.name, item.category, item.image_count, item.description ?? "", item.created_at, item.status]),
+    ]);
+  }
+  return <div><SectionHeader eyebrow="Quotes & Showcase" title="报价 & 展示" actions={<><ActionBtn onClick={exportQuotes}>↓ 导出当前表</ActionBtn><ActionBtn tone="primary" onClick={sub === "quotes" ? addQuote : addShowcase}>+ {sub === "quotes" ? "新建报价单" : "新建作品"}</ActionBtn></>} /><StatStrip items={[{ label: "草稿", value: String(quotes.filter((item) => item.status === "草稿").length), accent: "text-slate-500" }, { label: "已发出", value: String(quotes.filter((item) => item.status === "已发出").length), accent: "text-blue-600" }, { label: "已成交", value: String(quotes.filter((item) => item.status === "已成交").length), accent: "text-green-600" }, { label: "展示作品", value: String(showcases.length), accent: "text-violet-600" }]} /><SegmentedControl options={[{ key: "quotes", label: "报价单" }, { key: "showcase", label: "作品展示" }]} value={sub} onChange={setSub} />{sub === "quotes" ? <div className="space-y-4"><PanelCard title="新增报价单"><div className="grid gap-2 sm:grid-cols-2 xl:grid-cols-5"><SmallInput value={quoteDraft.client_name} onChange={(v) => setQuoteDraft((d) => ({ ...d, client_name: v }))} placeholder="客户" /><SmallInput value={quoteDraft.title} onChange={(v) => setQuoteDraft((d) => ({ ...d, title: v }))} placeholder="标题 / 项目" /><SmallInput value={quoteDraft.amount} onChange={(v) => setQuoteDraft((d) => ({ ...d, amount: v }))} type="number" placeholder="金额" /><SmallInput value={quoteDraft.valid_until} onChange={(v) => setQuoteDraft((d) => ({ ...d, valid_until: v }))} type="date" /><SmallSelect value={quoteDraft.status} onChange={(v) => setQuoteDraft((d) => ({ ...d, status: v }))} options={["草稿", "已发出", "已成交", "已失效"]} /></div></PanelCard><div className="overflow-x-auto rounded-xl border border-slate-200 bg-white"><table className="w-full text-left text-xs"><thead><tr className="border-b border-slate-200 bg-slate-50"><th className="px-4 py-2.5 font-semibold text-slate-600">报价单号</th><th className="px-4 py-2.5 font-semibold text-slate-600">客户</th><th className="px-4 py-2.5 font-semibold text-slate-600">标题 / 项目</th><th className="px-4 py-2.5 font-semibold text-slate-600">报价金额</th><th className="px-4 py-2.5 font-semibold text-slate-600">创建日期</th><th className="px-4 py-2.5 font-semibold text-slate-600">有效期至</th><th className="px-4 py-2.5 font-semibold text-slate-600">状态</th></tr></thead><tbody>{quotes.map((item) => <tr key={item.id} className="border-b border-slate-100 last:border-b-0"><td className="px-4 py-2.5 font-medium text-slate-700">{item.id}</td><td className="px-4 py-2.5 text-slate-700">{item.client_name}</td><td className="px-4 py-2.5 text-slate-500">{item.title}</td><td className="px-4 py-2.5 text-slate-700">{formatMoney(item.amount)}</td><td className="px-4 py-2.5 text-slate-500">{item.created_at}</td><td className="px-4 py-2.5 text-slate-500">{item.valid_until}</td><td className="px-4 py-2.5 text-slate-600">{item.status}</td></tr>)}</tbody></table></div></div> : <div className="space-y-4"><PanelCard title="新增作品展示"><div className="grid gap-2 sm:grid-cols-2 xl:grid-cols-5"><SmallInput value={showcaseDraft.name} onChange={(v) => setShowcaseDraft((d) => ({ ...d, name: v }))} placeholder="作品名称" /><SmallSelect value={showcaseDraft.category} onChange={(v) => setShowcaseDraft((d) => ({ ...d, category: v }))} options={["窗帘", "隔断", "雨棚", "扶手", "其他"]} /><SmallInput value={showcaseDraft.image_count} onChange={(v) => setShowcaseDraft((d) => ({ ...d, image_count: v }))} type="number" placeholder="图片数" /><SmallInput value={showcaseDraft.description} onChange={(v) => setShowcaseDraft((d) => ({ ...d, description: v }))} placeholder="描述" /><SmallSelect value={showcaseDraft.status} onChange={(v) => setShowcaseDraft((d) => ({ ...d, status: v }))} options={["待整理", "已发布", "隐藏"]} /></div></PanelCard><div className="overflow-x-auto rounded-xl border border-slate-200 bg-white"><table className="w-full text-left text-xs"><thead><tr className="border-b border-slate-200 bg-slate-50"><th className="px-4 py-2.5 font-semibold text-slate-600">作品名称</th><th className="px-4 py-2.5 font-semibold text-slate-600">类别</th><th className="px-4 py-2.5 font-semibold text-slate-600">图片数</th><th className="px-4 py-2.5 font-semibold text-slate-600">描述</th><th className="px-4 py-2.5 font-semibold text-slate-600">创建日期</th><th className="px-4 py-2.5 font-semibold text-slate-600">展示状态</th></tr></thead><tbody>{showcases.map((item) => <tr key={item.id} className="border-b border-slate-100 last:border-b-0"><td className="px-4 py-2.5 font-medium text-slate-700">{item.name}</td><td className="px-4 py-2.5 text-slate-600">{item.category}</td><td className="px-4 py-2.5 text-slate-600">{item.image_count}</td><td className="px-4 py-2.5 text-slate-500">{item.description ?? "-"}</td><td className="px-4 py-2.5 text-slate-500">{item.created_at}</td><td className="px-4 py-2.5 text-slate-600">{item.status}</td></tr>)}</tbody></table></div></div>}</div>;
 }
 
 // ─── Settings ────────────────────────────────────────────────────────────────

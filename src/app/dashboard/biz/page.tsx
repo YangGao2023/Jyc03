@@ -1,4 +1,4 @@
-"use client";
+﻿"use client";
 
 import { Fragment, useEffect, useMemo, useRef, useState } from "react";
 import { DashboardPageHeader } from "../components";
@@ -2773,7 +2773,7 @@ function applyFinanceAuditRepairs(orders: BizOrder[], clients: ContactRecord[]) 
   return { fixedOrders, fixedClients };
 }
 
-function FinanceSection({ orders, setOrders, expenses, setExpenses, cashEntries, setCashEntries, payrolls, clients, setClients, suppliers, employees, settings }: {
+function FinanceSection({ orders, setOrders, expenses, setExpenses, cashEntries, setCashEntries, payrolls, setPayrolls, clients, setClients, suppliers, employees, settings }: {
   orders: BizOrder[];
   setOrders: React.Dispatch<React.SetStateAction<BizOrder[]>>;
   expenses: ExpenseRecord[];
@@ -2781,6 +2781,7 @@ function FinanceSection({ orders, setOrders, expenses, setExpenses, cashEntries,
   cashEntries: CashEntry[];
   setCashEntries: React.Dispatch<React.SetStateAction<CashEntry[]>>;
   payrolls: PayrollRecord[];
+  setPayrolls: React.Dispatch<React.SetStateAction<PayrollRecord[]>>;
   clients: ContactRecord[];
   setClients: React.Dispatch<React.SetStateAction<ContactRecord[]>>;
   suppliers: SupplierRecord[];
@@ -2933,7 +2934,18 @@ function FinanceSection({ orders, setOrders, expenses, setExpenses, cashEntries,
   }
 
   function deleteExpense(expenseId: string) {
+    const removedExpense = expenses.find((item) => item.id === expenseId);
     setExpenses((prev) => prev.filter((item) => item.id !== expenseId));
+    if (removedExpense?.expense_type === "工资") {
+      setPayrolls((prev) => prev.map((item) => item.expense_id === expenseId
+        ? {
+            ...item,
+            payment_status: "未发放",
+            paid_at: undefined,
+            expense_id: undefined,
+          }
+        : item));
+    }
     setConfirmingExpenseId(null);
   }
 
@@ -4733,6 +4745,7 @@ function EmployeesSection({ employees, setEmployees, attendances, setAttendances
     });
   }, [employees]);
   const seededAttendances = useMemo(() => ensureAttendanceRows(normalizedEmployees, attendances, attendanceRange, settings), [normalizedEmployees, attendances, attendanceRange, settings]);
+  const mealAllowanceAmount = settings.meal_allowance_amount ?? 15;
 
   useEffect(() => {
     if (seededAttendances.length !== attendances.length) setAttendances(seededAttendances);
@@ -4760,11 +4773,24 @@ function EmployeesSection({ employees, setEmployees, attendances, setAttendances
       const totalMinutes = rows.reduce((sum, item) => sum + item.worked_minutes, 0);
       const mealCount = rows.filter((item) => item.meal_allowance).length;
       const hourlyRate = employee.hourly_rate || 0;
-      const wage = Number((minutesToHours(totalMinutes) * hourlyRate + mealCount * (settings.meal_allowance_amount || 0)).toFixed(2));
+      const wage = Number((minutesToHours(totalMinutes) * hourlyRate + mealCount * mealAllowanceAmount).toFixed(2));
       const payrollId = `PAY-${payrollRange.start}-${employee.id}`;
       const existing = payrolls.find((item) => item.id === payrollId);
-      return { employee, totalMinutes, mealCount, hourlyRate, wage, payrollId, paid: existing?.payment_status === "已发放" };
-    }), [normalizedEmployees, attendances, payrollRange, settings, payrolls, payrollEthnicityFilter]);
+      const linkedExpense = existing?.expense_id
+        ? expenses.find((item) => item.id === existing.expense_id)
+        : expenses.find((item) => item.expense_type === "工资"
+            && item.target === employee.name
+            && item.remark === `${payrollRange.start} ~ ${payrollRange.end}`);
+      return {
+        employee,
+        totalMinutes,
+        mealCount,
+        hourlyRate,
+        wage,
+        payrollId,
+        paid: existing?.payment_status === "已发放" && Boolean(linkedExpense),
+      };
+    }), [normalizedEmployees, attendances, payrollRange, settings, payrolls, payrollEthnicityFilter, mealAllowanceAmount, expenses]);
 
   const [employeeDraft, setEmployeeDraft] = useState({ name: "", phone: "", hourly_rate: "", workdays: ["Mon", "Tue", "Wed", "Thu", "Fri"], meal_allowance_eligible: true, ethnicity: "华人", position: "" });
   const [attendanceDraft, setAttendanceDraft] = useState({ employee_id: "", date: today, leave_minutes: "0", overtime_minutes: "0" });
@@ -4875,7 +4901,7 @@ function EmployeesSection({ employees, setEmployees, attendances, setAttendances
         employee_ethnicity: row.employee.ethnicity,
         total_hours: minutesToHours(row.totalMinutes),
         hourly_rate: row.hourlyRate,
-        meal_allowance_total: row.mealCount * (settings.meal_allowance_amount || 0),
+        meal_allowance_total: row.mealCount * mealAllowanceAmount,
         base_salary: row.wage,
         bonus: 0,
         deduction: 0,
@@ -4976,16 +5002,16 @@ function EmployeesSection({ employees, setEmployees, attendances, setAttendances
       {sub === "attendance" ? (
         <div className="space-y-4">
           <div className="flex flex-wrap items-center gap-3"><SegmentedControl options={[{ key: "today", label: "今天" }, { key: "thisWeek", label: "本周" }, { key: "lastWeek", label: "上周" }]} value={attendanceFilter} onChange={setAttendanceFilter} /><div className="flex items-center gap-2"><span className="text-xs text-slate-500">分组</span><select value={attendanceEthnicityFilter} onChange={(e) => setAttendanceEthnicityFilter(e.target.value)} className="h-8 rounded-lg border border-slate-300 bg-white px-2 text-xs text-slate-700"><option>全部</option>{EMPLOYEE_GROUP_OPTIONS.map((option) => <option key={option}>{option}</option>)}</select></div><span className="text-xs text-slate-500">{attendanceRange.start} ~ {attendanceRange.end}</span></div>
-          <PanelCard title="考勤规则说明" note="当天工作时长 = 10小时 + 加班时长 - 请假时长。工时小于等于 5 小时时强制取消饭补。"><div className="text-xs text-slate-500">缺失考勤会按员工工作日和自动规则补齐，支持逐行人工修正。</div></PanelCard>
-          <div className="overflow-x-auto rounded-xl border border-slate-200 bg-white"><table className="w-full text-left text-xs"><thead><tr className="border-b border-slate-200 bg-slate-50"><th className="px-3 py-2.5 font-semibold text-slate-600">日期</th><th className="px-3 py-2.5 font-semibold text-slate-600">工号</th><th className="px-3 py-2.5 font-semibold text-slate-600">人名</th><th className="px-3 py-2.5 font-semibold text-slate-600">工作时长</th><th className="px-3 py-2.5 font-semibold text-slate-600">请假时长</th><th className="px-3 py-2.5 font-semibold text-slate-600">加班时长</th><th className="px-3 py-2.5 font-semibold text-slate-600">饭补</th><th className="px-3 py-2.5 font-semibold text-slate-600">操作</th></tr></thead><tbody>{attendanceRows.map((item) => { const employee = normalizedEmployees.find((row) => row.id === item.employee_id || row.name === item.employee_name); const editing = editingAttendanceId === item.id; return <tr key={item.id} className="border-b border-slate-100 last:border-b-0"><td className="px-3 py-2.5 text-slate-600">{item.date}</td><td className="px-3 py-2.5 text-slate-700">{item.employee_code || employee?.code || "-"}</td><td className="px-3 py-2.5 font-medium text-slate-700">{item.employee_name}</td><td className="px-3 py-2.5 text-slate-700">{formatMinutes(item.worked_minutes)}</td>{editing ? <><td className="px-3 py-2.5"><SmallInput value={String(item.leave_minutes)} onChange={(v) => setAttendanceField(item.id, "leave_minutes", Number(v) || 0)} type="number" /></td><td className="px-3 py-2.5"><SmallInput value={String(item.overtime_minutes)} onChange={(v) => setAttendanceField(item.id, "overtime_minutes", Number(v) || 0)} type="number" /></td><td className="px-3 py-2.5"><label className="flex items-center gap-2 text-slate-600"><input type="checkbox" checked={item.meal_allowance} disabled={item.worked_minutes <= 300 || !employee?.meal_allowance_eligible} onChange={(e) => setAttendanceField(item.id, "meal_allowance", e.target.checked)} /> 饭补</label></td><td className="px-3 py-2.5"><div className="flex gap-2"><ActionBtn tone="success" onClick={() => setEditingAttendanceId(null)}>完成</ActionBtn><ActionBtn onClick={() => setEditingAttendanceId(null)}>取消</ActionBtn></div></td></> : <><td className="px-3 py-2.5 text-slate-600">{formatMinutes(item.leave_minutes)}</td><td className="px-3 py-2.5 text-slate-600">{formatMinutes(item.overtime_minutes)}</td><td className="px-3 py-2.5 text-slate-600">{item.meal_allowance ? `是 · ${formatMoney(settings.meal_allowance_amount || 0)}` : "否"}</td><td className="px-3 py-2.5"><ActionBtn onClick={() => setEditingAttendanceId(item.id)}>编辑</ActionBtn></td></>}</tr>; })}</tbody></table></div>
+          <PanelCard title="考勤规则说明" note="当天工作时长 = 10小时 + 加班时长 - 请假时长。工时小于等于 5 小时时强制取消饭补。"><div className="text-xs text-slate-500">缺失考勤会按员工工作日和自动规则补齐，支持逐行人工修正。当前饭补金额 {formatMoney(mealAllowanceAmount)} / 次。</div></PanelCard>
+          <div className="overflow-x-auto rounded-xl border border-slate-200 bg-white"><table className="w-full text-left text-xs"><thead><tr className="border-b border-slate-200 bg-slate-50"><th className="px-3 py-2.5 font-semibold text-slate-600">日期</th><th className="px-3 py-2.5 font-semibold text-slate-600">工号</th><th className="px-3 py-2.5 font-semibold text-slate-600">人名</th><th className="px-3 py-2.5 font-semibold text-slate-600">工作时长</th><th className="px-3 py-2.5 font-semibold text-slate-600">请假时长</th><th className="px-3 py-2.5 font-semibold text-slate-600">加班时长</th><th className="px-3 py-2.5 font-semibold text-slate-600">饭补</th><th className="px-3 py-2.5 font-semibold text-slate-600">操作</th></tr></thead><tbody>{attendanceRows.map((item) => { const employee = normalizedEmployees.find((row) => row.id === item.employee_id || row.name === item.employee_name); const editing = editingAttendanceId === item.id; return <tr key={item.id} className="border-b border-slate-100 last:border-b-0"><td className="px-3 py-2.5 text-slate-600">{item.date}</td><td className="px-3 py-2.5 text-slate-700">{item.employee_code || employee?.code || "-"}</td><td className="px-3 py-2.5 font-medium text-slate-700">{item.employee_name}</td><td className="px-3 py-2.5 text-slate-700">{formatMinutes(item.worked_minutes)}</td>{editing ? <><td className="px-3 py-2.5"><SmallInput value={String(item.leave_minutes)} onChange={(v) => setAttendanceField(item.id, "leave_minutes", Number(v) || 0)} type="number" /></td><td className="px-3 py-2.5"><SmallInput value={String(item.overtime_minutes)} onChange={(v) => setAttendanceField(item.id, "overtime_minutes", Number(v) || 0)} type="number" /></td><td className="px-3 py-2.5"><label className="flex items-center gap-2 text-slate-600"><input type="checkbox" checked={item.meal_allowance} disabled={item.worked_minutes <= 300 || !employee?.meal_allowance_eligible} onChange={(e) => setAttendanceField(item.id, "meal_allowance", e.target.checked)} /> 饭补</label></td><td className="px-3 py-2.5"><div className="flex gap-2"><ActionBtn tone="success" onClick={() => setEditingAttendanceId(null)}>完成</ActionBtn><ActionBtn onClick={() => setEditingAttendanceId(null)}>取消</ActionBtn></div></td></> : <><td className="px-3 py-2.5 text-slate-600">{formatMinutes(item.leave_minutes)}</td><td className="px-3 py-2.5 text-slate-600">{formatMinutes(item.overtime_minutes)}</td><td className="px-3 py-2.5 text-slate-600">{item.meal_allowance ? `是 · 当前饭补金额 ${formatMoney(mealAllowanceAmount)} / 次` : "否"}</td><td className="px-3 py-2.5"><ActionBtn onClick={() => setEditingAttendanceId(item.id)}>编辑</ActionBtn></td></>}</tr>; })}</tbody></table></div>
         </div>
       ) : null}
 
       {sub === "payroll" ? (
         <div className="space-y-4">
           <div className="flex flex-wrap items-center gap-3"><SegmentedControl options={[{ key: "lastWeek", label: "上周" }, { key: "thisWeek", label: "本周" }]} value={payrollWeekFilter} onChange={setPayrollWeekFilter} /><div className="flex items-center gap-2"><span className="text-xs text-slate-500">分组</span><select value={payrollEthnicityFilter} onChange={(e) => setPayrollEthnicityFilter(e.target.value)} className="h-8 rounded-lg border border-slate-300 bg-white px-2 text-xs text-slate-700"><option>全部</option>{EMPLOYEE_GROUP_OPTIONS.map((option) => <option key={option}>{option}</option>)}</select></div><span className="text-xs text-slate-500">{payrollRange.start} ~ {payrollRange.end}</span></div>
-          <PanelCard title="工资说明" note={`工资 = 总工时 × 时薪 + 饭补次数 × ${formatMoney(settings.meal_allowance_amount || 0)}。点击一键发放后，会自动落一笔“工资”支出。`}><div className="text-xs text-slate-500">保留周维度发放，本周 / 上周两档。</div></PanelCard>
-          <div className="overflow-x-auto rounded-xl border border-slate-200 bg-white"><table className="w-full text-left text-xs"><thead><tr className="border-b border-slate-200 bg-slate-50"><th className="px-4 py-2.5 font-semibold text-slate-600">姓名</th><th className="px-4 py-2.5 font-semibold text-slate-600">时薪</th><th className="px-4 py-2.5 font-semibold text-slate-600">总工时</th><th className="px-4 py-2.5 font-semibold text-slate-600">应发工资</th><th className="px-4 py-2.5 font-semibold text-slate-600">是否已发放工资</th></tr></thead><tbody>{payrollRows.map((item) => <tr key={item.employee.id} className="border-b border-slate-100 last:border-b-0"><td className="px-4 py-2.5 font-medium text-slate-700">{item.employee.name}</td><td className="px-4 py-2.5 text-slate-700">{formatMoney(item.hourlyRate)}</td><td className="px-4 py-2.5 text-slate-600">{formatMinutes(item.totalMinutes)}</td><td className="px-4 py-2.5 font-semibold text-slate-800">{formatMoney(item.wage)}</td><td className="px-4 py-2.5 text-slate-600">{item.paid ? "已发放" : "未发放"}</td></tr>)}</tbody></table></div>
+          <PanelCard title="工资说明" note={`工资 = 总工时 × 时薪 + 饭补次数 × 当前饭补金额。点击一键发放后，会自动落一笔“工资”支出。`}><div className="text-xs text-slate-500">当前饭补金额 {formatMoney(mealAllowanceAmount)} / 次，保留周维度发放，本周 / 上周两档。</div></PanelCard>
+          <div className="overflow-x-auto rounded-xl border border-slate-200 bg-white"><table className="w-full text-left text-xs"><thead><tr className="border-b border-slate-200 bg-slate-50"><th className="px-4 py-2.5 font-semibold text-slate-600">姓名</th><th className="px-4 py-2.5 font-semibold text-slate-600">时薪</th><th className="px-4 py-2.5 font-semibold text-slate-600">总工时</th><th className="px-4 py-2.5 font-semibold text-slate-600">饭补说明</th><th className="px-4 py-2.5 font-semibold text-slate-600">应发工资</th><th className="px-4 py-2.5 font-semibold text-slate-600">是否已发放工资</th></tr></thead><tbody>{payrollRows.map((item) => <tr key={item.employee.id} className="border-b border-slate-100 last:border-b-0"><td className="px-4 py-2.5 font-medium text-slate-700">{item.employee.name}</td><td className="px-4 py-2.5 text-slate-700">{formatMoney(item.hourlyRate)}</td><td className="px-4 py-2.5 text-slate-600">{formatMinutes(item.totalMinutes)}</td><td className="px-4 py-2.5 text-slate-600">{item.mealCount > 0 ? `${item.mealCount} 次，当前饭补金额 ${formatMoney(mealAllowanceAmount)} / 次` : "无"}</td><td className="px-4 py-2.5 font-semibold text-slate-800">{formatMoney(item.wage)}</td><td className="px-4 py-2.5 text-slate-600">{item.paid ? "已发放" : "未发放"}</td></tr>)}</tbody></table></div>
         </div>
       ) : null}
 
@@ -4993,7 +5019,7 @@ function EmployeesSection({ employees, setEmployees, attendances, setAttendances
         <div className="space-y-4">
           <PanelCard title="员工系统规则" note="员工系统规则独立成页，只保留规则配置，不再混入员工档案。">
             <div className="grid gap-3 md:grid-cols-2 xl:grid-cols-4">
-              <div><p className="mb-1 text-[11px] font-semibold text-slate-500">饭补金额</p><SmallInput value={String(settings.meal_allowance_amount || 15)} onChange={(v) => setSettings((prev) => ({ ...prev, meal_allowance_amount: Number(v) || 0 }))} type="number" /></div>
+              <div><p className="mb-1 text-[11px] font-semibold text-slate-500">饭补金额</p><SmallInput value={String(mealAllowanceAmount)} onChange={(v) => setSettings((prev) => ({ ...prev, meal_allowance_amount: Number(v) || 0 }))} type="number" /></div>
               <div><p className="mb-1 text-[11px] font-semibold text-slate-500">自动考勤时区</p><SmallInput value={settings.auto_attendance_timezone || "America/New_York"} onChange={(v) => setSettings((prev) => ({ ...prev, auto_attendance_timezone: v || "America/New_York" }))} /></div>
               <div><p className="mb-1 text-[11px] font-semibold text-slate-500">执行时间</p><SmallInput value={settings.auto_attendance_run_time || "01:00"} onChange={(v) => setSettings((prev) => ({ ...prev, auto_attendance_run_time: v || "01:00" }))} /></div>
               <div><p className="mb-1 text-[11px] font-semibold text-slate-500">自动默认工时</p><div className="rounded-lg border border-slate-200 bg-slate-50 px-3 py-2 text-xs text-slate-600">{formatMinutes(settings.auto_attendance_default_minutes || 600)}</div></div>
@@ -5330,6 +5356,7 @@ export default function DashboardBizPage() {
               cashEntries={cashEntries}
               setCashEntries={setCashEntries}
               payrolls={payrolls}
+              setPayrolls={setPayrolls}
               clients={clients}
               setClients={setClients}
               suppliers={suppliers}

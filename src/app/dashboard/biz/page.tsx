@@ -7,6 +7,7 @@ import {
   bizCashEntries,
   bizClients,
   bizEmployees,
+  bizAttendances,
   bizExpenses,
   formatMoney,
   bizMaterials,
@@ -24,6 +25,7 @@ import {
   type CashEntry,
   type ContactRecord,
   type EmployeeRecord,
+  type AttendanceRecord,
   type ExpenseRecord,
   type MaterialRecord,
   type MaterialRow,
@@ -2524,10 +2526,10 @@ function SmallInput({ value, onChange, placeholder, type = "text" }: { value: st
   return <input type={type} value={value} onChange={(e) => onChange(e.target.value)} placeholder={placeholder} className="h-8 w-full rounded-lg border border-slate-300 bg-white px-3 text-xs text-slate-700 focus:border-blue-400 focus:outline-none" />;
 }
 
-function SmallSelect({ value, onChange, options }: { value: string; onChange: (v: string) => void; options: string[]; }) {
+function SmallSelect({ value, onChange, options, labels }: { value: string; onChange: (v: string) => void; options: string[]; labels?: Record<string, string>; }) {
   return (
     <select value={value} onChange={(e) => onChange(e.target.value)} className="h-8 w-full rounded-lg border border-slate-300 bg-white px-3 text-xs text-slate-700 focus:border-blue-400 focus:outline-none">
-      {options.map((option) => <option key={option} value={option}>{option || "未选择"}</option>)}
+      {options.map((option) => <option key={option} value={option}>{labels?.[option] || option || "未选择"}</option>)}
     </select>
   );
 }
@@ -4564,42 +4566,382 @@ function AppointmentsSection({ appointments, setAppointments, clients, prefillCl
   return <div><SectionHeader eyebrow="Measurement Appointments" title="测量预约" actions={<><ActionBtn onClick={copyAppointmentList}>复制当前列表</ActionBtn><ActionBtn onClick={exportAppointments}>↓ 导出当前表</ActionBtn><ActionBtn onClick={printAppointments}>🖨 打印当前表</ActionBtn><ActionBtn tone="primary" onClick={() => setShowAppointmentModal(true)}>+ 新建预约</ActionBtn></>} /><StatStrip items={[{ label: "预约总数", value: String(stats.total) }, { label: "今日上门", value: String(stats.today), accent: "text-amber-600" }, { label: "待上门", value: String(stats.upcoming), accent: "text-sky-600" }, { label: "已完成", value: String(stats.done), accent: "text-emerald-600" }]} />{showAppointmentModal ? <div className="fixed inset-0 z-50 flex items-center justify-center bg-slate-950/45 px-4"><div className="w-full max-w-3xl rounded-2xl border border-slate-200 bg-white p-5 shadow-2xl"><div className="mb-4 flex items-start justify-between gap-3"><div><h3 className="text-base font-semibold text-slate-900">新建测量预约</h3><p className="mt-1 text-sm text-slate-500">支持直接搜索客户并自动带出电话和地址。</p></div><button onClick={() => setShowAppointmentModal(false)} className="rounded-lg border border-slate-200 px-2.5 py-1 text-xs text-slate-500 hover:border-slate-300 hover:text-slate-700 transition-colors">关闭</button></div><div className="grid gap-2 sm:grid-cols-2 xl:grid-cols-3"><select value={draft.client_id || ""} onChange={(e) => hydrateFromClient(e.target.value)} className="h-8 rounded-lg border border-slate-300 bg-white px-3 text-xs text-slate-700"><option value="">选择客户后自动带出电话和地址</option>{clientOptions.map((item) => <option key={item.value} value={item.value}>{item.label}</option>)}</select><div><input list="appointment-client-options" value={draft.client_name} onChange={(e) => hydrateFromClientName(e.target.value)} placeholder="客户名称" className="h-8 w-full rounded-lg border border-slate-300 bg-white px-3 text-xs text-slate-700 focus:border-blue-400 focus:outline-none" /><datalist id="appointment-client-options">{clients.map((item) => <option key={item.id} value={item.name} />)}</datalist></div><SmallInput value={draft.phone} onChange={(v) => setDraft((d) => ({ ...d, phone: v }))} placeholder="电话" /><div className="sm:col-span-2 xl:col-span-2"><SmallInput value={draft.address} onChange={(v) => setDraft((d) => ({ ...d, address: v }))} placeholder="测量地址" /></div><SmallInput value={draft.appointment_date} onChange={(v) => setDraft((d) => ({ ...d, appointment_date: v }))} type="datetime-local" /><div className="sm:col-span-2 xl:col-span-3"><SmallInput value={draft.description} onChange={(v) => setDraft((d) => ({ ...d, description: v }))} placeholder="描述，例如栏杆、复尺、现场确认" /></div></div><p className="mt-2 text-[11px] text-slate-400">原始应用里预约实体还带 Google Calendar event id。当前网站架构没有外部日历凭证和同步流，所以先保留字段但只做站内排期。</p><div className="mt-5 flex justify-end gap-2"><ActionBtn onClick={() => setShowAppointmentModal(false)}>取消</ActionBtn><ActionBtn tone="primary" onClick={addAppointment}>确认新建</ActionBtn></div></div></div> : null}<div className="mb-4"><PanelCard title="排期列表"><div className="mb-3 flex flex-wrap gap-2"><div className="relative min-w-[180px] flex-1"><span className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-400 text-sm">⌕</span><input value={search} onChange={(e) => setSearch(e.target.value)} placeholder="搜索客户 / 电话 / 地址" className="h-8 w-full rounded-lg border border-slate-300 bg-white pl-8 pr-3 text-xs text-slate-700" /></div><select value={statusFilter} onChange={(e) => setStatusFilter(e.target.value)} className="h-8 rounded-lg border border-slate-300 bg-white px-3 text-xs text-slate-700"><option>全部</option><option>今日预约</option><option>待上门</option><option>已完成</option></select><select value={datePreset} onChange={(e) => setDatePreset(e.target.value)} className="h-8 rounded-lg border border-slate-300 bg-white px-3 text-xs text-slate-700"><option>全部</option><option>今日</option><option>明日</option><option>近7天</option><option>自定义</option></select><input type="datetime-local" value={rangeStart} onChange={(e) => setRangeStart(e.target.value)} className="h-8 rounded-lg border border-slate-300 bg-white px-3 text-xs text-slate-700" /><input type="datetime-local" value={rangeEnd} onChange={(e) => setRangeEnd(e.target.value)} className="h-8 rounded-lg border border-slate-300 bg-white px-3 text-xs text-slate-700" /></div>{copyState ? <p className="mb-3 text-xs text-emerald-600">{copyState}</p> : null}<div className="space-y-2">{filteredAppointments.length ? filteredAppointments.map((item) => { const status = getAppointmentStatus(item.appointment_date); return <div key={item.id} className="rounded-xl border border-slate-200 bg-white p-3"><div className="flex flex-wrap items-start justify-between gap-2"><div><div className="flex items-center gap-2"><span className="text-sm font-semibold text-slate-900">{item.client_name}</span><AppointmentStatusBadge status={status} /></div><p className="mt-1 text-xs text-slate-500">{formatAppointmentDate(item.appointment_date)}{item.phone ? ` · ${item.phone}` : ""}</p><p className="mt-1 text-xs text-slate-500">{item.address ?? "未填写地址"}</p></div><div className="flex flex-wrap gap-2"><button onClick={() => copyAppointment(item)} className="rounded border border-sky-100 px-2 py-1 text-[11px] text-sky-600 hover:border-sky-300 hover:bg-sky-50 transition-colors">复制信息</button><button onClick={() => deleteAppointment(item)} className="rounded border border-rose-100 px-2 py-1 text-[11px] text-rose-500 hover:border-rose-300 hover:bg-rose-50 transition-colors">删除</button></div></div>{item.description ? <p className="mt-2 rounded-lg bg-slate-50 px-3 py-2 text-xs text-slate-600">{item.description}</p> : null}</div>; }) : <div className="rounded-xl border border-dashed border-slate-200 py-10 text-center text-sm text-slate-400">当前没有预约记录</div>}</div></PanelCard></div></div>;
 }
 
-type StaffSub = "staff" | "payroll";
+type StaffSub = "staff" | "attendance" | "payroll";
+type AttendanceFilter = "today" | "thisWeek" | "lastWeek";
+type PayrollWeekFilter = "lastWeek" | "thisWeek";
 
-function EmployeesSection({ employees, setEmployees, payrolls, setPayrolls }: { employees: EmployeeRecord[]; setEmployees: React.Dispatch<React.SetStateAction<EmployeeRecord[]>>; payrolls: PayrollRecord[]; setPayrolls: React.Dispatch<React.SetStateAction<PayrollRecord[]>>; }) {
-  const [sub, setSub] = useState<StaffSub>("staff");
+const WORKDAY_OPTIONS = [
+  { key: "Mon", label: "周一" },
+  { key: "Tue", label: "周二" },
+  { key: "Wed", label: "周三" },
+  { key: "Thu", label: "周四" },
+  { key: "Fri", label: "周五" },
+  { key: "Sat", label: "周六" },
+  { key: "Sun", label: "周日" },
+] as const;
+
+const EMPLOYEE_GROUP_OPTIONS = ["华人", "墨西哥人"] as const;
+
+function parseIsoDate(value: string) {
+  return new Date(`${value}T00:00:00`);
+}
+
+function startOfWeekIso(value: string) {
+  const date = parseIsoDate(value);
+  const day = date.getDay() || 7;
+  date.setDate(date.getDate() - day + 1);
+  return date.toISOString().slice(0, 10);
+}
+
+function getRangeDates(start: string, end: string) {
+  const result: string[] = [];
+  const cursor = parseIsoDate(start);
+  const endDate = parseIsoDate(end);
+  while (cursor <= endDate) {
+    result.push(cursor.toISOString().slice(0, 10));
+    cursor.setDate(cursor.getDate() + 1);
+  }
+  return result;
+}
+
+function getAttendanceRange(filter: AttendanceFilter) {
   const today = todayIso();
-  const month = monthIso();
-  const contractAlertCutoff = addDaysIso(today, 45);
-  const [staffDraft, setStaffDraft] = useState({ name: "", position: "", phone: "", hire_date: today, contract_end: "", monthly_salary: "" });
-  const [payrollDraft, setPayrollDraft] = useState({ employee_name: employees[0]?.name ?? "", base_salary: "", bonus: "", deduction: "", payment_status: "未发放" });
+  const thisWeekStart = startOfWeekIso(today);
+  if (filter === "today") return { start: today, end: today, label: "今天" };
+  if (filter === "thisWeek") return { start: thisWeekStart, end: today, label: "本周" };
+  return { start: addDaysIso(thisWeekStart, -7), end: addDaysIso(thisWeekStart, -1), label: "上周" };
+}
+
+function getPayrollWeekRange(filter: PayrollWeekFilter) {
+  const today = todayIso();
+  const thisWeekStart = startOfWeekIso(today);
+  if (filter === "thisWeek") return { start: thisWeekStart, end: addDaysIso(thisWeekStart, 6), label: "本周" };
+  return { start: addDaysIso(thisWeekStart, -7), end: addDaysIso(thisWeekStart, -1), label: "上周" };
+}
+
+function getWeekdayKey(value: string) {
+  return ["Sun", "Mon", "Tue", "Wed", "Thu", "Fri", "Sat"][parseIsoDate(value).getDay()] ?? "Mon";
+}
+
+function formatMinutes(value: number) {
+  const safe = Math.max(0, Math.round(value || 0));
+  const hours = Math.floor(safe / 60);
+  const minutes = safe % 60;
+  return `${hours}小时${String(minutes).padStart(2, "0")}分`;
+}
+
+function minutesToHours(value: number) {
+  return Number((Math.max(0, value || 0) / 60).toFixed(2));
+}
+
+function calcWorkedMinutes(leaveMinutes: number, overtimeMinutes: number) {
+  return Math.max(0, 600 + overtimeMinutes - leaveMinutes);
+}
+
+function nextEmployeeCode(employees: EmployeeRecord[]) {
+  const max = employees.reduce((result, item) => {
+    const parsed = Number(item.code || item.id.replace(/\D+/g, "") || 0);
+    return Number.isFinite(parsed) && parsed > result ? parsed : result;
+  }, 0);
+  return String(max + 1).padStart(3, "0");
+}
+
+function ensureAttendanceRows(employees: EmployeeRecord[], attendances: AttendanceRecord[], range: { start: string; end: string }, settings: BizSettings) {
+  const employeeMap = new Map(employees.map((item) => [item.id, item]));
+  const existingMap = new Map(attendances.map((item) => [`${item.date}__${item.employee_id || item.employee_name}`, item]));
+  const next = [...attendances];
+  const defaultMinutes = Math.max(0, Math.round(settings.auto_attendance_default_minutes || 600));
+
+  getRangeDates(range.start, range.end).forEach((date) => {
+    employees.filter((item) => item.status === "在职").forEach((employee) => {
+      const workdays = employee.workdays?.length ? employee.workdays : ["Mon", "Tue", "Wed", "Thu", "Fri"];
+      if (!workdays.includes(getWeekdayKey(date))) return;
+      const key = `${date}__${employee.id}`;
+      if (existingMap.has(key)) return;
+      const record: AttendanceRecord = {
+        id: `ATT-${date.replaceAll("-", "")}-${employee.code || employee.id}`,
+        date,
+        employee_id: employee.id,
+        employee_name: employee.name,
+        employee_code: employee.code,
+        leave_minutes: 0,
+        overtime_minutes: 0,
+        worked_minutes: defaultMinutes,
+        meal_allowance: defaultMinutes > 300 && Boolean(employee.meal_allowance_eligible),
+        generated_by: `auto-rule:${settings.auto_attendance_timezone || "America/New_York"}:${settings.auto_attendance_run_time || "01:00"}`,
+        note: settings.auto_attendance_note || undefined,
+      };
+      existingMap.set(key, record);
+      next.push(record);
+    });
+  });
+
+  return next.map((item) => {
+    const employee = employeeMap.get(item.employee_id || "") || employees.find((row) => row.name === item.employee_name);
+    const leaveMinutes = Math.max(0, Math.round(item.leave_minutes || 0));
+    const overtimeMinutes = Math.max(0, Math.round(item.overtime_minutes || 0));
+    const workedMinutes = calcWorkedMinutes(leaveMinutes, overtimeMinutes);
+    return {
+      ...item,
+      employee_id: employee?.id || item.employee_id,
+      employee_code: employee?.code || item.employee_code,
+      employee_name: employee?.name || item.employee_name,
+      leave_minutes: leaveMinutes,
+      overtime_minutes: overtimeMinutes,
+      worked_minutes: workedMinutes,
+      meal_allowance: workedMinutes > 300 ? Boolean(item.meal_allowance && employee?.meal_allowance_eligible !== false) : false,
+    };
+  });
+}
+
+function EmployeesSection({ employees, setEmployees, attendances, setAttendances, payrolls, setPayrolls, expenses, setExpenses, settings, setSettings }: { employees: EmployeeRecord[]; setEmployees: React.Dispatch<React.SetStateAction<EmployeeRecord[]>>; attendances: AttendanceRecord[]; setAttendances: React.Dispatch<React.SetStateAction<AttendanceRecord[]>>; payrolls: PayrollRecord[]; setPayrolls: React.Dispatch<React.SetStateAction<PayrollRecord[]>>; expenses: ExpenseRecord[]; setExpenses: React.Dispatch<React.SetStateAction<ExpenseRecord[]>>; settings: BizSettings; setSettings: React.Dispatch<React.SetStateAction<BizSettings>>; }) {
+  const [sub, setSub] = useState<StaffSub>("staff");
+  const [attendanceFilter, setAttendanceFilter] = useState<AttendanceFilter>("today");
+  const [payrollWeekFilter, setPayrollWeekFilter] = useState<PayrollWeekFilter>("lastWeek");
+  const [payrollEthnicityFilter, setPayrollEthnicityFilter] = useState("全部");
   const [showEmployeeModal, setShowEmployeeModal] = useState(false);
-  const [showPayrollModal, setShowPayrollModal] = useState(false);
-  const activeCount = employees.filter((item) => item.status === "在职").length;
-  const pendingSalary = payrolls.filter((item) => item.month === month).reduce((sum, item) => sum + item.net_salary, 0);
-  const paidSalary = payrolls.filter((item) => item.month === month && item.payment_status === "已发放").reduce((sum, item) => sum + item.net_salary, 0);
-  const contractAlert = employees.filter((item) => item.contract_end && item.contract_end <= contractAlertCutoff).length;
-  const employeeConfigs: Record<StaffSub, TabularSchemaConfig> = {
+  const [showAttendanceModal, setShowAttendanceModal] = useState(false);
+  const [editingEmployeeId, setEditingEmployeeId] = useState<string | null>(null);
+  const [editingAttendanceId, setEditingAttendanceId] = useState<string | null>(null);
+  const today = todayIso();
+  const attendanceRange = useMemo(() => getAttendanceRange(attendanceFilter), [attendanceFilter]);
+  const payrollRange = useMemo(() => getPayrollWeekRange(payrollWeekFilter), [payrollWeekFilter]);
+  const normalizedEmployees = useMemo(() => {
+    let fallback = 1;
+    return employees.map((item) => {
+      const code = item.code || String(fallback++).padStart(3, "0");
+      return {
+        ...item,
+        code,
+        ethnicity: item.ethnicity || "华人",
+        hourly_rate: item.hourly_rate ?? item.monthly_salary ?? 0,
+        workdays: item.workdays?.length ? item.workdays : ["Mon", "Tue", "Wed", "Thu", "Fri"],
+        meal_allowance_eligible: item.meal_allowance_eligible ?? true,
+      };
+    });
+  }, [employees]);
+  const seededAttendances = useMemo(() => ensureAttendanceRows(normalizedEmployees, attendances, attendanceRange, settings), [normalizedEmployees, attendances, attendanceRange, settings]);
+
+  useEffect(() => {
+    if (seededAttendances.length !== attendances.length) setAttendances(seededAttendances);
+  }, [seededAttendances, attendances.length, setAttendances]);
+
+  const attendanceRows = useMemo(() => seededAttendances
+    .filter((item) => item.date >= attendanceRange.start && item.date <= attendanceRange.end)
+    .sort((a, b) => String(b.date).localeCompare(String(a.date)) || String(a.employee_code || a.employee_name).localeCompare(String(b.employee_code || b.employee_name))), [seededAttendances, attendanceRange]);
+
+  const payrollRows = useMemo(() => normalizedEmployees
+    .filter((employee) => employee.status === "在职")
+    .filter((employee) => payrollEthnicityFilter === "全部" || employee.ethnicity === payrollEthnicityFilter)
+    .map((employee) => {
+      const rows = ensureAttendanceRows(normalizedEmployees, attendances, payrollRange, settings).filter((item) => (item.employee_id === employee.id || item.employee_name === employee.name) && item.date >= payrollRange.start && item.date <= payrollRange.end);
+      const totalMinutes = rows.reduce((sum, item) => sum + item.worked_minutes, 0);
+      const mealCount = rows.filter((item) => item.meal_allowance).length;
+      const hourlyRate = employee.hourly_rate || 0;
+      const wage = Number((minutesToHours(totalMinutes) * hourlyRate + mealCount * (settings.meal_allowance_amount || 0)).toFixed(2));
+      const payrollId = `PAY-${payrollRange.start}-${employee.id}`;
+      const existing = payrolls.find((item) => item.id === payrollId);
+      return { employee, totalMinutes, mealCount, hourlyRate, wage, payrollId, paid: existing?.payment_status === "已发放" };
+    }), [normalizedEmployees, attendances, payrollRange, settings, payrolls, payrollEthnicityFilter]);
+
+  const [employeeDraft, setEmployeeDraft] = useState({ name: "", phone: "", hourly_rate: "", workdays: ["Mon", "Tue", "Wed", "Thu", "Fri"], meal_allowance_eligible: true, ethnicity: "华人", position: "", hire_date: today, contract_end: "" });
+  const [attendanceDraft, setAttendanceDraft] = useState({ employee_id: "", date: today, leave_minutes: "0", overtime_minutes: "0" });
+
+  function openCreateEmployee() {
+    setEditingEmployeeId(null);
+    setEmployeeDraft({ name: "", phone: "", hourly_rate: "", workdays: ["Mon", "Tue", "Wed", "Thu", "Fri"], meal_allowance_eligible: true, ethnicity: "华人", position: "", hire_date: today, contract_end: "" });
+    setShowEmployeeModal(true);
+  }
+
+  function openEditEmployee(employee: EmployeeRecord) {
+    setEditingEmployeeId(employee.id);
+    setEmployeeDraft({
+      name: employee.name,
+      phone: employee.phone || "",
+      hourly_rate: String(employee.hourly_rate ?? employee.monthly_salary ?? 0),
+      workdays: employee.workdays?.length ? employee.workdays : ["Mon", "Tue", "Wed", "Thu", "Fri"],
+      meal_allowance_eligible: employee.meal_allowance_eligible ?? true,
+      ethnicity: employee.ethnicity || "华人",
+      position: employee.position || "",
+      hire_date: employee.hire_date || today,
+      contract_end: employee.contract_end || "",
+    });
+    setShowEmployeeModal(true);
+  }
+
+  function saveEmployee() {
+    if (!employeeDraft.name.trim()) return;
+    const code = editingEmployeeId ? normalizedEmployees.find((item) => item.id === editingEmployeeId)?.code || nextEmployeeCode(normalizedEmployees) : nextEmployeeCode(normalizedEmployees);
+    const payload: EmployeeRecord = {
+      id: editingEmployeeId || `EMP-${code}`,
+      code,
+      name: employeeDraft.name.trim(),
+      position: employeeDraft.position || undefined,
+      phone: employeeDraft.phone || undefined,
+      hire_date: employeeDraft.hire_date || undefined,
+      contract_end: employeeDraft.contract_end || undefined,
+      monthly_salary: Number(employeeDraft.hourly_rate) || 0,
+      hourly_rate: Number(employeeDraft.hourly_rate) || 0,
+      workdays: employeeDraft.workdays,
+      meal_allowance_eligible: employeeDraft.meal_allowance_eligible,
+      ethnicity: employeeDraft.ethnicity,
+      status: "在职",
+    };
+    setEmployees((prev) => editingEmployeeId ? prev.map((item) => item.id === editingEmployeeId ? payload : item) : [payload, ...prev]);
+    setShowEmployeeModal(false);
+  }
+
+  function setAttendanceField(id: string, field: "leave_minutes" | "overtime_minutes" | "meal_allowance", rawValue: number | boolean) {
+    setAttendances((prev) => prev.map((row) => {
+      if (row.id !== id) return row;
+      const employee = normalizedEmployees.find((item) => item.id === row.employee_id || item.name === row.employee_name);
+      const leaveMinutes = field === "leave_minutes" ? Number(rawValue) || 0 : row.leave_minutes;
+      const overtimeMinutes = field === "overtime_minutes" ? Number(rawValue) || 0 : row.overtime_minutes;
+      const workedMinutes = calcWorkedMinutes(leaveMinutes, overtimeMinutes);
+      const manualMeal = field === "meal_allowance" ? Boolean(rawValue) : row.meal_allowance;
+      return {
+        ...row,
+        leave_minutes: leaveMinutes,
+        overtime_minutes: overtimeMinutes,
+        worked_minutes: workedMinutes,
+        meal_allowance: workedMinutes > 300 ? (employee?.meal_allowance_eligible ? manualMeal : false) : false,
+      };
+    }));
+  }
+
+  function saveAttendanceDraft() {
+    const employee = normalizedEmployees.find((item) => item.id === attendanceDraft.employee_id) || normalizedEmployees[0];
+    if (!employee) return;
+    const leaveMinutes = Number(attendanceDraft.leave_minutes) || 0;
+    const overtimeMinutes = Number(attendanceDraft.overtime_minutes) || 0;
+    const workedMinutes = calcWorkedMinutes(leaveMinutes, overtimeMinutes);
+    const nextRecord: AttendanceRecord = {
+      id: `ATT-${attendanceDraft.date.replaceAll("-", "")}-${employee.code || employee.id}`,
+      date: attendanceDraft.date,
+      employee_id: employee.id,
+      employee_name: employee.name,
+      employee_code: employee.code,
+      leave_minutes: leaveMinutes,
+      overtime_minutes: overtimeMinutes,
+      worked_minutes: workedMinutes,
+      meal_allowance: workedMinutes > 300 && Boolean(employee.meal_allowance_eligible),
+      generated_by: "manual",
+      note: "手工补录",
+    };
+    setAttendances((prev) => {
+      const key = `${nextRecord.date}__${nextRecord.employee_id}`;
+      const filtered = prev.filter((item) => `${item.date}__${item.employee_id || item.employee_name}` !== key);
+      return [nextRecord, ...filtered];
+    });
+    setAttendanceDraft({ employee_id: normalizedEmployees[0]?.id || "", date: attendanceRange.start, leave_minutes: "0", overtime_minutes: "0" });
+    setShowAttendanceModal(false);
+  }
+
+  function markAllVisiblePaid() {
+    const visible = payrollRows.filter((item) => !item.paid && item.wage > 0);
+    if (!visible.length) return;
+    const paidAt = todayIso();
+    const expenseStart = expenses.length;
+    setPayrolls((prev) => {
+      const rest = prev.filter((item) => !visible.some((row) => row.payrollId === item.id));
+      const next = visible.map((row, index) => ({
+        id: row.payrollId,
+        month: payrollRange.start.slice(0, 7),
+        employee_id: row.employee.id,
+        employee_name: row.employee.name,
+        employee_code: row.employee.code,
+        employee_ethnicity: row.employee.ethnicity,
+        total_hours: minutesToHours(row.totalMinutes),
+        hourly_rate: row.hourlyRate,
+        meal_allowance_total: row.mealCount * (settings.meal_allowance_amount || 0),
+        base_salary: row.wage,
+        bonus: 0,
+        deduction: 0,
+        net_salary: row.wage,
+        payment_status: "已发放",
+        paid_at: paidAt,
+        expense_id: `EXP-${new Date().getFullYear()}-${String(expenseStart + index + 1).padStart(3, "0")}`,
+      } satisfies PayrollRecord));
+      return [...next, ...rest];
+    });
+    setExpenses((prev) => [
+      ...visible.map((row, index) => ({
+        id: `EXP-${new Date().getFullYear()}-${String(expenseStart + index + 1).padStart(3, "0")}`,
+        target: row.employee.name,
+        detail: `${payrollRange.label}工资发放`,
+        amount: row.wage,
+        expense_type: "工资",
+        payment_method: "转账",
+        expense_date: paidAt,
+        remark: `${payrollRange.start} ~ ${payrollRange.end}`,
+      } satisfies ExpenseRecord)),
+      ...prev,
+    ]);
+  }
+
+  const configs: Record<StaffSub, TabularSchemaConfig> = {
     staff: {
       title: "员工档案",
       filePrefix: "biz-employees",
-      columns: ["姓名", "职位", "电话", "入职日期", "合同到期", "月薪", "状态"],
-      exportRows: () => mapRows(employees, (item) => [item.name, item.position ?? "", item.phone ?? "", item.hire_date ?? "", item.contract_end ?? "", item.monthly_salary, item.status]),
-      printRows: () => mapRows(employees, (item) => [item.name, item.position ?? "-", item.phone ?? "-", item.hire_date ?? "-", item.contract_end ?? "-", formatMoney(item.monthly_salary), item.status]),
+      columns: ["工号", "姓名", "电话", "时薪", "工作日", "饭补资格", "分组"],
+      exportRows: () => normalizedEmployees.map((item) => [item.code || "", item.name, item.phone || "", item.hourly_rate || 0, (item.workdays || []).join("/"), item.meal_allowance_eligible ? "是" : "否", item.ethnicity || "华人"]),
+      printRows: () => normalizedEmployees.map((item) => [item.code || "-", item.name, item.phone || "-", formatMoney(item.hourly_rate || 0), (item.workdays || []).map((day) => WORKDAY_OPTIONS.find((option) => option.key === day)?.label || day).join("、"), item.meal_allowance_eligible ? "是" : "否", item.ethnicity || "华人"]),
+    },
+    attendance: {
+      title: "考勤记录",
+      filePrefix: "biz-attendance",
+      columns: ["日期", "工号", "姓名", "工作时长", "请假", "加班", "饭补"],
+      exportRows: () => attendanceRows.map((item) => [item.date, item.employee_code || "", item.employee_name, minutesToHours(item.worked_minutes), minutesToHours(item.leave_minutes), minutesToHours(item.overtime_minutes), item.meal_allowance ? "是" : "否"]),
+      printRows: () => attendanceRows.map((item) => [item.date, item.employee_code || "-", item.employee_name, formatMinutes(item.worked_minutes), formatMinutes(item.leave_minutes), formatMinutes(item.overtime_minutes), item.meal_allowance ? "是" : "否"]),
     },
     payroll: {
-      title: "工资记录",
-      filePrefix: "biz-payrolls",
-      columns: ["月份", "员工", "基本工资", "奖金", "扣款", "实发金额", "支付状态"],
-      exportRows: () => mapRows(payrolls, (item) => [item.month, item.employee_name, item.base_salary, item.bonus, item.deduction, item.net_salary, item.payment_status]),
-      printRows: () => mapRows(payrolls, (item) => [item.month, item.employee_name, formatMoney(item.base_salary), formatMoney(item.bonus), formatMoney(item.deduction), formatMoney(item.net_salary), item.payment_status]),
+      title: "工资发放",
+      filePrefix: "biz-payroll-weekly",
+      columns: ["姓名", "时薪", "总工时", "工资", "是否已发放"],
+      exportRows: () => payrollRows.map((item) => [item.employee.name, item.hourlyRate, minutesToHours(item.totalMinutes), item.wage, item.paid ? "是" : "否"]),
+      printRows: () => payrollRows.map((item) => [item.employee.name, formatMoney(item.hourlyRate), formatMinutes(item.totalMinutes), formatMoney(item.wage), item.paid ? "已发放" : "未发放"]),
     },
   };
-  function exportEmployees() { exportTabularSchema(employeeConfigs[sub]); }
-  function printEmployees() { const config = employeeConfigs[sub]; printTabularSchema(config, `共 ${config.printRows().length} 条`); }
-  function addEmployee() { if (!staffDraft.name.trim()) return; setEmployees((prev) => [{ id: `EMP-${String(prev.length + 1).padStart(3, "0")}`, name: staffDraft.name.trim(), position: staffDraft.position || undefined, phone: staffDraft.phone || undefined, hire_date: staffDraft.hire_date || undefined, contract_end: staffDraft.contract_end || undefined, monthly_salary: Number(staffDraft.monthly_salary) || 0, status: "在职" }, ...prev]); setStaffDraft({ name: "", position: "", phone: "", hire_date: today, contract_end: "", monthly_salary: "" }); setShowEmployeeModal(false); }
-  function addPayroll() { const base = Number(payrollDraft.base_salary) || 0; const bonus = Number(payrollDraft.bonus) || 0; const deduction = Number(payrollDraft.deduction) || 0; if (!payrollDraft.employee_name || base <= 0) return; setPayrolls((prev) => [{ id: `PAY-${month}-${String(prev.length + 1).padStart(3, "0")}`, month, employee_name: payrollDraft.employee_name, base_salary: base, bonus, deduction, net_salary: base + bonus - deduction, payment_status: payrollDraft.payment_status }, ...prev]); setPayrollDraft({ employee_name: employees[0]?.name ?? "", base_salary: "", bonus: "", deduction: "", payment_status: "未发放" }); setShowPayrollModal(false); }
-  return <div><SectionHeader eyebrow="Human Resources" title="员工管理" actions={<><ActionBtn onClick={exportEmployees}>↓ 导出当前表</ActionBtn><ActionBtn onClick={printEmployees}>🖨 打印当前表</ActionBtn><ActionBtn tone="primary" onClick={() => sub === "staff" ? setShowEmployeeModal(true) : setShowPayrollModal(true)}>+ {sub === "staff" ? "新建员工" : "录入工资"}</ActionBtn></>} /><StatStrip items={[{ label: "在职员工", value: String(activeCount) }, { label: "本月应发工资", value: formatMoney(pendingSalary), accent: "text-orange-600" }, { label: "本月已发工资", value: formatMoney(paidSalary), accent: "text-green-600" }, { label: "合同即将到期", value: String(contractAlert), accent: "text-red-600" }]} /><SegmentedControl options={[{ key: "staff", label: "员工档案" }, { key: "payroll", label: "工资记录" }]} value={sub} onChange={setSub} />{showEmployeeModal ? <div className="fixed inset-0 z-50 flex items-center justify-center bg-slate-950/45 px-4"><div className="w-full max-w-3xl rounded-2xl border border-slate-200 bg-white p-5 shadow-2xl"><div className="mb-4 flex items-start justify-between gap-3"><div><h3 className="text-base font-semibold text-slate-900">新建员工</h3><p className="mt-1 text-sm text-slate-500">员工新增改成弹窗，不占主区域。</p></div><button onClick={() => setShowEmployeeModal(false)} className="rounded-lg border border-slate-200 px-2.5 py-1 text-xs text-slate-500 hover:border-slate-300 hover:text-slate-700 transition-colors">关闭</button></div><div className="grid gap-2 sm:grid-cols-2 xl:grid-cols-3"><SmallInput value={staffDraft.name} onChange={(v) => setStaffDraft((d) => ({ ...d, name: v }))} placeholder="姓名" /><SmallInput value={staffDraft.position} onChange={(v) => setStaffDraft((d) => ({ ...d, position: v }))} placeholder="职位" /><SmallInput value={staffDraft.phone} onChange={(v) => setStaffDraft((d) => ({ ...d, phone: v }))} placeholder="电话" /><SmallInput value={staffDraft.hire_date} onChange={(v) => setStaffDraft((d) => ({ ...d, hire_date: v }))} type="date" /><SmallInput value={staffDraft.contract_end} onChange={(v) => setStaffDraft((d) => ({ ...d, contract_end: v }))} type="date" /><SmallInput value={staffDraft.monthly_salary} onChange={(v) => setStaffDraft((d) => ({ ...d, monthly_salary: v }))} type="number" placeholder="月薪" /></div><div className="mt-5 flex justify-end gap-2"><ActionBtn onClick={() => setShowEmployeeModal(false)}>取消</ActionBtn><ActionBtn tone="primary" onClick={addEmployee}>确认新建</ActionBtn></div></div></div> : null}{showPayrollModal ? <div className="fixed inset-0 z-50 flex items-center justify-center bg-slate-950/45 px-4"><div className="w-full max-w-3xl rounded-2xl border border-slate-200 bg-white p-5 shadow-2xl"><div className="mb-4 flex items-start justify-between gap-3"><div><h3 className="text-base font-semibold text-slate-900">录入工资</h3><p className="mt-1 text-sm text-slate-500">工资录入也改成弹窗。</p></div><button onClick={() => setShowPayrollModal(false)} className="rounded-lg border border-slate-200 px-2.5 py-1 text-xs text-slate-500 hover:border-slate-300 hover:text-slate-700 transition-colors">关闭</button></div><div className="grid gap-2 sm:grid-cols-2 xl:grid-cols-5"><SmallSelect value={payrollDraft.employee_name} onChange={(v) => setPayrollDraft((d) => ({ ...d, employee_name: v }))} options={employees.length ? employees.map((item) => item.name) : ["暂无员工"]} /><SmallInput value={payrollDraft.base_salary} onChange={(v) => setPayrollDraft((d) => ({ ...d, base_salary: v }))} type="number" placeholder="基本工资" /><SmallInput value={payrollDraft.bonus} onChange={(v) => setPayrollDraft((d) => ({ ...d, bonus: v }))} type="number" placeholder="奖金" /><SmallInput value={payrollDraft.deduction} onChange={(v) => setPayrollDraft((d) => ({ ...d, deduction: v }))} type="number" placeholder="扣款" /><SmallSelect value={payrollDraft.payment_status} onChange={(v) => setPayrollDraft((d) => ({ ...d, payment_status: v }))} options={["未发放", "已发放"]} /></div><div className="mt-5 flex justify-end gap-2"><ActionBtn onClick={() => setShowPayrollModal(false)}>取消</ActionBtn><ActionBtn tone="primary" onClick={addPayroll}>确认录入</ActionBtn></div></div></div> : null}{sub === "staff" ? <div className="space-y-4"><div className="overflow-x-auto rounded-xl border border-slate-200 bg-white"><table className="w-full text-left text-xs"><thead><tr className="border-b border-slate-200 bg-slate-50"><th className="px-4 py-2.5 font-semibold text-slate-600">姓名</th><th className="px-4 py-2.5 font-semibold text-slate-600">职位</th><th className="px-4 py-2.5 font-semibold text-slate-600">电话</th><th className="px-4 py-2.5 font-semibold text-slate-600">入职日期</th><th className="px-4 py-2.5 font-semibold text-slate-600">合同到期</th><th className="px-4 py-2.5 font-semibold text-slate-600">月薪</th><th className="px-4 py-2.5 font-semibold text-slate-600">状态</th></tr></thead><tbody>{employees.map((item) => <tr key={item.id} className="border-b border-slate-100 last:border-b-0"><td className="px-4 py-2.5 font-medium text-slate-700">{item.name}</td><td className="px-4 py-2.5 text-slate-600">{item.position ?? "-"}</td><td className="px-4 py-2.5 text-slate-600">{item.phone ?? "-"}</td><td className="px-4 py-2.5 text-slate-500">{item.hire_date ?? "-"}</td><td className="px-4 py-2.5 text-slate-500">{item.contract_end ?? "-"}</td><td className="px-4 py-2.5 text-slate-700">{formatMoney(item.monthly_salary)}</td><td className="px-4 py-2.5 text-slate-600">{item.status}</td></tr>)}</tbody></table></div></div> : <div className="space-y-4"><div className="overflow-x-auto rounded-xl border border-slate-200 bg-white"><table className="w-full text-left text-xs"><thead><tr className="border-b border-slate-200 bg-slate-50"><th className="px-4 py-2.5 font-semibold text-slate-600">月份</th><th className="px-4 py-2.5 font-semibold text-slate-600">员工</th><th className="px-4 py-2.5 font-semibold text-slate-600">基本工资</th><th className="px-4 py-2.5 font-semibold text-slate-600">奖金</th><th className="px-4 py-2.5 font-semibold text-slate-600">扣款</th><th className="px-4 py-2.5 font-semibold text-slate-600">实发金额</th><th className="px-4 py-2.5 font-semibold text-slate-600">支付状态</th></tr></thead><tbody>{payrolls.map((item) => <tr key={item.id} className="border-b border-slate-100 last:border-b-0"><td className="px-4 py-2.5 text-slate-700">{item.month}</td><td className="px-4 py-2.5 font-medium text-slate-700">{item.employee_name}</td><td className="px-4 py-2.5 text-slate-700">{formatMoney(item.base_salary)}</td><td className="px-4 py-2.5 text-green-600">{formatMoney(item.bonus)}</td><td className="px-4 py-2.5 text-rose-600">{formatMoney(item.deduction)}</td><td className="px-4 py-2.5 font-semibold text-slate-800">{formatMoney(item.net_salary)}</td><td className="px-4 py-2.5 text-slate-600">{item.payment_status}</td></tr>)}</tbody></table></div></div>}</div>;
+
+  return (
+    <div>
+      <SectionHeader eyebrow="Human Resources" title="员工管理" actions={<><ActionBtn onClick={() => exportTabularSchema(configs[sub])}>↓ 导出当前表</ActionBtn><ActionBtn onClick={() => printTabularSchema(configs[sub], sub === "attendance" ? `${attendanceRange.label} ${attendanceRange.start} ~ ${attendanceRange.end}` : `${payrollRange.label} ${payrollRange.start} ~ ${payrollRange.end}`)}>🖨 打印当前表</ActionBtn>{sub === "staff" ? <ActionBtn tone="primary" onClick={openCreateEmployee}>+ 新建员工</ActionBtn> : null}{sub === "attendance" ? <ActionBtn tone="primary" onClick={() => { setAttendanceDraft({ employee_id: normalizedEmployees[0]?.id || "", date: attendanceRange.start, leave_minutes: "0", overtime_minutes: "0" }); setShowAttendanceModal(true); }}>+ 手工补录</ActionBtn> : null}{sub === "payroll" ? <ActionBtn tone="success" onClick={markAllVisiblePaid}>一键发放当前工资</ActionBtn> : null}</>} />
+      <StatStrip items={[{ label: "在职员工", value: String(normalizedEmployees.filter((item) => item.status === "在职").length) }, { label: "当前考勤", value: String(attendanceRows.length), accent: "text-blue-600" }, { label: "当前工资", value: formatMoney(payrollRows.reduce((sum, item) => sum + item.wage, 0)), accent: "text-orange-600" }, { label: "已发放", value: formatMoney(payrollRows.filter((item) => item.paid).reduce((sum, item) => sum + item.wage, 0)), accent: "text-green-600" }]} />
+      <SegmentedControl options={[{ key: "staff", label: "员工档案" }, { key: "attendance", label: "考勤记录" }, { key: "payroll", label: "工资发放" }]} value={sub} onChange={setSub} />
+
+      {sub === "staff" && (
+        <div className="space-y-4">
+          <PanelCard title="系统规则" note="保留自动考勤规则，供后续接外部定时器时直接复用。">
+            <div className="grid gap-3 md:grid-cols-2 xl:grid-cols-4">
+              <div><p className="mb-1 text-[11px] font-semibold text-slate-500">饭补金额</p><SmallInput value={String(settings.meal_allowance_amount || 15)} onChange={(v) => setSettings((prev) => ({ ...prev, meal_allowance_amount: Number(v) || 0 }))} type="number" /></div>
+              <div><p className="mb-1 text-[11px] font-semibold text-slate-500">自动考勤时区</p><SmallInput value={settings.auto_attendance_timezone || "America/New_York"} onChange={(v) => setSettings((prev) => ({ ...prev, auto_attendance_timezone: v || "America/New_York" }))} /></div>
+              <div><p className="mb-1 text-[11px] font-semibold text-slate-500">执行时间</p><SmallInput value={settings.auto_attendance_run_time || "01:00"} onChange={(v) => setSettings((prev) => ({ ...prev, auto_attendance_run_time: v || "01:00" }))} /></div>
+              <div><p className="mb-1 text-[11px] font-semibold text-slate-500">默认工时</p><div className="rounded-lg border border-slate-200 bg-slate-50 px-3 py-2 text-xs text-slate-600">10小时00分</div></div>
+            </div>
+          </PanelCard>
+          <div className="overflow-x-auto rounded-xl border border-slate-200 bg-white"><table className="w-full text-left text-xs"><thead><tr className="border-b border-slate-200 bg-slate-50"><th className="px-4 py-2.5 font-semibold text-slate-600">工号</th><th className="px-4 py-2.5 font-semibold text-slate-600">姓名</th><th className="px-4 py-2.5 font-semibold text-slate-600">电话</th><th className="px-4 py-2.5 font-semibold text-slate-600">时薪</th><th className="px-4 py-2.5 font-semibold text-slate-600">工作日</th><th className="px-4 py-2.5 font-semibold text-slate-600">饭补资格</th><th className="px-4 py-2.5 font-semibold text-slate-600">分组</th><th className="px-4 py-2.5 font-semibold text-slate-600">操作</th></tr></thead><tbody>{normalizedEmployees.map((item) => <tr key={item.id} className="border-b border-slate-100 last:border-b-0"><td className="px-4 py-2.5 font-medium text-slate-700">{item.code}</td><td className="px-4 py-2.5 text-slate-700">{item.name}</td><td className="px-4 py-2.5 text-slate-600">{item.phone || "-"}</td><td className="px-4 py-2.5 text-slate-700">{formatMoney(item.hourly_rate || 0)}</td><td className="px-4 py-2.5 text-slate-600">{(item.workdays || []).map((day) => WORKDAY_OPTIONS.find((option) => option.key === day)?.label || day).join("、")}</td><td className="px-4 py-2.5 text-slate-600">{item.meal_allowance_eligible ? "可用" : "关闭"}</td><td className="px-4 py-2.5 text-slate-600">{item.ethnicity}</td><td className="px-4 py-2.5"><ActionBtn onClick={() => openEditEmployee(item)}>编辑</ActionBtn></td></tr>)}</tbody></table></div>
+        </div>
+      )}
+
+      {sub === "attendance" && (
+        <div className="space-y-4">
+          <div className="flex flex-wrap items-center gap-2"><SegmentedControl options={[{ key: "today", label: "今天" }, { key: "thisWeek", label: "本周" }, { key: "lastWeek", label: "上周" }]} value={attendanceFilter} onChange={setAttendanceFilter} /><span className="text-xs text-slate-500">{attendanceRange.start} ~ {attendanceRange.end}</span></div>
+          <PanelCard title="考勤公式" note="当天工作时长 = 10小时 + 加班时长 - 请假时长。工时小于等于 5 小时时强制取消饭补。"><div className="text-xs text-slate-500">缺失考勤会按员工工作日和自动规则补齐，支持逐行人工修正。</div></PanelCard>
+          <div className="overflow-x-auto rounded-xl border border-slate-200 bg-white"><table className="w-full text-left text-xs"><thead><tr className="border-b border-slate-200 bg-slate-50"><th className="px-3 py-2.5 font-semibold text-slate-600">日期</th><th className="px-3 py-2.5 font-semibold text-slate-600">工号</th><th className="px-3 py-2.5 font-semibold text-slate-600">人名</th><th className="px-3 py-2.5 font-semibold text-slate-600">工作时长</th><th className="px-3 py-2.5 font-semibold text-slate-600">请假时长</th><th className="px-3 py-2.5 font-semibold text-slate-600">加班时长</th><th className="px-3 py-2.5 font-semibold text-slate-600">饭补</th><th className="px-3 py-2.5 font-semibold text-slate-600">操作</th></tr></thead><tbody>{attendanceRows.map((item) => { const employee = normalizedEmployees.find((row) => row.id === item.employee_id || row.name === item.employee_name); const editing = editingAttendanceId === item.id; return <tr key={item.id} className="border-b border-slate-100 last:border-b-0"><td className="px-3 py-2.5 text-slate-600">{item.date}</td><td className="px-3 py-2.5 text-slate-700">{item.employee_code || employee?.code || "-"}</td><td className="px-3 py-2.5 font-medium text-slate-700">{item.employee_name}</td><td className="px-3 py-2.5 text-slate-700">{formatMinutes(item.worked_minutes)}</td>{editing ? <><td className="px-3 py-2.5"><SmallInput value={String(item.leave_minutes)} onChange={(v) => setAttendanceField(item.id, "leave_minutes", Number(v) || 0)} type="number" /></td><td className="px-3 py-2.5"><SmallInput value={String(item.overtime_minutes)} onChange={(v) => setAttendanceField(item.id, "overtime_minutes", Number(v) || 0)} type="number" /></td><td className="px-3 py-2.5"><label className="flex items-center gap-2 text-slate-600"><input type="checkbox" checked={item.meal_allowance} disabled={item.worked_minutes <= 300 || !employee?.meal_allowance_eligible} onChange={(e) => setAttendanceField(item.id, "meal_allowance", e.target.checked)} /> 饭补</label></td><td className="px-3 py-2.5"><div className="flex gap-2"><ActionBtn tone="success" onClick={() => setEditingAttendanceId(null)}>完成</ActionBtn><ActionBtn onClick={() => setEditingAttendanceId(null)}>取消</ActionBtn></div></td></> : <><td className="px-3 py-2.5 text-slate-600">{formatMinutes(item.leave_minutes)}</td><td className="px-3 py-2.5 text-slate-600">{formatMinutes(item.overtime_minutes)}</td><td className="px-3 py-2.5 text-slate-600">{item.meal_allowance ? `是 · ${formatMoney(settings.meal_allowance_amount || 0)}` : "否"}</td><td className="px-3 py-2.5"><ActionBtn onClick={() => setEditingAttendanceId(item.id)}>编辑</ActionBtn></td></>}</tr>; })}</tbody></table></div>
+        </div>
+      )}
+
+      {sub === "payroll" && (
+        <div className="space-y-4">
+          <div className="flex flex-wrap items-center gap-3"><SegmentedControl options={[{ key: "lastWeek", label: "上周" }, { key: "thisWeek", label: "本周" }]} value={payrollWeekFilter} onChange={setPayrollWeekFilter} /><div className="flex items-center gap-2"><span className="text-xs text-slate-500">分组</span><select value={payrollEthnicityFilter} onChange={(e) => setPayrollEthnicityFilter(e.target.value)} className="h-8 rounded-lg border border-slate-300 bg-white px-2 text-xs text-slate-700"><option>全部</option>{EMPLOYEE_GROUP_OPTIONS.map((option) => <option key={option}>{option}</option>)}</select></div><span className="text-xs text-slate-500">{payrollRange.start} ~ {payrollRange.end}</span></div>
+          <PanelCard title="工资说明" note={`工资 = 总工时 × 时薪 + 饭补次数 × ${formatMoney(settings.meal_allowance_amount || 0)}。点击一键发放后，会自动落一笔“工资”支出。`}><div className="text-xs text-slate-500">周维度只保留本周 / 上周两档，默认上周。</div></PanelCard>
+          <div className="overflow-x-auto rounded-xl border border-slate-200 bg-white"><table className="w-full text-left text-xs"><thead><tr className="border-b border-slate-200 bg-slate-50"><th className="px-4 py-2.5 font-semibold text-slate-600">姓名</th><th className="px-4 py-2.5 font-semibold text-slate-600">时薪</th><th className="px-4 py-2.5 font-semibold text-slate-600">总工时</th><th className="px-4 py-2.5 font-semibold text-slate-600">应发工资</th><th className="px-4 py-2.5 font-semibold text-slate-600">是否已发放工资</th></tr></thead><tbody>{payrollRows.map((item) => <tr key={item.employee.id} className="border-b border-slate-100 last:border-b-0"><td className="px-4 py-2.5 font-medium text-slate-700">{item.employee.name}</td><td className="px-4 py-2.5 text-slate-700">{formatMoney(item.hourlyRate)}</td><td className="px-4 py-2.5 text-slate-600">{formatMinutes(item.totalMinutes)}</td><td className="px-4 py-2.5 font-semibold text-slate-800">{formatMoney(item.wage)}</td><td className="px-4 py-2.5 text-slate-600">{item.paid ? "已发放" : "未发放"}</td></tr>)}</tbody></table></div>
+        </div>
+      )}
+
+      {showAttendanceModal ? <div className="fixed inset-0 z-50 flex items-center justify-center bg-slate-950/45 px-4"><div className="w-full max-w-xl rounded-2xl border border-slate-200 bg-white p-5 shadow-2xl"><div className="mb-4 flex items-start justify-between gap-3"><div><h3 className="text-base font-semibold text-slate-900">手工补录考勤</h3><p className="mt-1 text-sm text-slate-500">可直接指定员工和日期，覆盖当天已有记录。</p></div><button onClick={() => setShowAttendanceModal(false)} className="rounded-lg border border-slate-200 px-2.5 py-1 text-xs text-slate-500 hover:border-slate-300 hover:text-slate-700 transition-colors">关闭</button></div><div className="grid gap-3 sm:grid-cols-2"><div><p className="mb-1 text-[11px] font-semibold text-slate-500">员工</p><SmallSelect value={attendanceDraft.employee_id} onChange={(v) => setAttendanceDraft((draft) => ({ ...draft, employee_id: v }))} options={normalizedEmployees.map((item) => item.id)} labels={Object.fromEntries(normalizedEmployees.map((item) => [item.id, `${item.code} · ${item.name}`]))} /></div><div><p className="mb-1 text-[11px] font-semibold text-slate-500">日期</p><SmallInput value={attendanceDraft.date} onChange={(v) => setAttendanceDraft((draft) => ({ ...draft, date: v }))} type="date" /></div><div><p className="mb-1 text-[11px] font-semibold text-slate-500">请假时长（分钟）</p><SmallInput value={attendanceDraft.leave_minutes} onChange={(v) => setAttendanceDraft((draft) => ({ ...draft, leave_minutes: v }))} type="number" /></div><div><p className="mb-1 text-[11px] font-semibold text-slate-500">加班时长（分钟）</p><SmallInput value={attendanceDraft.overtime_minutes} onChange={(v) => setAttendanceDraft((draft) => ({ ...draft, overtime_minutes: v }))} type="number" /></div></div><div className="mt-3 rounded-lg border border-slate-200 bg-slate-50 px-3 py-2 text-xs text-slate-600">计算后工作时长：{formatMinutes(calcWorkedMinutes(Number(attendanceDraft.leave_minutes) || 0, Number(attendanceDraft.overtime_minutes) || 0))}</div><div className="mt-5 flex justify-end gap-2"><ActionBtn onClick={() => setShowAttendanceModal(false)}>取消</ActionBtn><ActionBtn tone="primary" onClick={saveAttendanceDraft}>保存考勤</ActionBtn></div></div></div> : null}{showEmployeeModal ? <div className="fixed inset-0 z-50 flex items-center justify-center bg-slate-950/45 px-4"><div className="w-full max-w-3xl rounded-2xl border border-slate-200 bg-white p-5 shadow-2xl"><div className="mb-4 flex items-start justify-between gap-3"><div><h3 className="text-base font-semibold text-slate-900">{editingEmployeeId ? "编辑员工" : "新建员工"}</h3><p className="mt-1 text-sm text-slate-500">工号自动递增，从 001 开始。</p></div><button onClick={() => setShowEmployeeModal(false)} className="rounded-lg border border-slate-200 px-2.5 py-1 text-xs text-slate-500 hover:border-slate-300 hover:text-slate-700 transition-colors">关闭</button></div><div className="grid gap-3 sm:grid-cols-2 xl:grid-cols-3"><div><p className="mb-1 text-[11px] font-semibold text-slate-500">姓名</p><SmallInput value={employeeDraft.name} onChange={(v) => setEmployeeDraft((draft) => ({ ...draft, name: v }))} /></div><div><p className="mb-1 text-[11px] font-semibold text-slate-500">电话</p><SmallInput value={employeeDraft.phone} onChange={(v) => setEmployeeDraft((draft) => ({ ...draft, phone: v }))} /></div><div><p className="mb-1 text-[11px] font-semibold text-slate-500">时薪</p><SmallInput value={employeeDraft.hourly_rate} onChange={(v) => setEmployeeDraft((draft) => ({ ...draft, hourly_rate: v }))} type="number" /></div><div><p className="mb-1 text-[11px] font-semibold text-slate-500">分组</p><SmallSelect value={employeeDraft.ethnicity} onChange={(v) => setEmployeeDraft((draft) => ({ ...draft, ethnicity: v }))} options={[...EMPLOYEE_GROUP_OPTIONS]} /></div><div><p className="mb-1 text-[11px] font-semibold text-slate-500">入职日期</p><SmallInput value={employeeDraft.hire_date} onChange={(v) => setEmployeeDraft((draft) => ({ ...draft, hire_date: v }))} type="date" /></div><div><p className="mb-1 text-[11px] font-semibold text-slate-500">合同到期</p><SmallInput value={employeeDraft.contract_end} onChange={(v) => setEmployeeDraft((draft) => ({ ...draft, contract_end: v }))} type="date" /></div></div><div className="mt-4"><p className="mb-2 text-[11px] font-semibold text-slate-500">工作日</p><div className="flex flex-wrap gap-2">{WORKDAY_OPTIONS.map((option) => { const checked = employeeDraft.workdays.includes(option.key); return <label key={option.key} className={`rounded-lg border px-3 py-2 text-xs ${checked ? "border-blue-300 bg-blue-50 text-blue-700" : "border-slate-200 bg-white text-slate-600"}`}><input type="checkbox" className="mr-2" checked={checked} onChange={(e) => setEmployeeDraft((draft) => ({ ...draft, workdays: e.target.checked ? [...draft.workdays, option.key] : draft.workdays.filter((day) => day !== option.key) }))} />{option.label}</label>; })}</div></div><label className="mt-4 flex items-center gap-2 text-xs text-slate-600"><input type="checkbox" checked={employeeDraft.meal_allowance_eligible} onChange={(e) => setEmployeeDraft((draft) => ({ ...draft, meal_allowance_eligible: e.target.checked }))} /> 饭补资格</label><div className="mt-5 flex justify-end gap-2"><ActionBtn onClick={() => setShowEmployeeModal(false)}>取消</ActionBtn><ActionBtn tone="primary" onClick={saveEmployee}>保存员工</ActionBtn></div></div></div> : null}
+    </div>
+  );
 }
 
 // ─── Quotes ──────────────────────────────────────────────────────────────────
@@ -4777,6 +5119,7 @@ export default function DashboardBizPage() {
   const [materials, setMaterials] = useState<MaterialRecord[]>(bizMaterials);
   const [purchases, setPurchases] = useState<PurchaseRecord[]>(bizPurchases);
   const [employees, setEmployees] = useState<EmployeeRecord[]>(bizEmployees);
+  const [attendances, setAttendances] = useState<AttendanceRecord[]>(bizAttendances);
   const [appointments, setAppointments] = useState<MeasurementAppointmentRecord[]>(bizAppointments);
   const [appointmentPrefill, setAppointmentPrefill] = useState<Partial<MeasurementAppointmentRecord> | null>(null);
   const [payrolls, setPayrolls] = useState<PayrollRecord[]>(bizPayrolls);
@@ -4806,6 +5149,7 @@ export default function DashboardBizPage() {
         setMaterials(payload.data.materials ?? []);
         setPurchases(payload.data.purchases ?? []);
         setEmployees(payload.data.employees ?? []);
+        setAttendances(payload.data.attendances ?? []);
         setAppointments(payload.data.appointments ?? []);
         setPayrolls(payload.data.payrolls ?? []);
         setQuotes(payload.data.quotes ?? []);
@@ -4847,6 +5191,7 @@ export default function DashboardBizPage() {
             materials,
             purchases,
             employees,
+            attendances,
             appointments,
             payrolls,
             quotes,
@@ -4862,7 +5207,7 @@ export default function DashboardBizPage() {
     }, 250);
 
     return () => window.clearTimeout(timer);
-  }, [isHydrated, orders, clients, suppliers, expenses, cashEntries, materials, purchases, employees, appointments, payrolls, quotes, showcases, printArchives, settings]);
+  }, [isHydrated, orders, clients, suppliers, expenses, cashEntries, materials, purchases, employees, attendances, appointments, payrolls, quotes, showcases, printArchives, settings]);
 
   return (
     <PageSection>
@@ -4980,8 +5325,14 @@ export default function DashboardBizPage() {
             <EmployeesSection
               employees={employees}
               setEmployees={setEmployees}
+              attendances={attendances}
+              setAttendances={setAttendances}
               payrolls={payrolls}
               setPayrolls={setPayrolls}
+              expenses={expenses}
+              setExpenses={setExpenses}
+              settings={settings}
+              setSettings={setSettings}
             />
           )}
           {section === "settings" && <SettingsSection settings={settings} setSettings={setSettings} />}

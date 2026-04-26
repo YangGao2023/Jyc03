@@ -124,13 +124,32 @@ export type PurchaseRecord = {
 
 export type EmployeeRecord = {
   id: string;
+  code?: string;
   name: string;
   position?: string;
   phone?: string;
   hire_date?: string;
   contract_end?: string;
   monthly_salary: number;
+  hourly_rate?: number;
+  workdays?: string[];
+  meal_allowance_eligible?: boolean;
+  ethnicity?: string;
   status: string;
+};
+
+export type AttendanceRecord = {
+  id: string;
+  date: string;
+  employee_id?: string;
+  employee_name: string;
+  employee_code?: string;
+  leave_minutes: number;
+  overtime_minutes: number;
+  worked_minutes: number;
+  meal_allowance: boolean;
+  generated_by?: string;
+  note?: string;
 };
 
 export type MeasurementAppointmentRecord = {
@@ -147,12 +166,20 @@ export type MeasurementAppointmentRecord = {
 export type PayrollRecord = {
   id: string;
   month: string;
+  employee_id?: string;
   employee_name: string;
+  employee_code?: string;
+  employee_ethnicity?: string;
+  total_hours?: number;
+  hourly_rate?: number;
+  meal_allowance_total?: number;
   base_salary: number;
   bonus: number;
   deduction: number;
   net_salary: number;
   payment_status: string;
+  paid_at?: string;
+  expense_id?: string;
 };
 
 export type QuoteRecord = {
@@ -216,6 +243,11 @@ export type BizSettings = {
   logo_url: string;
   expense_types?: string;
   supplier_categories?: string;
+  meal_allowance_amount?: number;
+  auto_attendance_timezone?: string;
+  auto_attendance_run_time?: string;
+  auto_attendance_default_minutes?: number;
+  auto_attendance_note?: string;
 };
 
 function toNumber(value: unknown) {
@@ -395,13 +427,32 @@ export const bizPurchases = normalizeList<PurchaseRecord>(rawAssetsRecord.purcha
 
 export const bizEmployees = normalizeList<EmployeeRecord>(rawAssetsRecord.employees, (item) => ({
   id: toString(item.id),
+  code: toString(item.code) || undefined,
   name: toString(item.name),
   position: toString(item.position) || undefined,
   phone: toString(item.phone) || undefined,
   hire_date: toString(item.hire_date) || undefined,
   contract_end: toString(item.contract_end) || undefined,
   monthly_salary: toNumber(item.monthly_salary),
+  hourly_rate: item.hourly_rate == null ? undefined : toNumber(item.hourly_rate),
+  workdays: Array.isArray(item.workdays) ? item.workdays.map(toString).filter(Boolean) : undefined,
+  meal_allowance_eligible: item.meal_allowance_eligible == null ? undefined : Boolean(item.meal_allowance_eligible),
+  ethnicity: toString(item.ethnicity) || undefined,
   status: toString(item.status),
+}));
+
+export const bizAttendances = normalizeList<AttendanceRecord>(rawAssetsRecord.attendances, (item) => ({
+  id: toString(item.id),
+  date: toString(item.date),
+  employee_id: toString(item.employee_id) || undefined,
+  employee_name: toString(item.employee_name),
+  employee_code: toString(item.employee_code) || undefined,
+  leave_minutes: toNumber(item.leave_minutes),
+  overtime_minutes: toNumber(item.overtime_minutes),
+  worked_minutes: toNumber(item.worked_minutes),
+  meal_allowance: Boolean(item.meal_allowance),
+  generated_by: toString(item.generated_by) || undefined,
+  note: toString(item.note) || undefined,
 }));
 
 export const bizAppointments = normalizeList<MeasurementAppointmentRecord>(rawAssetsRecord.appointments, (item) => ({
@@ -418,12 +469,20 @@ export const bizAppointments = normalizeList<MeasurementAppointmentRecord>(rawAs
 export const bizPayrolls = normalizeList<PayrollRecord>(rawAssetsRecord.payrolls, (item) => ({
   id: toString(item.id),
   month: toString(item.month),
+  employee_id: toString(item.employee_id) || undefined,
   employee_name: toString(item.employee_name),
+  employee_code: toString(item.employee_code) || undefined,
+  employee_ethnicity: toString(item.employee_ethnicity) || undefined,
+  total_hours: item.total_hours == null ? undefined : toNumber(item.total_hours),
+  hourly_rate: item.hourly_rate == null ? undefined : toNumber(item.hourly_rate),
+  meal_allowance_total: item.meal_allowance_total == null ? undefined : toNumber(item.meal_allowance_total),
   base_salary: toNumber(item.base_salary),
   bonus: toNumber(item.bonus),
   deduction: toNumber(item.deduction),
   net_salary: toNumber(item.net_salary),
   payment_status: toString(item.payment_status),
+  paid_at: toString(item.paid_at) || undefined,
+  expense_id: toString(item.expense_id) || undefined,
 }));
 
 export const bizQuotes = normalizeList<QuoteRecord>(rawAssetsRecord.quotes, (item) => ({
@@ -487,6 +546,11 @@ export const bizSettings: BizSettings = {
   logo_url: toString(rawAssetsRecord.settings && (rawAssetsRecord.settings as Record<string, unknown>).logo_url),
   expense_types: toString(rawAssetsRecord.settings && (rawAssetsRecord.settings as Record<string, unknown>).expense_types),
   supplier_categories: toString(rawAssetsRecord.settings && (rawAssetsRecord.settings as Record<string, unknown>).supplier_categories),
+  meal_allowance_amount: toNumber(rawAssetsRecord.settings && (rawAssetsRecord.settings as Record<string, unknown>).meal_allowance_amount) || 15,
+  auto_attendance_timezone: toString(rawAssetsRecord.settings && (rawAssetsRecord.settings as Record<string, unknown>).auto_attendance_timezone) || "America/New_York",
+  auto_attendance_run_time: toString(rawAssetsRecord.settings && (rawAssetsRecord.settings as Record<string, unknown>).auto_attendance_run_time) || "01:00",
+  auto_attendance_default_minutes: toNumber(rawAssetsRecord.settings && (rawAssetsRecord.settings as Record<string, unknown>).auto_attendance_default_minutes) || 600,
+  auto_attendance_note: toString(rawAssetsRecord.settings && (rawAssetsRecord.settings as Record<string, unknown>).auto_attendance_note) || "America/New_York 每天 01:00 自动生成 10 小时考勤",
 };
 
 export function formatMoney(value: number) {

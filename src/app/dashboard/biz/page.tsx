@@ -84,6 +84,10 @@ function downloadMappedCsv<T>(filename: string, headers: Array<string>, items: T
   downloadCsv(filename, [headers, ...items.map(mapRow)]);
 }
 
+function mapRows<T>(items: T[], mapRow: (item: T) => Array<string | number>) {
+  return items.map(mapRow);
+}
+
 // ─── primitives ──────────────────────────────────────────────────────────────
 
 function PageSection({ children }: { children: React.ReactNode }) {
@@ -2008,42 +2012,12 @@ function FinanceSection({ orders, expenses, setExpenses, cashEntries, setCashEnt
   payrolls: PayrollRecord[];
 }) {
   function exportFinance() {
-    if (sub === "income") {
-      downloadMappedCsv(`biz-finance-income-${todayIso()}.csv`, ["订单号", "客户", "金额", "支付方式", "日期", "明细", "类型"], paymentRows, ({ order, record }) => [order.order_number, order.client_name, record.amount, record.method, record.date, record.note ?? "", record.type === "refund" ? "退款" : "收款"]);
-      return;
-    }
-    if (sub === "expense") {
-      downloadMappedCsv(`biz-finance-expense-${todayIso()}.csv`, ["对象", "明细", "金额", "类型", "付款方式", "日期", "备注"], expenses, (item) => [item.target, item.detail, item.amount, item.expense_type, item.payment_method, item.expense_date, item.remark ?? ""]);
-      return;
-    }
-    if (sub === "cash") {
-      downloadMappedCsv(`biz-finance-cash-${todayIso()}.csv`, ["类型", "金额", "日期", "备注"], cashEntries, (item) => [item.type, item.amount, item.date, item.note ?? ""]);
-      return;
-    }
-    if (sub === "ledger") {
-      downloadMappedCsv(`biz-finance-ledger-${todayIso()}.csv`, ["月份", "收入", "支出", "净额", "工资", "净利润"], ledgerRows, (item) => [item.month, item.income, item.expense, item.net, item.wage, item.profit]);
-      return;
-    }
-    downloadMappedCsv(`biz-finance-receivables-${todayIso()}.csv`, ["客户", "订单号", "总额", "已付", "余款", "下单日期", "状态"], receivableOrders, (o) => [o.client_name, o.order_number, o.total_after_tax ?? o.total_price ?? 0, o.amount_paid ?? 0, o.balance ?? 0, o.order_date ?? "", o.status ?? ""]);
+    const config = financeConfigs[sub];
+    downloadCsv(`${config.filePrefix}-${todayIso()}.csv`, [config.columns, ...config.exportRows()]);
   }
   function printFinance() {
-    if (sub === "income") {
-      openPrintWindow(buildSimpleTablePrintHTML("订单收入", `共 ${paymentRows.length} 条`, ["订单号", "客户", "金额", "支付方式", "日期", "明细", "类型"], paymentRows.map(({ order, record }) => [order.order_number, order.client_name, formatMoney(record.amount), record.method, record.date, record.note ?? "-", record.type === "refund" ? "退款" : "收款"])));
-      return;
-    }
-    if (sub === "expense") {
-      openPrintWindow(buildSimpleTablePrintHTML("支出清单", `共 ${expenses.length} 条`, ["对象", "明细", "金额", "类型", "付款方式", "日期", "备注"], expenses.map((item) => [item.target, item.detail, formatMoney(item.amount), item.expense_type, item.payment_method, item.expense_date, item.remark ?? "-"])));
-      return;
-    }
-    if (sub === "cash") {
-      openPrintWindow(buildSimpleTablePrintHTML("现金管理", `共 ${cashEntries.length} 条`, ["类型", "金额", "日期", "备注"], cashEntries.map((item) => [item.type, formatMoney(item.amount), item.date, item.note ?? "-"])));
-      return;
-    }
-    if (sub === "ledger") {
-      openPrintWindow(buildSimpleTablePrintHTML("月度账单", `共 ${ledgerRows.length} 条`, ["月份", "收入", "支出", "净额", "工资", "净利润"], ledgerRows.map((item) => [item.month, formatMoney(item.income), formatMoney(item.expense), formatMoney(item.net), formatMoney(item.wage), formatMoney(item.profit)])));
-      return;
-    }
-    openPrintWindow(buildSimpleTablePrintHTML("应收款", `共 ${receivableOrders.length} 条`, ["客户", "订单号", "总额", "已付", "余款", "下单日期", "状态"], receivableOrders.map((o) => [o.client_name, o.order_number, formatMoney(o.total_after_tax ?? o.total_price ?? 0), formatMoney(o.amount_paid ?? 0), formatMoney(o.balance ?? 0), o.order_date ?? "-", o.status ?? "-"])));
+    const config = financeConfigs[sub];
+    openPrintWindow(buildSimpleTablePrintHTML(config.title, `共 ${config.printRows().length} 条`, config.columns, config.printRows()));
   }
   const [sub, setSub] = useState<FinanceSub>("income");
   const today = new Date().toISOString().slice(0, 10);
@@ -2061,6 +2035,43 @@ function FinanceSection({ orders, expenses, setExpenses, cashEntries, setCashEnt
     const wage = payrolls.filter((item) => item.month === month).reduce((sum, item) => sum + item.net_salary, 0);
     return { month, income, expense, net: income - expense, wage, profit: income - expense - wage };
   });
+  const financeConfigs: Record<FinanceSub, { title: string; filePrefix: string; columns: string[]; exportRows: () => Array<Array<string | number>>; printRows: () => Array<Array<string | number>> }> = {
+    income: {
+      title: "订单收入",
+      filePrefix: "biz-finance-income",
+      columns: ["订单号", "客户", "金额", "支付方式", "日期", "明细", "类型"],
+      exportRows: () => mapRows(paymentRows, ({ order, record }) => [order.order_number, order.client_name, record.amount, record.method, record.date, record.note ?? "", record.type === "refund" ? "退款" : "收款"]),
+      printRows: () => mapRows(paymentRows, ({ order, record }) => [order.order_number, order.client_name, formatMoney(record.amount), record.method, record.date, record.note ?? "-", record.type === "refund" ? "退款" : "收款"]),
+    },
+    expense: {
+      title: "支出清单",
+      filePrefix: "biz-finance-expense",
+      columns: ["对象", "明细", "金额", "类型", "付款方式", "日期", "备注"],
+      exportRows: () => mapRows(expenses, (item) => [item.target, item.detail, item.amount, item.expense_type, item.payment_method, item.expense_date, item.remark ?? ""]),
+      printRows: () => mapRows(expenses, (item) => [item.target, item.detail, formatMoney(item.amount), item.expense_type, item.payment_method, item.expense_date, item.remark ?? "-"]),
+    },
+    cash: {
+      title: "现金管理",
+      filePrefix: "biz-finance-cash",
+      columns: ["类型", "金额", "日期", "备注"],
+      exportRows: () => mapRows(cashEntries, (item) => [item.type, item.amount, item.date, item.note ?? ""]),
+      printRows: () => mapRows(cashEntries, (item) => [item.type, formatMoney(item.amount), item.date, item.note ?? "-"]),
+    },
+    ledger: {
+      title: "月度账单",
+      filePrefix: "biz-finance-ledger",
+      columns: ["月份", "收入", "支出", "净额", "工资", "净利润"],
+      exportRows: () => mapRows(ledgerRows, (item) => [item.month, item.income, item.expense, item.net, item.wage, item.profit]),
+      printRows: () => mapRows(ledgerRows, (item) => [item.month, formatMoney(item.income), formatMoney(item.expense), formatMoney(item.net), formatMoney(item.wage), formatMoney(item.profit)]),
+    },
+    receivables: {
+      title: "应收款",
+      filePrefix: "biz-finance-receivables",
+      columns: ["客户", "订单号", "总额", "已付", "余款", "下单日期", "状态"],
+      exportRows: () => mapRows(receivableOrders, (o) => [o.client_name, o.order_number, o.total_after_tax ?? o.total_price ?? 0, o.amount_paid ?? 0, o.balance ?? 0, o.order_date ?? "", o.status ?? ""]),
+      printRows: () => mapRows(receivableOrders, (o) => [o.client_name, o.order_number, formatMoney(o.total_after_tax ?? o.total_price ?? 0), formatMoney(o.amount_paid ?? 0), formatMoney(o.balance ?? 0), o.order_date ?? "-", o.status ?? "-"]),
+    },
+  };
 
   function addExpense() {
     const amount = Number(draft.amount) || 0;

@@ -10,6 +10,7 @@ import {
   bizExpenses,
   formatMoney,
   bizMaterials,
+  bizAppointments,
   bizPayrolls,
   bizPurchases,
   bizQuotes,
@@ -25,6 +26,7 @@ import {
   type ExpenseRecord,
   type MaterialRecord,
   type MaterialRow,
+  type MeasurementAppointmentRecord,
   type PaymentRecord,
   type PayrollRecord,
   type PurchaseRecord,
@@ -2178,6 +2180,107 @@ function MaterialsSection({ materials, setMaterials, purchases, setPurchases, su
 
 // ─── Employees ───────────────────────────────────────────────────────────────
 
+function formatAppointmentDate(value: string) {
+  if (!value) return "-";
+  const date = new Date(value);
+  if (Number.isNaN(date.getTime())) return value;
+  return new Intl.DateTimeFormat("zh-CN", {
+    month: "2-digit",
+    day: "2-digit",
+    hour: "2-digit",
+    minute: "2-digit",
+    hour12: false,
+  }).format(date);
+}
+
+function getAppointmentStatus(value: string) {
+  const date = new Date(value);
+  if (Number.isNaN(date.getTime())) return "待确认";
+  const start = new Date();
+  start.setHours(0, 0, 0, 0);
+  const end = new Date(start);
+  end.setDate(end.getDate() + 1);
+  if (date < start) return "已完成";
+  if (date >= start && date < end) return "今日预约";
+  return "待上门";
+}
+
+function AppointmentStatusBadge({ status }: { status: string }) {
+  const styles: Record<string, string> = {
+    "今日预约": "bg-amber-50 text-amber-700",
+    "待上门": "bg-sky-50 text-sky-700",
+    "已完成": "bg-emerald-50 text-emerald-700",
+    "待确认": "bg-slate-100 text-slate-600",
+  };
+  return <span className={`rounded-full px-2 py-0.5 text-[11px] font-semibold ${styles[status] ?? styles["待确认"]}`}>{status}</span>;
+}
+
+function AppointmentsSection({ appointments, setAppointments, clients }: { appointments: MeasurementAppointmentRecord[]; setAppointments: React.Dispatch<React.SetStateAction<MeasurementAppointmentRecord[]>>; clients: ContactRecord[]; }) {
+  const today = todayIso();
+  const [search, setSearch] = useState("");
+  const [statusFilter, setStatusFilter] = useState("全部");
+  const [draft, setDraft] = useState({ client_id: "", client_name: "", phone: "", address: "", appointment_date: `${today}T10:00`, description: "" });
+
+  const clientOptions = clients.map((item) => ({ value: item.id, label: item.name }));
+
+  const filteredAppointments = useMemo(() => {
+    return [...appointments]
+      .sort((a, b) => a.appointment_date.localeCompare(b.appointment_date))
+      .filter((item) => {
+        const status = getAppointmentStatus(item.appointment_date);
+        const keyword = search.trim().toLowerCase();
+        const matchesSearch = !keyword || item.client_name.toLowerCase().includes(keyword) || (item.phone ?? "").toLowerCase().includes(keyword) || (item.address ?? "").toLowerCase().includes(keyword);
+        const matchesStatus = statusFilter === "全部" || status === statusFilter;
+        return matchesSearch && matchesStatus;
+      });
+  }, [appointments, search, statusFilter]);
+
+  const stats = {
+    total: appointments.length,
+    today: appointments.filter((item) => getAppointmentStatus(item.appointment_date) === "今日预约").length,
+    upcoming: appointments.filter((item) => getAppointmentStatus(item.appointment_date) === "待上门").length,
+    done: appointments.filter((item) => getAppointmentStatus(item.appointment_date) === "已完成").length,
+  };
+
+  function hydrateFromClient(clientId: string) {
+    const client = clients.find((item) => item.id === clientId);
+    setDraft((prev) => ({
+      ...prev,
+      client_id: clientId,
+      client_name: client?.name ?? prev.client_name,
+      phone: client?.phone ?? prev.phone,
+      address: client?.address ?? prev.address,
+    }));
+  }
+
+  function addAppointment() {
+    if (!draft.client_name.trim() || !draft.appointment_date) return;
+    setAppointments((prev) => [{
+      id: `APT-${new Date().getFullYear()}-${String(prev.length + 1).padStart(3, "0")}`,
+      client_id: draft.client_id || undefined,
+      client_name: draft.client_name.trim(),
+      phone: draft.phone || undefined,
+      address: draft.address || undefined,
+      appointment_date: draft.appointment_date,
+      description: draft.description || undefined,
+    }, ...prev]);
+    setDraft({ client_id: "", client_name: "", phone: "", address: "", appointment_date: `${todayIso()}T10:00`, description: "" });
+  }
+
+  function exportAppointments() {
+    downloadCsv(`biz-appointments-${todayIso()}.csv`, [
+      ["客户", "电话", "地址", "预约时间", "状态", "说明"],
+      ...filteredAppointments.map((item) => [item.client_name, item.phone ?? "", item.address ?? "", item.appointment_date, getAppointmentStatus(item.appointment_date), item.description ?? ""]),
+    ]);
+  }
+
+  function printAppointments() {
+    openPrintWindow(buildSimpleTablePrintHTML("测量预约", `共 ${filteredAppointments.length} 条`, ["客户", "电话", "地址", "预约时间", "状态", "说明"], filteredAppointments.map((item) => [item.client_name, item.phone ?? "-", item.address ?? "-", formatAppointmentDate(item.appointment_date), getAppointmentStatus(item.appointment_date), item.description ?? "-"])));
+  }
+
+  return <div><SectionHeader eyebrow="Measurement Appointments" title="测量预约" actions={<><ActionBtn onClick={exportAppointments}>↓ 导出当前表</ActionBtn><ActionBtn onClick={printAppointments}>🖨 打印当前表</ActionBtn><ActionBtn tone="primary" onClick={addAppointment}>+ 新建预约</ActionBtn></>} /><StatStrip items={[{ label: "预约总数", value: String(stats.total) }, { label: "今日上门", value: String(stats.today), accent: "text-amber-600" }, { label: "待上门", value: String(stats.upcoming), accent: "text-sky-600" }, { label: "已完成", value: String(stats.done), accent: "text-emerald-600" }]} /><div className="mb-4 grid gap-4 xl:grid-cols-[1.1fr_2fr]"><PanelCard title="新增测量预约" note="来自 Base44 的预约能力，本站先落地本地排期与客户联动，不直接同步 Google Calendar。"><div className="grid gap-2 sm:grid-cols-2 xl:grid-cols-3"><select value={draft.client_id || ""} onChange={(e) => hydrateFromClient(e.target.value)} className="h-8 rounded-lg border border-slate-300 bg-white px-3 text-xs text-slate-700"><option value="">选择客户后自动带出电话和地址</option>{clientOptions.map((item) => <option key={item.value} value={item.value}>{item.label}</option>)}</select><SmallInput value={draft.client_name} onChange={(v) => setDraft((d) => ({ ...d, client_name: v }))} placeholder="客户名称" /><SmallInput value={draft.phone} onChange={(v) => setDraft((d) => ({ ...d, phone: v }))} placeholder="电话" /><div className="sm:col-span-2 xl:col-span-2"><SmallInput value={draft.address} onChange={(v) => setDraft((d) => ({ ...d, address: v }))} placeholder="测量地址" /></div><SmallInput value={draft.appointment_date} onChange={(v) => setDraft((d) => ({ ...d, appointment_date: v }))} type="datetime-local" /><div className="sm:col-span-2 xl:col-span-3"><SmallInput value={draft.description} onChange={(v) => setDraft((d) => ({ ...d, description: v }))} placeholder="描述，例如复尺、现场确认、批发布样" /></div></div><p className="mt-2 text-[11px] text-slate-400">原始应用里预约实体还带 Google Calendar event id。当前网站架构没有外部日历凭证和同步流，所以先保留字段但只做站内排期。</p></PanelCard><PanelCard title="排期列表"><div className="mb-3 flex flex-wrap gap-2"><div className="relative min-w-[180px] flex-1"><span className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-400 text-sm">⌕</span><input value={search} onChange={(e) => setSearch(e.target.value)} placeholder="搜索客户 / 电话 / 地址" className="h-8 w-full rounded-lg border border-slate-300 bg-white pl-8 pr-3 text-xs text-slate-700" /></div><select value={statusFilter} onChange={(e) => setStatusFilter(e.target.value)} className="h-8 rounded-lg border border-slate-300 bg-white px-3 text-xs text-slate-700"><option>全部</option><option>今日预约</option><option>待上门</option><option>已完成</option></select></div><div className="space-y-2">{filteredAppointments.length ? filteredAppointments.map((item) => { const status = getAppointmentStatus(item.appointment_date); return <div key={item.id} className="rounded-xl border border-slate-200 bg-white p-3"><div className="flex flex-wrap items-start justify-between gap-2"><div><div className="flex items-center gap-2"><span className="text-sm font-semibold text-slate-900">{item.client_name}</span><AppointmentStatusBadge status={status} /></div><p className="mt-1 text-xs text-slate-500">{formatAppointmentDate(item.appointment_date)}{item.phone ? ` · ${item.phone}` : ""}</p><p className="mt-1 text-xs text-slate-500">{item.address ?? "未填写地址"}</p></div><button onClick={() => setAppointments((prev) => prev.filter((entry) => entry.id !== item.id))} className="rounded border border-rose-100 px-2 py-1 text-[11px] text-rose-500 hover:border-rose-300 hover:bg-rose-50 transition-colors">删除</button></div>{item.description ? <p className="mt-2 rounded-lg bg-slate-50 px-3 py-2 text-xs text-slate-600">{item.description}</p> : null}</div>; }) : <div className="rounded-xl border border-dashed border-slate-200 py-10 text-center text-sm text-slate-400">当前没有预约记录</div>}</div></PanelCard></div></div>;
+}
+
 type StaffSub = "staff" | "payroll";
 
 function EmployeesSection({ employees, setEmployees, payrolls, setPayrolls }: { employees: EmployeeRecord[]; setEmployees: React.Dispatch<React.SetStateAction<EmployeeRecord[]>>; payrolls: PayrollRecord[]; setPayrolls: React.Dispatch<React.SetStateAction<PayrollRecord[]>>; }) {
@@ -2277,6 +2380,7 @@ type Section =
   | "finance"
   | "quotes"
   | "clients"
+  | "appointments"
   | "materials"
   | "employees"
   | "settings";
@@ -2298,6 +2402,7 @@ const NAV_GROUPS: Array<{
     label: "资源管理",
     items: [
       { key: "clients", label: "客户档案", icon: "⊙" },
+      { key: "appointments", label: "测量预约", icon: "◷" },
       { key: "materials", label: "物料库存", icon: "▤" },
       { key: "employees", label: "员工管理", icon: "♟" },
     ],
@@ -2320,6 +2425,7 @@ export default function DashboardBizPage() {
   const [materials, setMaterials] = useState<MaterialRecord[]>(bizMaterials);
   const [purchases, setPurchases] = useState<PurchaseRecord[]>(bizPurchases);
   const [employees, setEmployees] = useState<EmployeeRecord[]>(bizEmployees);
+  const [appointments, setAppointments] = useState<MeasurementAppointmentRecord[]>(bizAppointments);
   const [payrolls, setPayrolls] = useState<PayrollRecord[]>(bizPayrolls);
   const [quotes, setQuotes] = useState<QuoteRecord[]>(bizQuotes);
   const [showcases, setShowcases] = useState<ShowcaseRecord[]>(bizShowcases);
@@ -2346,6 +2452,7 @@ export default function DashboardBizPage() {
         setMaterials(payload.data.materials ?? []);
         setPurchases(payload.data.purchases ?? []);
         setEmployees(payload.data.employees ?? []);
+        setAppointments(payload.data.appointments ?? []);
         setPayrolls(payload.data.payrolls ?? []);
         setQuotes(payload.data.quotes ?? []);
         setShowcases(payload.data.showcases ?? []);
@@ -2385,6 +2492,7 @@ export default function DashboardBizPage() {
             materials,
             purchases,
             employees,
+            appointments,
             payrolls,
             quotes,
             showcases,
@@ -2398,7 +2506,7 @@ export default function DashboardBizPage() {
     }, 250);
 
     return () => window.clearTimeout(timer);
-  }, [isHydrated, orders, clients, suppliers, expenses, cashEntries, materials, purchases, employees, payrolls, quotes, showcases, settings]);
+  }, [isHydrated, orders, clients, suppliers, expenses, cashEntries, materials, purchases, employees, appointments, payrolls, quotes, showcases, settings]);
 
   return (
     <PageSection>
@@ -2473,6 +2581,13 @@ export default function DashboardBizPage() {
               setClients={setClients}
               suppliers={suppliers}
               setSuppliers={setSuppliers}
+            />
+          )}
+          {section === "appointments" && (
+            <AppointmentsSection
+              appointments={appointments}
+              setAppointments={setAppointments}
+              clients={clients}
             />
           )}
           {section === "materials" && (

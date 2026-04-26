@@ -10,6 +10,7 @@ import type {
   EmployeeRecord,
   ExpenseRecord,
   MaterialRecord,
+  MeasurementAppointmentRecord,
   PayrollRecord,
   PurchaseRecord,
   QuoteRecord,
@@ -26,6 +27,7 @@ export type BizStoreSnapshot = {
   materials: MaterialRecord[];
   purchases: PurchaseRecord[];
   employees: EmployeeRecord[];
+  appointments: MeasurementAppointmentRecord[];
   payrolls: PayrollRecord[];
   quotes: QuoteRecord[];
   showcases: ShowcaseRecord[];
@@ -47,6 +49,7 @@ function buildSeedSnapshot(): BizStoreSnapshot {
     materials: Array.isArray(assets.materials) ? (assets.materials as MaterialRecord[]) : [],
     purchases: Array.isArray(assets.purchases) ? (assets.purchases as PurchaseRecord[]) : [],
     employees: Array.isArray(assets.employees) ? (assets.employees as EmployeeRecord[]) : [],
+    appointments: Array.isArray(assets.appointments) ? (assets.appointments as MeasurementAppointmentRecord[]) : [],
     payrolls: Array.isArray(assets.payrolls) ? (assets.payrolls as PayrollRecord[]) : [],
     quotes: Array.isArray(assets.quotes) ? (assets.quotes as QuoteRecord[]) : [],
     showcases: Array.isArray(assets.showcases) ? (assets.showcases as ShowcaseRecord[]) : [],

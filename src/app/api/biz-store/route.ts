@@ -18,6 +18,7 @@ export async function PUT(request: Request) {
     materials: Array.isArray(body.materials) ? body.materials : current.materials,
     purchases: Array.isArray(body.purchases) ? body.purchases : current.purchases,
     employees: Array.isArray(body.employees) ? body.employees : current.employees,
+    appointments: Array.isArray(body.appointments) ? body.appointments : current.appointments,
     payrolls: Array.isArray(body.payrolls) ? body.payrolls : current.payrolls,
     quotes: Array.isArray(body.quotes) ? body.quotes : current.quotes,
     showcases: Array.isArray(body.showcases) ? body.showcases : current.showcases,

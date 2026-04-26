@@ -4,12 +4,13 @@ import net from "node:net";
 import { revalidatePath } from "next/cache";
 import { DashboardCard, DashboardCardTitle, DashboardPageHeader } from "../components";
 import { ConfirmSubmitButton } from "../ConfirmSubmitButton";
+import { AgentStatusHistoryPanel } from "./AgentStatusHistoryPanel";
 import { safeRead } from "@/lib/fs-utils";
 
 export const dynamic = "force-dynamic";
 export const revalidate = 0;
 import { enqueueMessage, readQueue, writeQueue } from "@/lib/agent-bridge";
-import { readAgentStatuses, type AgentStatus } from "@/lib/agent-status";
+import { readAgentStatusHistory, readAgentStatuses, type AgentStatus } from "@/lib/agent-status";
 import { cleanDiscussionReplyText, deriveDiscussionStatus, discussionParticipantStates as buildDiscussionParticipantStates, extractTopicId, isFinalDiscussionReply, typingParticipants as buildTypingParticipants } from "@/lib/discussion-semantics";
 import { readDiscussionThreads, upsertDiscussionThread, type DiscussionStatus, type DiscussionThread } from "@/lib/discussion-store";
 import { appendEvent, clearEventChain, readEventChain } from "@/lib/event-store";
@@ -292,9 +293,9 @@ function heartbeatTime(item: AgentStatus) {
 function displayHeartbeatAge(iso: string) {
   const diffMs = Math.max(0, Date.now() - Date.parse(iso));
   const diffSec = Math.round(diffMs / 1000);
-  if (diffSec < 60) return `${diffSec} 秒前`;
-  if (diffSec < 3600) return `${Math.round(diffSec / 60)} 分钟前`;
-  return `${Math.round(diffSec / 3600)} 小时前`;
+  if (diffSec < 60) return String(diffSec) + "s ago";
+  if (diffSec < 3600) return String(Math.round(diffSec / 60)) + "m ago";
+  return String(Math.round(diffSec / 3600)) + "h ago";
 }
 
 function typingDurationSeconds(item: AgentStatus) {
@@ -307,13 +308,13 @@ function typingDurationSeconds(item: AgentStatus) {
 function normalizeAgentState(item: AgentStatus) {
   const normalized = String(item.systemState || item.status || "standby").trim().toLowerCase();
   if (isStale(heartbeatTime(item))) {
-    return { label: "离线", tone: "bg-slate-200 text-slate-700" };
+    return { label: "offline", tone: "bg-slate-200 text-slate-700" };
   }
-  if (normalized === "typing") return { label: "输出中", tone: "bg-indigo-100 text-indigo-800" };
-  if (normalized === "thinking") return { label: "推理中", tone: "bg-sky-100 text-sky-800" };
-  if (normalized === "busy") return { label: "执行中", tone: "bg-amber-100 text-amber-800" };
-  if (["blocked", "error"].includes(normalized)) return { label: normalized === "error" ? "出错" : "阻塞", tone: "bg-rose-100 text-rose-800" };
-  return { label: "空闲", tone: "bg-emerald-100 text-emerald-800" };
+  if (normalized === "typing") return { label: "typing", tone: "bg-indigo-100 text-indigo-800" };
+  if (normalized === "thinking") return { label: "thinking", tone: "bg-sky-100 text-sky-800" };
+  if (normalized === "busy") return { label: "busy", tone: "bg-amber-100 text-amber-800" };
+  if (["blocked", "error"].includes(normalized)) return { label: normalized === "error" ? "error" : "blocked", tone: "bg-rose-100 text-rose-800" };
+  return { label: "idle", tone: "bg-emerald-100 text-emerald-800" };
 }
 
 function contextBarTone(value: number) {
@@ -513,6 +514,7 @@ export default async function DashboardSystemPage() {
   const eventChain = await readEventChain().catch(() => []);
   const discussionThreads = await readDiscussionThreads().catch(() => []);
   const agentStatuses = await readAgentStatuses().catch(() => []);
+  const agentStatusHistory = await readAgentStatusHistory({ hours: 24, limitPerAgent: 288 }).catch(() => ({}));
   const wakeItems = await readWakeQueue().catch(() => []);
   const consumedWakeItems = await readWakeQueue({ includeConsumed: true, limit: 20 }).then((items) => items.filter((item) => item.consumedAt)).catch(() => []);
   const watchdogAlerts = await computeWatchdogAlerts().catch(() => []);
@@ -912,6 +914,8 @@ export default async function DashboardSystemPage() {
           </div>
         </DashboardCard>
 
+        <AgentStatusHistoryPanel statuses={agentStatuses} history={agentStatusHistory} />
+
         <DashboardCard>
           <DashboardCardTitle title="系统状态" desc="放在后面，只在需要诊断时看，不打断发命令和看回执。" right={<span className="rounded-full bg-slate-900 px-3 py-1 text-xs font-semibold text-white">{onlineCount} 在线 · {offlineCount} 离线</span>} />
           <div className="mt-3 grid gap-3 xl:grid-cols-[0.86fr_1.14fr]">
@@ -946,14 +950,14 @@ export default async function DashboardSystemPage() {
 
             <div className="grid gap-3 lg:grid-cols-2">
               <div className="rounded-2xl border border-slate-200 bg-slate-50 p-3">
-                <p className="text-sm font-semibold text-slate-900">Agent 心跳 / 状态</p>
-                <p className="mt-1 text-[11px] text-slate-500">零号等远端状态优先在这里看，现在会额外展示输出中、上下文占用和卡住风险。</p>
+                <p className="text-sm font-semibold text-slate-900">Agent heartbeat / state</p>
+                <p className="mt-1 text-[11px] text-slate-500">Remote agents now show typing, context usage, and stuck-risk hints here.</p>
                 <div className="mt-2 space-y-3">
                   {agentStatuses.length > 0 ? agentStatuses.map((item) => {
                     const heartbeatAt = heartbeatTime(item);
                     const state = normalizeAgentState(item);
                     const typingSeconds = typingDurationSeconds(item);
-                    const showTyping = state.label === "输出中" && typingSeconds > 0;
+                    const showTyping = state.label === "typing" && typingSeconds > 0;
                     const maybeStuck = showTyping && typingSeconds >= 120;
                     const ctxUsage = typeof item.realCtxUsage === "number" && Number.isFinite(item.realCtxUsage) ? Math.max(0, Math.min(100, item.realCtxUsage)) : null;
                     const primaryTask = item.taskProgress || item.currentTask || item.summary;
@@ -962,48 +966,48 @@ export default async function DashboardSystemPage() {
                         <div className="flex flex-wrap items-start justify-between gap-3">
                           <div>
                             <div className="flex flex-wrap items-center gap-2">
-                              <p className="text-sm font-semibold text-slate-900">{item.agent}{item.role ? ` · ${item.role}` : ""}</p>
-                              <span className={`rounded-full px-2.5 py-0.5 text-[11px] font-semibold ${state.tone}`}>{state.label}</span>
-                              <span className={`rounded-full px-2.5 py-0.5 text-[11px] font-semibold ${isStale(heartbeatAt) ? "bg-rose-100 text-rose-800" : "bg-slate-100 text-slate-700"}`}>{displayHeartbeatAge(heartbeatAt)}</span>
-                              {maybeStuck ? <span className="rounded-full bg-orange-100 px-2.5 py-0.5 text-[11px] font-semibold text-orange-800">可能卡住</span> : null}
+                              <p className="text-sm font-semibold text-slate-900">{item.agent}{item.role ? " / " + item.role : ""}</p>
+                              <span className={"rounded-full px-2.5 py-0.5 text-[11px] font-semibold " + state.tone}>{state.label}</span>
+                              <span className={"rounded-full px-2.5 py-0.5 text-[11px] font-semibold " + (isStale(heartbeatAt) ? "bg-rose-100 text-rose-800" : "bg-slate-100 text-slate-700")}>{displayHeartbeatAge(heartbeatAt)}</span>
+                              {maybeStuck ? <span className="rounded-full bg-orange-100 px-2.5 py-0.5 text-[11px] font-semibold text-orange-800">stuck?</span> : null}
                             </div>
                             {primaryTask ? <p className="mt-1 text-xs leading-5 text-slate-600">{primaryTask}</p> : null}
                           </div>
-                          <span className={`rounded-full px-2.5 py-0.5 text-[11px] font-semibold ${statusBadge(item.status)}`}>{item.status}</span>
+                          <span className={"rounded-full px-2.5 py-0.5 text-[11px] font-semibold " + statusBadge(item.status)}>{item.status}</span>
                         </div>
 
                         {showTyping ? (
-                          <div className={`mt-3 rounded-xl px-3 py-2 text-[11px] font-semibold ${maybeStuck ? "bg-orange-50 text-orange-700" : "bg-indigo-50 text-indigo-700"}`}>
-                            正在输出 {typingSeconds} 秒{maybeStuck ? "，已超过 120 秒" : ""}
+                          <div className={"mt-3 rounded-xl px-3 py-2 text-[11px] font-semibold " + (maybeStuck ? "bg-orange-50 text-orange-700" : "bg-indigo-50 text-indigo-700")}>
+                            ???? {typingSeconds} ?{maybeStuck ? "???? 120 ?" : ""}
                           </div>
                         ) : null}
 
                         {item.errorDetail ? (
                           <div className="mt-3 rounded-xl bg-rose-50 px-3 py-2 text-[11px] leading-5 text-rose-700">
-                            错误详情：{item.errorDetail}
+                            ?????{item.errorDetail}
                           </div>
                         ) : null}
 
                         {ctxUsage !== null ? (
                           <div className="mt-3">
                             <div className="mb-1 flex items-center justify-between text-[11px] text-slate-500">
-                              <span>Context 占用</span>
+                              <span>Context usage</span>
                               <span className={ctxUsage >= 85 ? "font-semibold text-rose-700" : ctxUsage >= 70 ? "font-semibold text-amber-700" : "text-slate-600"}>{ctxUsage}%</span>
                             </div>
                             <div className="h-2 overflow-hidden rounded-full bg-slate-100">
-                              <div className={`h-full rounded-full ${contextBarTone(ctxUsage)}`} style={{ width: `${ctxUsage}%` }} />
+                              <div className={"h-full rounded-full " + contextBarTone(ctxUsage)} style={{ width: String(ctxUsage) + "%" }} />
                             </div>
                           </div>
                         ) : null}
 
                         <div className="mt-3 grid gap-2 text-[11px] text-slate-500 sm:grid-cols-2">
-                          <div className="rounded-xl bg-slate-50 px-3 py-2">owner: {item.owner || "-"} · backup: {item.backup || "-"}</div>
+                          <div className="rounded-xl bg-slate-50 px-3 py-2">owner: {item.owner || "-"} / backup: {item.backup || "-"}</div>
                           <div className="rounded-xl bg-slate-50 px-3 py-2">task: {item.taskId || item.currentTask || "-"}</div>
-                          <div className="rounded-xl bg-slate-50 px-3 py-2 sm:col-span-2">heartbeat: {formatEasternTime(heartbeatAt)} · updated: {formatEasternTime(item.updatedAt)}</div>
+                          <div className="rounded-xl bg-slate-50 px-3 py-2 sm:col-span-2">heartbeat: {formatEasternTime(heartbeatAt)} / updated: {formatEasternTime(item.updatedAt)}</div>
                         </div>
                       </div>
                     );
-                  }) : <div className="rounded-xl border border-dashed border-slate-200 bg-white px-3 py-4 text-sm text-slate-500">还没有 agent 上报心跳</div>}
+                  }) : <div className="rounded-xl border border-dashed border-slate-200 bg-white px-3 py-4 text-sm text-slate-500">No agent heartbeat yet</div>}
                 </div>
               </div>
               <div className="rounded-2xl border border-slate-200 bg-slate-50 p-3">

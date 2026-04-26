@@ -1,5 +1,11 @@
 import { existsSync, readFileSync } from "node:fs";
 
 export function safeRead(filePath: string, fallback = "") {
-  return existsSync(filePath) ? readFileSync(filePath, "utf8") : fallback;
+  if (!existsSync(filePath)) return fallback;
+
+  try {
+    return readFileSync(filePath, "utf8");
+  } catch {
+    return fallback;
+  }
 }

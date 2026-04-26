@@ -2,6 +2,9 @@ import { DashboardCard, DashboardCardTitle, DashboardPageHeader } from "../compo
 import { displayTaskEventType, getSortValue, parseEventStream, parseTaskQueue, readEventStream, readTaskQueue } from "@/lib/task-board";
 import { formatEasternTime } from "@/lib/time";
 import { readActiveTodos } from "@/lib/todo-board";
+import { readPromises } from "@/lib/promise-store";
+import { readWakeQueue } from "@/lib/wake-store";
+import { computeWatchdogAlerts } from "@/lib/watchdog";
 
 function statusTone(value: string) {
   const normalized = value.trim().toLowerCase();
@@ -43,6 +46,9 @@ export default async function DashboardTasksPage({
   });
   const events = parseEventStream(readEventStream());
   const activeTodos = readActiveTodos();
+  const promises = await readPromises().catch(() => []);
+  const wakeItems = await readWakeQueue().catch(() => []);
+  const watchdogAlerts = await computeWatchdogAlerts().catch(() => []);
 
   const filterCounts = {
     in_progress: tasks.filter((task) => task.status === "in_progress").length,
@@ -66,6 +72,8 @@ export default async function DashboardTasksPage({
       : taskFilter === "all"
         ? "当前没有未完成任务"
         : "当前没有进行中的任务";
+  const handedOffPromises = promises.filter((item) => item.status === "handed_off").length;
+  const pendingWakeCount = wakeItems.filter((item) => !item.consumedAt).length;
 
   return (
     <div className="rounded-[30px] border border-white/10 bg-[linear-gradient(180deg,_rgba(15,23,42,0.98),_rgba(3,7,18,0.98))] p-4 shadow-2xl">
@@ -125,6 +133,16 @@ export default async function DashboardTasksPage({
                 新建任务
               </button>
             </form>
+
+            <div className="mt-4 rounded-2xl border border-white/10 bg-white/5 p-3 text-xs text-slate-200">
+              <div className="flex flex-wrap items-center gap-2">
+                <span className="rounded-full bg-white/10 px-3 py-1 font-semibold text-white">阻塞任务 {filterCounts.blocked}</span>
+                <span className="rounded-full bg-white/10 px-3 py-1 font-semibold text-white">已移交 Promise {handedOffPromises}</span>
+                <span className="rounded-full bg-white/10 px-3 py-1 font-semibold text-white">待消费 Wake {pendingWakeCount}</span>
+                <span className="rounded-full bg-white/10 px-3 py-1 font-semibold text-white">Watchdog 告警 {watchdogAlerts.length}</span>
+                <a href="/dashboard/system" className="rounded-full border border-white/10 px-3 py-1 font-semibold text-sky-200 hover:bg-white/10">去系统页排查</a>
+              </div>
+            </div>
 
             <div className="mt-4 flex flex-wrap gap-2">
               {[

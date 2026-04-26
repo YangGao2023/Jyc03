@@ -3964,6 +3964,12 @@ export default function DashboardBizPage() {
         description={`订单、财务、客户、物料、员工与设置的统一操作界面。${saveState === "saving" ? " 正在保存…" : saveState === "saved" ? " 已持久化保存" : saveState === "error" ? " 保存异常" : ""}`}
       />
 
+      <div className="mt-4 flex flex-wrap gap-2">
+        <a href="/dashboard" className="rounded-full border border-slate-200 bg-white px-3 py-1.5 text-xs font-semibold text-slate-700 hover:bg-slate-50">返回后台</a>
+        <a href="/dashboard/overview" className="rounded-full border border-slate-200 bg-white px-3 py-1.5 text-xs font-semibold text-slate-700 hover:bg-slate-50">回总览页</a>
+        <a href="/dashboard/tasks" className="rounded-full border border-slate-200 bg-white px-3 py-1.5 text-xs font-semibold text-slate-700 hover:bg-slate-50">去任务页处理</a>
+      </div>
+
       <div className="mt-4 flex min-h-[600px] overflow-hidden rounded-[20px] bg-white shadow-sm">
         <nav className="w-40 shrink-0 border-r border-slate-100 bg-slate-50 py-4">
           {NAV_GROUPS.map((group) => (

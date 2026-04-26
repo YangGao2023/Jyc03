@@ -9,7 +9,7 @@ import { safeRead } from "@/lib/fs-utils";
 export const dynamic = "force-dynamic";
 export const revalidate = 0;
 import { enqueueMessage, readQueue, writeQueue } from "@/lib/agent-bridge";
-import { readAgentStatuses } from "@/lib/agent-status";
+import { readAgentStatuses, type AgentStatus } from "@/lib/agent-status";
 import { cleanDiscussionReplyText, deriveDiscussionStatus, discussionParticipantStates as buildDiscussionParticipantStates, extractTopicId, isFinalDiscussionReply, typingParticipants as buildTypingParticipants } from "@/lib/discussion-semantics";
 import { readDiscussionThreads, upsertDiscussionThread, type DiscussionStatus, type DiscussionThread } from "@/lib/discussion-store";
 import { appendEvent, clearEventChain, readEventChain } from "@/lib/event-store";
@@ -285,6 +285,43 @@ function statusBadge(status: string) {
   return "bg-emerald-100 text-emerald-800";
 }
 
+function heartbeatTime(item: AgentStatus) {
+  return item.lastHeartbeat || item.updatedAt;
+}
+
+function displayHeartbeatAge(iso: string) {
+  const diffMs = Math.max(0, Date.now() - Date.parse(iso));
+  const diffSec = Math.round(diffMs / 1000);
+  if (diffSec < 60) return `${diffSec} 秒前`;
+  if (diffSec < 3600) return `${Math.round(diffSec / 60)} 分钟前`;
+  return `${Math.round(diffSec / 3600)} 小时前`;
+}
+
+function typingDurationSeconds(item: AgentStatus) {
+  if (!item.typingSince) return 0;
+  const diffMs = Date.now() - Date.parse(item.typingSince);
+  if (!Number.isFinite(diffMs) || diffMs <= 0) return 0;
+  return Math.round(diffMs / 1000);
+}
+
+function normalizeAgentState(item: AgentStatus) {
+  const normalized = String(item.systemState || item.status || "standby").trim().toLowerCase();
+  if (isStale(heartbeatTime(item))) {
+    return { label: "离线", tone: "bg-slate-200 text-slate-700" };
+  }
+  if (normalized === "typing") return { label: "输出中", tone: "bg-indigo-100 text-indigo-800" };
+  if (normalized === "thinking") return { label: "推理中", tone: "bg-sky-100 text-sky-800" };
+  if (normalized === "busy") return { label: "执行中", tone: "bg-amber-100 text-amber-800" };
+  if (["blocked", "error"].includes(normalized)) return { label: normalized === "error" ? "出错" : "阻塞", tone: "bg-rose-100 text-rose-800" };
+  return { label: "空闲", tone: "bg-emerald-100 text-emerald-800" };
+}
+
+function contextBarTone(value: number) {
+  if (value >= 85) return "bg-rose-500";
+  if (value >= 70) return "bg-amber-500";
+  return "bg-sky-500";
+}
+
 function displayRelativeAge(iso: string) {
   const diffMs = Date.now() - Date.parse(iso);
   const diffMin = Math.max(0, Math.round(diffMs / 60000));
@@ -487,6 +524,8 @@ export default async function DashboardSystemPage() {
   }).length;
   const sentHistory = buildSentHistory(eventChain, visibleInboxMessages);
   const visibleInboxCards = [...visibleInboxMessages].reverse();
+  const receiptInboxCards = visibleInboxCards.filter((item) => String(item.kind || "").toLowerCase() === "receipt");
+  const resultInboxCards = visibleInboxCards.filter((item) => String(item.kind || "").toLowerCase() === "result");
   const recipientSummary = summarizeRecipients(sentHistory.map((item) => ({ to: item.to } as (typeof outboxMessages)[number])) as Awaited<ReturnType<typeof readQueue>>);
   const staleAgentCount = agentStatuses.filter((item) => isStale(item.updatedAt)).length;
 
@@ -805,10 +844,14 @@ export default async function DashboardSystemPage() {
                   <p className="text-sm font-semibold text-slate-900">回执箱，Agent 回给老板的执行结果</p>
                   <span className="rounded-full bg-emerald-600 px-2.5 py-0.5 text-xs font-semibold text-white">{visibleInboxMessages.length} 条</span>
                 </div>
-                <div className="space-y-2 overflow-y-auto pr-1 2xl:max-h-[72vh]">
-                  {visibleInboxCards.length > 0 ? (
-                    <>
-                      {visibleInboxCards.map((message, index) => (
+                <div className="space-y-3 overflow-y-auto pr-1 2xl:max-h-[72vh]">
+                  <div>
+                    <div className="mb-2 flex items-center justify-between">
+                      <p className="text-xs font-semibold text-slate-700">真实执行结果</p>
+                      <span className="rounded-full bg-emerald-600 px-2 py-0.5 text-[10px] font-semibold text-white">{resultInboxCards.length}</span>
+                    </div>
+                    <div className="space-y-2">
+                      {resultInboxCards.length > 0 ? resultInboxCards.map((message, index) => (
                         <details key={`${message.id}-${index}`} className={`rounded-2xl border bg-white p-3 ${bridgeCardTone(message.kind, "border-emerald-200")}`}>
                           <summary className="cursor-pointer list-none">
                             <div className="flex flex-wrap items-center gap-1.5">
@@ -829,11 +872,40 @@ export default async function DashboardSystemPage() {
                             ) : null}
                           </div>
                         </details>
-                      ))}
-                    </>
-                  ) : (
-                    <div className="rounded-2xl border border-dashed border-emerald-200 bg-white px-4 py-6 text-sm text-slate-500">当前还没有回写到 inbox 的执行结果</div>
-                  )}
+                      )) : <div className="rounded-2xl border border-dashed border-emerald-200 bg-white px-4 py-4 text-sm text-slate-500">当前还没有真实执行结果</div>}
+                    </div>
+                  </div>
+
+                  <div>
+                    <div className="mb-2 flex items-center justify-between">
+                      <p className="text-xs font-semibold text-slate-700">系统自动回执</p>
+                      <span className="rounded-full bg-amber-500 px-2 py-0.5 text-[10px] font-semibold text-white">{receiptInboxCards.length}</span>
+                    </div>
+                    <div className="space-y-2">
+                      {receiptInboxCards.length > 0 ? receiptInboxCards.map((message, index) => (
+                        <details key={`${message.id}-${index}`} className={`rounded-2xl border bg-white p-3 ${bridgeCardTone(message.kind, "border-amber-200")}`}>
+                          <summary className="cursor-pointer list-none">
+                            <div className="flex flex-wrap items-center gap-1.5">
+                              <span className="text-[11px] text-slate-500">{formatEasternTime(message.createdAt)}</span>
+                              <span className={`rounded-full px-2 py-0.5 text-[10px] font-semibold ${bridgeKindBadge(message.kind)}`}>{displayBridgeKind(message.kind)}</span>
+                              <span className="rounded-full bg-slate-200 px-2 py-0.5 text-[10px] font-semibold text-slate-700">{message.from} → {message.to}</span>
+                            </div>
+                            <p className="mt-1.5 text-xs font-semibold leading-5 text-slate-800">{summarizeMessageTitle(message.text)}</p>
+                            <p className="mt-1 text-[11px] leading-4 text-slate-500">{emphasizeQuestion(message.text)}</p>
+                          </summary>
+                          <div className="mt-2 space-y-2 border-t border-amber-100 pt-2">
+                            <p className="text-xs leading-5 text-slate-700">{message.text}</p>
+                            {message.meta ? (
+                              <details className="rounded-xl bg-amber-50/70 px-2.5 py-2">
+                                <summary className="cursor-pointer text-[11px] font-medium text-slate-500">{compactMetaSummary(message.meta as Record<string, unknown>) || "查看元数据"}</summary>
+                                <pre className="mt-2 overflow-x-auto rounded-xl bg-slate-950/95 p-2.5 text-[10px] leading-4 text-slate-100">{JSON.stringify(message.meta, null, 2)}</pre>
+                              </details>
+                            ) : null}
+                          </div>
+                        </details>
+                      )) : <div className="rounded-2xl border border-dashed border-amber-200 bg-white px-4 py-4 text-sm text-slate-500">当前还没有系统自动回执</div>}
+                    </div>
+                  </div>
                 </div>
               </div>
             </div>
@@ -875,22 +947,65 @@ export default async function DashboardSystemPage() {
             <div className="grid gap-3 lg:grid-cols-2">
               <div className="rounded-2xl border border-slate-200 bg-slate-50 p-3">
                 <p className="text-sm font-semibold text-slate-900">Agent 心跳 / 状态</p>
-                <p className="mt-1 text-[11px] text-slate-500">零号等远端状态优先在这里看。</p>
-                <div className="mt-2 space-y-2">
-                  {agentStatuses.length > 0 ? agentStatuses.map((item) => (
-                    <div key={item.agent} className="rounded-xl bg-white px-3 py-2.5">
-                      <div className="flex flex-wrap items-center gap-2">
-                        <span className={`rounded-full px-2.5 py-0.5 text-[11px] font-semibold ${statusBadge(item.status)}`}>{item.status}</span>
-                        <span className={`rounded-full px-2.5 py-0.5 text-[11px] font-semibold ${isStale(item.updatedAt) ? "bg-rose-100 text-rose-800" : "bg-slate-100 text-slate-700"}`}>{displayRelativeAge(item.updatedAt)}</span>
+                <p className="mt-1 text-[11px] text-slate-500">零号等远端状态优先在这里看，现在会额外展示输出中、上下文占用和卡住风险。</p>
+                <div className="mt-2 space-y-3">
+                  {agentStatuses.length > 0 ? agentStatuses.map((item) => {
+                    const heartbeatAt = heartbeatTime(item);
+                    const state = normalizeAgentState(item);
+                    const typingSeconds = typingDurationSeconds(item);
+                    const showTyping = state.label === "输出中" && typingSeconds > 0;
+                    const maybeStuck = showTyping && typingSeconds >= 120;
+                    const ctxUsage = typeof item.realCtxUsage === "number" && Number.isFinite(item.realCtxUsage) ? Math.max(0, Math.min(100, item.realCtxUsage)) : null;
+                    const primaryTask = item.taskProgress || item.currentTask || item.summary;
+                    return (
+                      <div key={item.agent} className="rounded-2xl border border-slate-200 bg-white p-3">
+                        <div className="flex flex-wrap items-start justify-between gap-3">
+                          <div>
+                            <div className="flex flex-wrap items-center gap-2">
+                              <p className="text-sm font-semibold text-slate-900">{item.agent}{item.role ? ` · ${item.role}` : ""}</p>
+                              <span className={`rounded-full px-2.5 py-0.5 text-[11px] font-semibold ${state.tone}`}>{state.label}</span>
+                              <span className={`rounded-full px-2.5 py-0.5 text-[11px] font-semibold ${isStale(heartbeatAt) ? "bg-rose-100 text-rose-800" : "bg-slate-100 text-slate-700"}`}>{displayHeartbeatAge(heartbeatAt)}</span>
+                              {maybeStuck ? <span className="rounded-full bg-orange-100 px-2.5 py-0.5 text-[11px] font-semibold text-orange-800">可能卡住</span> : null}
+                            </div>
+                            {primaryTask ? <p className="mt-1 text-xs leading-5 text-slate-600">{primaryTask}</p> : null}
+                          </div>
+                          <span className={`rounded-full px-2.5 py-0.5 text-[11px] font-semibold ${statusBadge(item.status)}`}>{item.status}</span>
+                        </div>
+
+                        {showTyping ? (
+                          <div className={`mt-3 rounded-xl px-3 py-2 text-[11px] font-semibold ${maybeStuck ? "bg-orange-50 text-orange-700" : "bg-indigo-50 text-indigo-700"}`}>
+                            正在输出 {typingSeconds} 秒{maybeStuck ? "，已超过 120 秒" : ""}
+                          </div>
+                        ) : null}
+
+                        {item.errorDetail ? (
+                          <div className="mt-3 rounded-xl bg-rose-50 px-3 py-2 text-[11px] leading-5 text-rose-700">
+                            错误详情：{item.errorDetail}
+                          </div>
+                        ) : null}
+
+                        {ctxUsage !== null ? (
+                          <div className="mt-3">
+                            <div className="mb-1 flex items-center justify-between text-[11px] text-slate-500">
+                              <span>Context 占用</span>
+                              <span className={ctxUsage >= 85 ? "font-semibold text-rose-700" : ctxUsage >= 70 ? "font-semibold text-amber-700" : "text-slate-600"}>{ctxUsage}%</span>
+                            </div>
+                            <div className="h-2 overflow-hidden rounded-full bg-slate-100">
+                              <div className={`h-full rounded-full ${contextBarTone(ctxUsage)}`} style={{ width: `${ctxUsage}%` }} />
+                            </div>
+                          </div>
+                        ) : null}
+
+                        <div className="mt-3 grid gap-2 text-[11px] text-slate-500 sm:grid-cols-2">
+                          <div className="rounded-xl bg-slate-50 px-3 py-2">owner: {item.owner || "-"} · backup: {item.backup || "-"}</div>
+                          <div className="rounded-xl bg-slate-50 px-3 py-2">task: {item.taskId || item.currentTask || "-"}</div>
+                          <div className="rounded-xl bg-slate-50 px-3 py-2 sm:col-span-2">heartbeat: {formatEasternTime(heartbeatAt)} · updated: {formatEasternTime(item.updatedAt)}</div>
+                        </div>
                       </div>
-                      <p className="mt-1 text-sm font-semibold text-slate-900">{item.agent}{item.role ? ` · ${item.role}` : ""}</p>
-                      {item.summary ? <p className="mt-1 text-xs leading-5 text-slate-600">{item.summary}</p> : null}
-                      <p className="mt-1 text-[11px] text-slate-500">owner: {item.owner || "-"} · backup: {item.backup || "-"} · task: {item.taskId || "-"}</p>
-                    </div>
-                  )) : <div className="rounded-xl border border-dashed border-slate-200 bg-white px-3 py-4 text-sm text-slate-500">还没有 agent 上报心跳</div>}
+                    );
+                  }) : <div className="rounded-xl border border-dashed border-slate-200 bg-white px-3 py-4 text-sm text-slate-500">还没有 agent 上报心跳</div>}
                 </div>
               </div>
-
               <div className="rounded-2xl border border-slate-200 bg-slate-50 p-3">
                 <p className="text-sm font-semibold text-slate-900">最近系统事件</p>
                 <div className="mt-2 space-y-2">

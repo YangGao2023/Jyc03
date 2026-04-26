@@ -109,7 +109,7 @@ export default async function DashboardPage() {
               <div>
                 <p className="text-[11px] uppercase tracking-[0.28em] text-sky-300">Owner Backend</p>
                 <h1 className="mt-2 text-2xl font-semibold text-white">后台首页</h1>
-                <p className="mt-2 max-w-3xl text-sm leading-6 text-slate-300">这里不再承担所有细节，只做老板入口。真正的工作去 overview / tasks / memory / system 四个页面里看。</p>
+                <p className="mt-2 max-w-3xl text-sm leading-6 text-slate-300">这里不再承担所有细节，只做老板入口。真正的工作去 biz / overview / tasks / memory / system 五个页面里看。</p>
               </div>
               <form action="/api/logout" method="POST">
                 <button className="rounded-2xl border border-white/10 bg-white px-4 py-2 text-sm font-semibold text-slate-950">退出登录</button>
@@ -149,7 +149,7 @@ export default async function DashboardPage() {
               <div className="flex items-center justify-between gap-3">
                 <div>
                   <p className="text-sm font-medium text-sky-700">工作区入口</p>
-                  <p className="mt-1 text-sm text-slate-500">从首页分流，不再把 {workspaceLinks.length} 个区堆在同一页里。业务页是这次新建设的第一入口。</p>
+                  <p className="mt-1 text-sm text-slate-500">从首页分流，不再把 {workspaceLinks.length} 个区堆在同一页里。业务、总览、任务、记忆、系统都在这里直接进。</p>
                 </div>
                 <span className="rounded-full bg-slate-900 px-3 py-1 text-xs font-semibold text-white">{workspaceLinks.length} 区</span>
               </div>

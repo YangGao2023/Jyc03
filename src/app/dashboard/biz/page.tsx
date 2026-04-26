@@ -1920,6 +1920,7 @@ function OrdersSection({
   printArchives,
   setPrintArchives,
   setCashEntries,
+  setExpenses,
 }: {
   orders: BizOrder[];
   materials: MaterialRecord[];
@@ -1929,6 +1930,7 @@ function OrdersSection({
   printArchives: PrintArchiveRecord[];
   setPrintArchives: React.Dispatch<React.SetStateAction<PrintArchiveRecord[]>>;
   setCashEntries: React.Dispatch<React.SetStateAction<CashEntry[]>>;
+  setExpenses: React.Dispatch<React.SetStateAction<ExpenseRecord[]>>;
 }) {
   const [selectedOrder, setSelectedOrder] = useState<BizOrder | null>(null);
   const [typeFilter, setTypeFilter] = useState("全部");
@@ -1978,6 +1980,8 @@ function OrdersSection({
 
   function handleDelete(orderNumber: string) {
     setOrders((prev) => prev.filter((o) => o.order_number !== orderNumber));
+    setExpenses((prev) => prev.filter((item) => ![item.target, item.detail, item.remark ?? ""].some((value) => value.includes(orderNumber))));
+    setCashEntries((prev) => prev.filter((item) => !(item.note ?? "").includes(orderNumber)));
     setSelectedOrderNumbers((prev) => prev.filter((item) => item !== orderNumber));
     setDeleteConfirm(null);
   }
@@ -2101,6 +2105,8 @@ function OrdersSection({
     }
     setBulkBusy(true);
     setOrders((prev) => prev.filter((order) => !selectedOrderNumbers.includes(order.order_number)));
+    setExpenses((prev) => prev.filter((item) => !selectedOrderNumbers.some((orderNumber) => [item.target, item.detail, item.remark ?? ""].some((value) => value.includes(orderNumber)))));
+    setCashEntries((prev) => prev.filter((item) => !selectedOrderNumbers.some((orderNumber) => (item.note ?? "").includes(orderNumber))));
     setSelectedOrderNumbers([]);
     setBulkBusy(false);
     setBulkAction(null);
@@ -2786,6 +2792,7 @@ function FinanceSection({ orders, setOrders, expenses, setExpenses, cashEntries,
   const [draft, setDraft] = useState<FinanceDraft>({ target: "", detail: "", amount: "", expense_type: expenseTypeOptions[0] ?? "采购", payment_method: "转账", expense_date: today, remark: "" });
   const [auditReport, setAuditReport] = useState<FinanceAuditReport | null>(null);
   const [showExpenseModal, setShowExpenseModal] = useState(false);
+  const [confirmingExpenseId, setConfirmingExpenseId] = useState<string | null>(null);
   const [quickPayTarget, setQuickPayTarget] = useState<string | null>(null);
   const [quickPayFields, setQuickPayFields] = useState({ date: today, amount: "", method: "现金", note: "", office: false });
   const [expenseFromOffice, setExpenseFromOffice] = useState(false);
@@ -2924,8 +2931,8 @@ function FinanceSection({ orders, setOrders, expenses, setExpenses, cashEntries,
   }
 
   function deleteExpense(expenseId: string) {
-    if (!window.confirm("确认删除这条支出记录吗？")) return;
     setExpenses((prev) => prev.filter((item) => item.id !== expenseId));
+    setConfirmingExpenseId(null);
   }
 
   function addOfficeTransfer() {
@@ -3055,7 +3062,7 @@ function FinanceSection({ orders, setOrders, expenses, setExpenses, cashEntries,
         </div>
       )}
       {sub === "income" && <div className="overflow-x-auto rounded-xl border border-slate-200 bg-white"><table className="w-full text-left text-xs"><thead><tr className="border-b border-slate-200 bg-slate-50"><th className="px-4 py-2.5 font-semibold text-slate-600">订单号</th><th className="px-4 py-2.5 font-semibold text-slate-600">客户</th><th className="px-4 py-2.5 font-semibold text-slate-600">金额</th><th className="px-4 py-2.5 font-semibold text-slate-600">支付方式</th><th className="px-4 py-2.5 font-semibold text-slate-600">日期</th><th className="px-4 py-2.5 font-semibold text-slate-600">明细</th></tr></thead><tbody>{filteredPaymentRows.length ? filteredPaymentRows.map(({ key, order, record }) => <tr key={key} className="border-b border-slate-100 last:border-b-0"><td className="px-4 py-2.5 font-medium text-slate-700">{order.order_number}</td><td className="px-4 py-2.5 text-slate-700">{order.client_name}</td><td className={`px-4 py-2.5 font-semibold ${record.type === "refund" ? "text-rose-600" : "text-green-600"}`}>{record.type === "refund" ? "-" : "+"}{formatMoney(record.amount)}</td><td className="px-4 py-2.5 text-slate-600">{record.method}</td><td className="px-4 py-2.5 text-slate-500">{record.date}</td><td className="px-4 py-2.5 text-slate-500">{record.note ?? "-"}</td></tr>) : <tr><td colSpan={6} className="py-10 text-center text-sm text-slate-400">这个日期范围内没有收入记录</td></tr>}</tbody></table></div>}
-      {sub === "expense" && <div className="overflow-x-auto rounded-xl border border-slate-200 bg-white"><table className="w-full text-left text-xs"><thead><tr className="border-b border-slate-200 bg-slate-50"><th className="px-4 py-2.5 font-semibold text-slate-600">对象</th><th className="px-4 py-2.5 font-semibold text-slate-600">明细</th><th className="px-4 py-2.5 font-semibold text-slate-600">金额</th><th className="px-4 py-2.5 font-semibold text-slate-600">类型</th><th className="px-4 py-2.5 font-semibold text-slate-600">方式</th><th className="px-4 py-2.5 font-semibold text-slate-600">办公室</th><th className="px-4 py-2.5 font-semibold text-slate-600">日期</th><th className="px-4 py-2.5 font-semibold text-slate-600">操作</th></tr></thead><tbody>{filteredExpenses.length ? filteredExpenses.map((item) => <tr key={item.id} className="border-b border-slate-100 last:border-b-0"><td className="px-4 py-2.5 text-slate-700">{item.target}</td><td className="px-4 py-2.5 text-slate-500">{item.detail}</td><td className="px-4 py-2.5 font-semibold text-rose-600">{formatMoney(item.amount)}</td><td className="px-4 py-2.5 text-slate-600">{item.expense_type}</td><td className="px-4 py-2.5 text-slate-600">{item.payment_method}</td><td className="px-4 py-2.5 text-slate-600">{item.office ? "是" : "否"}</td><td className="px-4 py-2.5 text-slate-500">{item.expense_date}</td><td className="px-4 py-2.5"><button onClick={() => deleteExpense(item.id)} className="rounded border border-red-100 px-2 py-0.5 text-xs text-red-500 hover:border-red-300 hover:bg-red-50 transition-colors">删除</button></td></tr>) : <tr><td colSpan={8} className="py-10 text-center text-sm text-slate-400">这个日期范围内没有支出记录</td></tr>}</tbody></table></div>}
+      {sub === "expense" && <div className="overflow-x-auto rounded-xl border border-slate-200 bg-white"><table className="w-full text-left text-xs"><thead><tr className="border-b border-slate-200 bg-slate-50"><th className="px-4 py-2.5 font-semibold text-slate-600">对象</th><th className="px-4 py-2.5 font-semibold text-slate-600">明细</th><th className="px-4 py-2.5 font-semibold text-slate-600">金额</th><th className="px-4 py-2.5 font-semibold text-slate-600">类型</th><th className="px-4 py-2.5 font-semibold text-slate-600">方式</th><th className="px-4 py-2.5 font-semibold text-slate-600">办公室</th><th className="px-4 py-2.5 font-semibold text-slate-600">日期</th><th className="px-4 py-2.5 font-semibold text-slate-600">操作</th></tr></thead><tbody>{filteredExpenses.length ? filteredExpenses.map((item) => <tr key={item.id} className="border-b border-slate-100 last:border-b-0"><td className="px-4 py-2.5 text-slate-700">{item.target}</td><td className="px-4 py-2.5 text-slate-500">{item.detail}</td><td className="px-4 py-2.5 font-semibold text-rose-600">{formatMoney(item.amount)}</td><td className="px-4 py-2.5 text-slate-600">{item.expense_type}</td><td className="px-4 py-2.5 text-slate-600">{item.payment_method}</td><td className="px-4 py-2.5 text-slate-600">{item.office ? "是" : "否"}</td><td className="px-4 py-2.5 text-slate-500">{item.expense_date}</td><td className="px-4 py-2.5"><div className="flex items-center gap-2">{confirmingExpenseId === item.id ? <><button onClick={() => deleteExpense(item.id)} className="rounded border border-red-400 bg-red-500 px-2 py-0.5 text-xs font-semibold text-white hover:bg-red-600 transition-colors">确认</button><button onClick={() => setConfirmingExpenseId(null)} className="rounded border border-slate-200 px-2 py-0.5 text-xs text-slate-500 hover:border-slate-300 transition-colors">取消</button></> : <button onClick={() => setConfirmingExpenseId(item.id)} className="rounded border border-red-100 px-2 py-0.5 text-xs text-red-500 hover:border-red-300 hover:bg-red-50 transition-colors">删除</button>}</div></td></tr>) : <tr><td colSpan={8} className="py-10 text-center text-sm text-slate-400">这个日期范围内没有支出记录</td></tr>}</tbody></table></div>}
       {sub === "cash" && <div className="overflow-x-auto rounded-xl border border-slate-200 bg-white"><table className="w-full text-left text-xs"><thead><tr className="border-b border-slate-200 bg-slate-50"><th className="px-4 py-2.5 font-semibold text-slate-600">类型</th><th className="px-4 py-2.5 font-semibold text-slate-600">金额</th><th className="px-4 py-2.5 font-semibold text-slate-600">日期</th><th className="px-4 py-2.5 font-semibold text-slate-600">备注</th></tr></thead><tbody>{filteredCashEntries.length ? filteredCashEntries.map((item) => <tr key={item.id} className="border-b border-slate-100 last:border-b-0"><td className="px-4 py-2.5"><span className={`rounded-full px-2 py-0.5 text-[11px] font-semibold ${item.type === "收入" ? "bg-green-50 text-green-700" : "bg-rose-50 text-rose-700"}`}>{item.type}</span></td><td className={`px-4 py-2.5 font-semibold ${item.type === "收入" ? "text-green-600" : "text-rose-600"}`}>{formatMoney(item.amount)}</td><td className="px-4 py-2.5 text-slate-500">{item.date}</td><td className="px-4 py-2.5 text-slate-500">{item.note ?? "-"}</td></tr>) : <tr><td colSpan={4} className="py-10 text-center text-sm text-slate-400">这个日期范围内没有现金流水</td></tr>}</tbody></table></div>}
       {sub === "ledger" && <div className="overflow-x-auto rounded-xl border border-slate-200 bg-white"><table className="w-full text-left text-xs"><thead><tr className="border-b border-slate-200 bg-slate-50"><th className="px-4 py-2.5 font-semibold text-slate-600">月份</th><th className="px-4 py-2.5 font-semibold text-slate-600">收入</th><th className="px-4 py-2.5 font-semibold text-slate-600">支出</th><th className="px-4 py-2.5 font-semibold text-slate-600">净额</th><th className="px-4 py-2.5 font-semibold text-slate-600">工资</th><th className="px-4 py-2.5 font-semibold text-slate-600">净利润</th></tr></thead><tbody>{ledgerRows.map((item) => <tr key={item.month} className="border-b border-slate-100 last:border-b-0"><td className="px-4 py-2.5 font-medium text-slate-700">{item.month}</td><td className="px-4 py-2.5 text-green-600">{formatMoney(item.income)}</td><td className="px-4 py-2.5 text-rose-600">{formatMoney(item.expense)}</td><td className="px-4 py-2.5 text-slate-700">{formatMoney(item.net)}</td><td className="px-4 py-2.5 text-amber-600">{formatMoney(item.wage)}</td><td className={`px-4 py-2.5 font-semibold ${item.profit >= 0 ? "text-emerald-600" : "text-rose-600"}`}>{formatMoney(item.profit)}</td></tr>)}</tbody></table></div>}
       {sub === "receivables" && (
@@ -3245,11 +3252,12 @@ function ClientsSection({ clients, setClients, suppliers, setSuppliers, orders, 
   const [clientDraft, setClientDraft] = useState({ name: "", contact: "", phone: "", wechat: "", address: "", note: "" });
   const supplierCategoryOptions = useMemo(() => getSupplierCategoryOptions(settings), [settings]);
   const [supplierDraft, setSupplierDraft] = useState({ name: "", category: supplierCategoryOptions[0] ?? "布料", contact_person: "", phone: "", email: "", website: "", address: "", remark: "" });
-  const [supplierPurchaseDraft, setSupplierPurchaseDraft] = useState({ supplier: suppliers[0]?.name ?? "", item_name: "", quantity: "", unit_price: "", purchase_date: today, status: "未付款", office: false, note: "" });
+  const [supplierPurchaseDraft, setSupplierPurchaseDraft] = useState({ supplier: suppliers[0]?.name ?? "", detail: "", amount: "", payment_method: "转账", purchase_date: today, office: false, note: "" });
   const [showClientModal, setShowClientModal] = useState(false);
   const [showSupplierModal, setShowSupplierModal] = useState(false);
   const [editingClientId, setEditingClientId] = useState<string | null>(null);
   const [editingSupplierId, setEditingSupplierId] = useState<string | null>(null);
+  const [confirmingSupplierId, setConfirmingSupplierId] = useState<string | null>(null);
   const [showSupplierPurchaseModal, setShowSupplierPurchaseModal] = useState(false);
   const [clientSearch, setClientSearch] = useState("");
   const [clientPage, setClientPage] = useState(1);
@@ -3337,23 +3345,21 @@ function ClientsSection({ clients, setClients, suppliers, setSuppliers, orders, 
   }
 
   function deleteSupplier(supplier: SupplierRecord) {
-    if (!window.confirm(`确认删除供应商“${supplier.name}”吗？`)) return;
     setSuppliers((prev) => prev.filter((item) => item.id !== supplier.id));
+    setConfirmingSupplierId(null);
   }
 
   function openSupplierPurchase(supplier: SupplierRecord) {
-    setSupplierPurchaseDraft({ supplier: supplier.name, item_name: "", quantity: "", unit_price: "", purchase_date: today, status: "未付款", office: false, note: "" });
+    setSupplierPurchaseDraft({ supplier: supplier.name, detail: "", amount: "", payment_method: "转账", purchase_date: today, office: false, note: "" });
     setShowSupplierPurchaseModal(true);
   }
 
   function addSupplierPurchase() {
-    const quantity = Number(supplierPurchaseDraft.quantity) || 0;
-    const unitPrice = Number(supplierPurchaseDraft.unit_price) || 0;
-    if (!supplierPurchaseDraft.supplier || !supplierPurchaseDraft.item_name.trim() || quantity <= 0) return;
-    const total = Number((quantity * unitPrice).toFixed(2));
-    setPurchases((prev) => [{ id: `PO-${new Date().getFullYear()}-${String(prev.length + 1).padStart(3, "0")}`, supplier: supplierPurchaseDraft.supplier, item_name: supplierPurchaseDraft.item_name.trim(), quantity, unit: "个", unit_price: unitPrice, total_amount: total, purchase_date: supplierPurchaseDraft.purchase_date, status: supplierPurchaseDraft.status }, ...prev]);
+    const amount = Number(supplierPurchaseDraft.amount) || 0;
+    if (!supplierPurchaseDraft.supplier || amount <= 0) return;
+    setPurchases((prev) => [{ id: `PO-${new Date().getFullYear()}-${String(prev.length + 1).padStart(3, "0")}`, supplier: supplierPurchaseDraft.supplier, item_name: supplierPurchaseDraft.detail.trim() || "采购支出", quantity: 1, unit: "笔", unit_price: amount, total_amount: amount, purchase_date: supplierPurchaseDraft.purchase_date, status: supplierPurchaseDraft.payment_method }, ...prev]);
     if (supplierPurchaseDraft.office) {
-      setCashEntries((prev) => [{ id: `CASH-${new Date().getFullYear()}-${String(prev.length + 1).padStart(3, "0")}`, type: "转出", amount: total, date: supplierPurchaseDraft.purchase_date, note: supplierPurchaseDraft.note || `${supplierPurchaseDraft.supplier} 采购支出` }, ...prev]);
+      setCashEntries((prev) => [{ id: `CASH-${new Date().getFullYear()}-${String(prev.length + 1).padStart(3, "0")}`, type: "转出", amount, date: supplierPurchaseDraft.purchase_date, note: supplierPurchaseDraft.note || `${supplierPurchaseDraft.supplier} 采购支出` }, ...prev]);
     }
     setShowSupplierPurchaseModal(false);
   }
@@ -3617,11 +3623,10 @@ function ClientsSection({ clients, setClients, suppliers, setSuppliers, orders, 
             </div>
             <div className="grid gap-2 sm:grid-cols-2 xl:grid-cols-3">
               <SmallInput value={supplierPurchaseDraft.supplier} onChange={(v) => setSupplierPurchaseDraft((d) => ({ ...d, supplier: v }))} placeholder="供应商" />
-              <SmallInput value={supplierPurchaseDraft.item_name} onChange={(v) => setSupplierPurchaseDraft((d) => ({ ...d, item_name: v }))} placeholder="品名" />
-              <SmallInput value={supplierPurchaseDraft.quantity} onChange={(v) => setSupplierPurchaseDraft((d) => ({ ...d, quantity: v }))} type="number" placeholder="数量" />
-              <SmallInput value={supplierPurchaseDraft.unit_price} onChange={(v) => setSupplierPurchaseDraft((d) => ({ ...d, unit_price: v }))} type="number" placeholder="单价" />
+              <SmallInput value={supplierPurchaseDraft.detail} onChange={(v) => setSupplierPurchaseDraft((d) => ({ ...d, detail: v }))} placeholder="采购明细" />
+              <SmallInput value={supplierPurchaseDraft.amount} onChange={(v) => setSupplierPurchaseDraft((d) => ({ ...d, amount: v }))} type="number" placeholder="总价" />
+              <SmallSelect value={supplierPurchaseDraft.payment_method} onChange={(v) => setSupplierPurchaseDraft((d) => ({ ...d, payment_method: v }))} options={PAYMENT_METHODS} />
               <SmallInput value={supplierPurchaseDraft.purchase_date} onChange={(v) => setSupplierPurchaseDraft((d) => ({ ...d, purchase_date: v }))} type="date" />
-              <SmallSelect value={supplierPurchaseDraft.status} onChange={(v) => setSupplierPurchaseDraft((d) => ({ ...d, status: v }))} options={["未付款", "部分付款", "已付款"]} />
             </div>
             <div className="mt-2"><SmallInput value={supplierPurchaseDraft.note} onChange={(v) => setSupplierPurchaseDraft((d) => ({ ...d, note: v }))} placeholder="备注（可选）" /></div>
             <label className="mt-3 flex items-center gap-2 text-xs text-slate-600"><input type="checkbox" checked={supplierPurchaseDraft.office} onChange={(e) => setSupplierPurchaseDraft((d) => ({ ...d, office: e.target.checked }))} /> 这笔采购从办公室抽屉里转出</label>
@@ -3963,7 +3968,7 @@ function ClientsSection({ clients, setClients, suppliers, setSuppliers, orders, 
                       <div className="flex flex-wrap gap-2">
                         <button onClick={() => openSupplierPurchase(item)} className="rounded border border-emerald-100 px-2 py-1 text-[11px] text-emerald-600 hover:border-emerald-300 hover:bg-emerald-50 transition-colors">新建采购</button>
                         <button onClick={() => openEditSupplier(item)} className="rounded border border-slate-200 px-2 py-1 text-[11px] text-slate-600 hover:border-slate-300 hover:bg-slate-50 transition-colors">编辑</button>
-                        <button onClick={() => deleteSupplier(item)} className="rounded border border-rose-100 px-2 py-1 text-[11px] text-rose-500 hover:border-rose-300 hover:bg-rose-50 transition-colors">删除</button>
+                        {confirmingSupplierId === item.id ? <><button onClick={() => deleteSupplier(item)} className="rounded border border-red-400 bg-red-500 px-2 py-1 text-[11px] font-semibold text-white hover:bg-red-600 transition-colors">确认</button><button onClick={() => setConfirmingSupplierId(null)} className="rounded border border-slate-200 px-2 py-1 text-[11px] text-slate-500 hover:border-slate-300 transition-colors">取消</button></> : <button onClick={() => setConfirmingSupplierId(item.id)} className="rounded border border-rose-100 px-2 py-1 text-[11px] text-rose-500 hover:border-rose-300 hover:bg-rose-50 transition-colors">删除</button>}
                       </div>
                     </td>
                   </tr>
@@ -4530,12 +4535,9 @@ function AppointmentsSection({ appointments, setAppointments, clients, prefillCl
   }
 
   async function copyAppointmentList() {
-    const text = [
-      "客户名 | 电话 | 地址 | 预约时间 | 状态 | 描述",
-      ...filteredAppointments.map((item) => [item.client_name, item.phone ?? "", item.address ?? "", formatAppointmentDate(item.appointment_date), getAppointmentStatus(item.appointment_date), item.description ?? ""].join(" | ")),
-    ].join("\n");
+    const text = filteredAppointments.map((item) => formatAppointmentCopyText(item)).join("\n");
     const ok = await copyPlainText(text);
-    setCopyState(ok ? `已复制 ${filteredAppointments.length} 条预约列表` : "复制失败");
+    setCopyState(ok ? `已复制 ${filteredAppointments.length} 条预约信息` : "复制失败");
   }
 
   function deleteAppointment(item: MeasurementAppointmentRecord) {
@@ -4909,7 +4911,7 @@ export default function DashboardBizPage() {
               employees={employees}
             />
           )}
-          {section === "orders" && <OrdersSection orders={orders} materials={materials} clients={clients} setOrders={setOrders} settings={settings} printArchives={printArchives} setPrintArchives={setPrintArchives} setCashEntries={setCashEntries} />}
+          {section === "orders" && <OrdersSection orders={orders} materials={materials} clients={clients} setOrders={setOrders} settings={settings} printArchives={printArchives} setPrintArchives={setPrintArchives} setCashEntries={setCashEntries} setExpenses={setExpenses} />}
           {section === "finance" && (
             <FinanceSection
               orders={orders}

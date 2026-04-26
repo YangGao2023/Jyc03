@@ -88,6 +88,23 @@ function mapRows<T>(items: T[], mapRow: (item: T) => Array<string | number>) {
   return items.map(mapRow);
 }
 
+type TabularSchemaConfig = {
+  title: string;
+  filePrefix: string;
+  columns: string[];
+  exportRows: () => Array<Array<string | number>>;
+  printRows: () => Array<Array<string | number>>;
+};
+
+type SplitTabularSchemaConfig = {
+  title: string;
+  filePrefix: string;
+  exportColumns: string[];
+  printColumns: string[];
+  exportRows: () => Array<Array<string | number>>;
+  printRows: () => Array<Array<string | number>>;
+};
+
 // ─── primitives ──────────────────────────────────────────────────────────────
 
 function PageSection({ children }: { children: React.ReactNode }) {
@@ -1687,7 +1704,7 @@ function OrdersSection({
   const [createType, setCreateType] = useState<"定制单" | "批发单" | null>(null);
   const [deleteConfirm, setDeleteConfirm] = useState<string | null>(null);
 
-  const orderListConfig = {
+  const orderListConfig: SplitTabularSchemaConfig = {
     title: "订单列表",
     filePrefix: "biz-orders",
     exportColumns: ["订单号", "类型", "客户", "电话", "总额", "已付", "余款", "状态", "日期"],
@@ -2045,7 +2062,7 @@ function FinanceSection({ orders, expenses, setExpenses, cashEntries, setCashEnt
     const wage = payrolls.filter((item) => item.month === month).reduce((sum, item) => sum + item.net_salary, 0);
     return { month, income, expense, net: income - expense, wage, profit: income - expense - wage };
   });
-  const financeConfigs: Record<FinanceSub, { title: string; filePrefix: string; columns: string[]; exportRows: () => Array<Array<string | number>>; printRows: () => Array<Array<string | number>> }> = {
+  const financeConfigs: Record<FinanceSub, TabularSchemaConfig> = {
     income: {
       title: "订单收入",
       filePrefix: "biz-finance-income",
@@ -2134,7 +2151,7 @@ function ClientsSection({ clients, setClients, suppliers, setSuppliers, orders, 
   const [supplierDraft, setSupplierDraft] = useState({ name: "", category: "Fabric", contact_person: "", phone: "", address: "", remark: "" });
   const [clientSearch, setClientSearch] = useState("");
   const [selectedClientId, setSelectedClientId] = useState<string>(clients[0]?.id ?? "");
-  const contactConfigs: Record<ContactSub, { title: string; filePrefix: string; exportColumns: string[]; printColumns: string[]; exportRows: () => Array<Array<string | number>>; printRows: () => Array<Array<string | number>> }> = {
+  const contactConfigs: Record<ContactSub, SplitTabularSchemaConfig> = {
     clients: {
       title: "Client Directory",
       filePrefix: "biz-clients",
@@ -2253,7 +2270,7 @@ function MaterialsSection({ materials, setMaterials, purchases, setPurchases, su
   const [purchaseDraft, setPurchaseDraft] = useState({ supplier: suppliers[0]?.name ?? "", item_name: "", quantity: "", unit: "个", unit_price: "", purchase_date: today, status: "未付款" });
   const lowStockCount = materials.filter((item) => item.stock_quantity <= item.min_stock).length;
   const monthlyPurchase = purchases.filter((item) => item.purchase_date.startsWith(today.slice(0, 7))).reduce((sum, item) => sum + item.total_amount, 0);
-  const materialConfigs: Record<MaterialSub, { title: string; filePrefix: string; exportColumns: string[]; printColumns: string[]; exportRows: () => Array<Array<string | number>>; printRows: () => Array<Array<string | number>> }> = {
+  const materialConfigs: Record<MaterialSub, SplitTabularSchemaConfig> = {
     inventory: {
       title: "库存清单",
       filePrefix: "biz-materials",
@@ -2367,7 +2384,7 @@ function AppointmentsSection({ appointments, setAppointments, clients }: { appoi
     setDraft({ client_id: "", client_name: "", phone: "", address: "", appointment_date: `${todayIso()}T10:00`, description: "" });
   }
 
-  const appointmentConfig = {
+  const appointmentConfig: TabularSchemaConfig = {
     title: "测量预约",
     filePrefix: "biz-appointments",
     columns: ["客户", "电话", "地址", "预约时间", "状态", "说明"],
@@ -2399,7 +2416,7 @@ function EmployeesSection({ employees, setEmployees, payrolls, setPayrolls }: { 
   const pendingSalary = payrolls.filter((item) => item.month === month).reduce((sum, item) => sum + item.net_salary, 0);
   const paidSalary = payrolls.filter((item) => item.month === month && item.payment_status === "已发放").reduce((sum, item) => sum + item.net_salary, 0);
   const contractAlert = employees.filter((item) => item.contract_end && item.contract_end <= contractAlertCutoff).length;
-  const employeeConfigs: Record<StaffSub, { title: string; filePrefix: string; columns: string[]; exportRows: () => Array<Array<string | number>>; printRows: () => Array<Array<string | number>> }> = {
+  const employeeConfigs: Record<StaffSub, TabularSchemaConfig> = {
     staff: {
       title: "员工档案",
       filePrefix: "biz-employees",
@@ -2433,7 +2450,7 @@ function QuotesSection({ quotes, setQuotes, showcases, setShowcases, settings }:
   const [showcaseDraft, setShowcaseDraft] = useState({ name: "", category: "窗帘", image_count: "", description: "", status: "待整理" });
   function addQuote() { if (!quoteDraft.client_name.trim() || !quoteDraft.title.trim()) return; setQuotes((prev) => [{ id: `QT-${new Date().getFullYear()}-${String(prev.length + 1).padStart(3, "0")}`, client_name: quoteDraft.client_name.trim(), title: quoteDraft.title.trim(), amount: Number(quoteDraft.amount) || 0, created_at: today, valid_until: quoteDraft.valid_until || today, status: quoteDraft.status }, ...prev]); setQuoteDraft({ client_name: "", title: "", amount: "", valid_until: today, status: "草稿" }); }
   function addShowcase() { if (!showcaseDraft.name.trim()) return; setShowcases((prev) => [{ id: `GAL-${String(prev.length + 1).padStart(3, "0")}`, name: showcaseDraft.name.trim(), category: showcaseDraft.category, image_count: Number(showcaseDraft.image_count) || 0, description: showcaseDraft.description || undefined, created_at: today, status: showcaseDraft.status }, ...prev]); setShowcaseDraft({ name: "", category: "窗帘", image_count: "", description: "", status: "待整理" }); }
-  const quoteConfigs: Record<QuoteSub, { title: string; filePrefix: string; exportColumns: string[]; printColumns: string[]; exportRows: () => Array<Array<string | number>>; printRows: () => Array<Array<string | number>> }> = {
+  const quoteConfigs: Record<QuoteSub, SplitTabularSchemaConfig> = {
     quotes: {
       title: "报价单列表",
       filePrefix: "biz-quotes",

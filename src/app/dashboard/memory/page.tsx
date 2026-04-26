@@ -88,6 +88,7 @@ export default async function DashboardMemoryPage() {
               <span className="rounded-full bg-white/10 px-3 py-1 font-semibold text-white">已移交 Promise {handedOffPromises}</span>
               <span className="rounded-full bg-white/10 px-3 py-1 font-semibold text-white">待消费 Wake {pendingWakeCount}</span>
               <span className="rounded-full bg-white/10 px-3 py-1 font-semibold text-white">Watchdog 告警 {watchdogAlerts.length}</span>
+              <a href="/dashboard/overview" className="rounded-full border border-white/10 px-3 py-1 font-semibold text-sky-200 hover:bg-white/10">回总览页</a>
               <a href="/dashboard/system" className="rounded-full border border-white/10 px-3 py-1 font-semibold text-sky-200 hover:bg-white/10">去系统页核对</a>
             </div>
           </div>

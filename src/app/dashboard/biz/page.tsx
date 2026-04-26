@@ -2062,6 +2062,25 @@ function FinanceSection({ orders, expenses, setExpenses, cashEntries, setCashEnt
       ...receivableOrders.map((o) => [o.client_name, o.order_number, o.total_after_tax ?? o.total_price ?? 0, o.amount_paid ?? 0, o.balance ?? 0, o.order_date ?? "", o.status ?? ""]),
     ]);
   }
+  function printFinance() {
+    if (sub === "income") {
+      openPrintWindow(buildSimpleTablePrintHTML("订单收入", `共 ${paymentRows.length} 条`, ["订单号", "客户", "金额", "支付方式", "日期", "明细", "类型"], paymentRows.map(({ order, record }) => [order.order_number, order.client_name, formatMoney(record.amount), record.method, record.date, record.note ?? "-", record.type === "refund" ? "退款" : "收款"])));
+      return;
+    }
+    if (sub === "expense") {
+      openPrintWindow(buildSimpleTablePrintHTML("支出清单", `共 ${expenses.length} 条`, ["对象", "明细", "金额", "类型", "付款方式", "日期", "备注"], expenses.map((item) => [item.target, item.detail, formatMoney(item.amount), item.expense_type, item.payment_method, item.expense_date, item.remark ?? "-"])));
+      return;
+    }
+    if (sub === "cash") {
+      openPrintWindow(buildSimpleTablePrintHTML("现金管理", `共 ${cashEntries.length} 条`, ["类型", "金额", "日期", "备注"], cashEntries.map((item) => [item.type, formatMoney(item.amount), item.date, item.note ?? "-"])));
+      return;
+    }
+    if (sub === "ledger") {
+      openPrintWindow(buildSimpleTablePrintHTML("月度账单", `共 ${ledgerRows.length} 条`, ["月份", "收入", "支出", "净额", "工资", "净利润"], ledgerRows.map((item) => [item.month, formatMoney(item.income), formatMoney(item.expense), formatMoney(item.net), formatMoney(item.wage), formatMoney(item.profit)])));
+      return;
+    }
+    openPrintWindow(buildSimpleTablePrintHTML("应收款", `共 ${receivableOrders.length} 条`, ["客户", "订单号", "总额", "已付", "余款", "下单日期", "状态"], receivableOrders.map((o) => [o.client_name, o.order_number, formatMoney(o.total_after_tax ?? o.total_price ?? 0), formatMoney(o.amount_paid ?? 0), formatMoney(o.balance ?? 0), o.order_date ?? "-", o.status ?? "-"])));
+  }
   const [sub, setSub] = useState<FinanceSub>("income");
   const today = new Date().toISOString().slice(0, 10);
   const [draft, setDraft] = useState<FinanceDraft>({ target: "", detail: "", amount: "", expense_type: "采购", payment_method: "转账", expense_date: today, remark: "" });
@@ -2092,7 +2111,7 @@ function FinanceSection({ orders, expenses, setExpenses, cashEntries, setCashEnt
 
   return (
     <div>
-      <SectionHeader eyebrow="Finance Management" title="收支管理" actions={<><ActionBtn onClick={exportFinance}>↓ 导出当前表</ActionBtn><ActionBtn tone="primary" onClick={addExpense}>+ 录入支出</ActionBtn></>} />
+      <SectionHeader eyebrow="Finance Management" title="收支管理" actions={<><ActionBtn onClick={exportFinance}>↓ 导出当前表</ActionBtn><ActionBtn onClick={printFinance}>🖨 打印当前表</ActionBtn><ActionBtn tone="primary" onClick={addExpense}>+ 录入支出</ActionBtn></>} />
       <StatStrip items={[{ label: "订单收入", value: formatMoney(totalIncome), accent: "text-green-600" }, { label: "支出合计", value: formatMoney(totalExpense), accent: "text-red-600" }, { label: "现金余额", value: formatMoney(cashBalance), accent: "text-sky-600" }, { label: "应收余款", value: formatMoney(totalBalance), accent: "text-amber-600" }, { label: "账面利润", value: formatMoney(totalIncome - totalExpense - payrollAmount), accent: "text-emerald-600" }]} />
       <div className="mb-4 grid gap-4 xl:grid-cols-[1.1fr_2fr]">
         <PanelCard title="新增支出" note="现金付款会自动补一条现金流水。">

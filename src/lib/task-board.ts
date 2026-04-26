@@ -1,5 +1,6 @@
-import { existsSync, readFileSync, writeFileSync } from "node:fs";
+import { writeFileSync } from "node:fs";
 import path from "node:path";
+import { safeRead } from "@/lib/fs-utils";
 
 export type TaskCard = {
   id: string;
@@ -25,10 +26,6 @@ export type EventItem = {
 
 export const TASK_QUEUE_PATH = path.join(process.cwd(), "..", "共享协作区", "任务", "任务队列.md");
 export const EVENT_STREAM_PATH = path.join(process.cwd(), "..", "共享协作区", "日志", "事件流.md");
-
-export function safeRead(filePath: string) {
-  return existsSync(filePath) ? readFileSync(filePath, "utf8") : "";
-}
 
 export function nowStamp() {
   return new Date().toISOString().slice(0, 16).replace("T", " ");

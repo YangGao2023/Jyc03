@@ -1,5 +1,5 @@
 import path from "node:path";
-import { safeRead } from "@/lib/task-board";
+import { safeRead } from "@/lib/fs-utils";
 
 export type TodoItem = {
   id: string;

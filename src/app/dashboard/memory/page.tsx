@@ -1,12 +1,8 @@
-import { existsSync, readFileSync } from "node:fs";
 import path from "node:path";
 import { DashboardCard, DashboardCardTitle, DashboardPageHeader } from "../components";
+import { safeRead } from "@/lib/fs-utils";
 import { TASK_QUEUE_PATH, parseTaskQueue } from "@/lib/task-board";
 import { TODO_PATH, parseTodoBoard, readTodoBoard } from "@/lib/todo-board";
-
-function safeRead(filePath: string) {
-  return existsSync(filePath) ? readFileSync(filePath, "utf8") : "文件不存在";
-}
 
 function clipLines(raw: string, lines = 18) {
   const list = raw.split(/\r?\n/).slice(0, lines);
@@ -48,7 +44,7 @@ const docs = [
 ] as const;
 
 export default async function DashboardMemoryPage() {
-  const panels = docs.map(([label, file]) => ({ label, file, content: safeRead(file) }));
+  const panels = docs.map(([label, file]) => ({ label, file, content: safeRead(file, "文件不存在") }));
   const previewLines = 18;
   const todoItems = parseTodoBoard(readTodoBoard());
   const activeTodos = todoItems.filter((todo) => todo.section === "active");

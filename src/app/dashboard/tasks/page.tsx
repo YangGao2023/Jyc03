@@ -1,5 +1,6 @@
 import { DashboardCard, DashboardCardTitle, DashboardPageHeader } from "../components";
-import { EVENT_STREAM_PATH, TASK_QUEUE_PATH, getSortValue, parseEventStream, parseTaskQueue, safeRead } from "@/lib/task-board";
+import { safeRead } from "@/lib/fs-utils";
+import { EVENT_STREAM_PATH, TASK_QUEUE_PATH, getSortValue, parseEventStream, parseTaskQueue } from "@/lib/task-board";
 import { formatEasternTime } from "@/lib/time";
 import { parseTodoBoard, readTodoBoard } from "@/lib/todo-board";
 

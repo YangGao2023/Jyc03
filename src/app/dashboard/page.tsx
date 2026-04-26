@@ -1,7 +1,7 @@
-import { existsSync, readFileSync } from "node:fs";
 import path from "node:path";
 import { homedir } from "node:os";
 import net from "node:net";
+import { safeRead } from "@/lib/fs-utils";
 import { countTodoItems, readTodoBoard } from "@/lib/todo-board";
 import { countBlockedTaskItems, countEventItems, countTaskItems, readEventStream, readTaskQueue } from "@/lib/task-board";
 
@@ -40,10 +40,6 @@ const agents: AgentSpec[] = [
     fallbackPort: 18790,
   },
 ];
-
-function safeRead(filePath: string) {
-  return existsSync(filePath) ? readFileSync(filePath, "utf8") : "";
-}
 
 function getGatewayPort(configPath: string, fallbackPort: number) {
   try {

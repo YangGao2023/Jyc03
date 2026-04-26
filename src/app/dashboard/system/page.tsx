@@ -1,12 +1,18 @@
-import { existsSync, readFileSync } from "node:fs";
 import path from "node:path";
 import { homedir } from "node:os";
 import net from "node:net";
 import { revalidatePath } from "next/cache";
 import { DashboardCard, DashboardCardTitle, DashboardPageHeader } from "../components";
-import { enqueueMessage, readQueue } from "@/lib/agent-bridge";
+import { ConfirmSubmitButton } from "../ConfirmSubmitButton";
+import { safeRead } from "@/lib/fs-utils";
+
+export const dynamic = "force-dynamic";
+export const revalidate = 0;
+import { enqueueMessage, readQueue, writeQueue } from "@/lib/agent-bridge";
 import { readAgentStatuses } from "@/lib/agent-status";
-import { appendEvent, readEventChain } from "@/lib/event-store";
+import { cleanDiscussionReplyText, deriveDiscussionStatus, discussionParticipantStates as buildDiscussionParticipantStates, extractTopicId, isFinalDiscussionReply, typingParticipants as buildTypingParticipants } from "@/lib/discussion-semantics";
+import { readDiscussionThreads, upsertDiscussionThread, type DiscussionStatus, type DiscussionThread } from "@/lib/discussion-store";
+import { appendEvent, clearEventChain, readEventChain } from "@/lib/event-store";
 import { formatEasternTime } from "@/lib/time";
 
 const profileSpecs = [
@@ -16,20 +22,6 @@ const profileSpecs = [
     profile: "A3",
     configPath: path.join(homedir(), ".openclaw-A3", "openclaw.json"),
     fallbackPort: 18789,
-  },
-  {
-    key: "aben",
-    name: "阿本",
-    profile: "default",
-    configPath: path.join(homedir(), ".openclaw", "openclaw.json"),
-    fallbackPort: 19000,
-  },
-  {
-    key: "xiaosi",
-    name: "小四",
-    profile: "Xiaosi",
-    configPath: path.join(homedir(), ".openclaw-Xiaosi", "openclaw.json"),
-    fallbackPort: 18790,
   },
 ] as const;
 
@@ -57,10 +49,25 @@ type SentHistoryItem = {
   relatedInbox?: Awaited<ReturnType<typeof readQueue>>[number];
 };
 
+type DiscussionTimelineItem = {
+  id: string;
+  createdAt: string;
+  from: string;
+  to: string;
+  kind: string;
+  text: string;
+  lane: "outbox" | "inbox";
+  status: string;
+};
+
+type DiscussionParticipantState = {
+  participant: string;
+  state: "replied" | "pending";
+};
+
 const COMMAND_RECIPIENT_OPTIONS = [
   { value: "阿三", label: "阿三（可执行）" },
-  { value: "阿本", label: "阿本（语音/TTS 线）" },
-  { value: "小四", label: "小四（本地执行线）" },
+  { value: "零号", label: "零号（云端）" },
 ] as const;
 
 async function sendCommandAction(formData: FormData) {
@@ -98,8 +105,110 @@ async function sendCommandAction(formData: FormData) {
   revalidatePath("/dashboard/system");
 }
 
-function safeRead(filePath: string) {
-  return existsSync(filePath) ? readFileSync(filePath, "utf8") : "";
+async function createDiscussionAction(formData: FormData) {
+  "use server";
+
+  const title = String(formData.get("title") || "").trim();
+  const prompt = String(formData.get("prompt") || "").trim();
+  const participants = COMMAND_RECIPIENT_OPTIONS.map((item) => item.value);
+  if (!title || !prompt) {
+    return;
+  }
+
+  const threadId = `topic-${Date.now()}`;
+  await upsertDiscussionThread({
+    id: threadId,
+    title,
+    prompt,
+    participants,
+    status: "open",
+    createdBy: "YANG",
+    summary: "等待阿三与零号围绕同一问题开始讨论",
+  });
+
+  for (const to of participants) {
+    const message = await enqueueMessage("outbox", {
+      from: "YANG",
+      to,
+      kind: "discussion",
+      text: prompt,
+      meta: {
+        source: "owner-discussion",
+        topicId: threadId,
+        topicTitle: title,
+        discussionStatus: "open",
+        participants,
+      },
+    });
+    await appendEvent({
+      actor: "YANG",
+      target: to,
+      promiseId: message.id,
+      type: "promise_created",
+      result: "ok",
+      summary: `Owner opened discussion via website: ${title} :: ${prompt}`,
+    });
+  }
+
+  revalidatePath("/dashboard/system");
+}
+
+async function updateDiscussionStatusAction(formData: FormData) {
+  "use server";
+
+  const threadId = String(formData.get("threadId") || "").trim();
+  const nextStatus = String(formData.get("status") || "").trim() as DiscussionStatus;
+  const title = String(formData.get("title") || "").trim();
+  const prompt = String(formData.get("prompt") || "").trim();
+  const participants = String(formData.get("participants") || "")
+    .split(",")
+    .map((item) => item.trim())
+    .filter(Boolean);
+
+  if (!threadId || !title || !prompt || !participants.length || !["open", "deciding", "closed"].includes(nextStatus)) {
+    return;
+  }
+
+  await upsertDiscussionThread({
+    id: threadId,
+    title,
+    prompt,
+    participants,
+    status: nextStatus,
+    createdBy: "YANG",
+    summary: nextStatus === "closed" ? "讨论已收口，不再继续自动来回" : `讨论状态已切换到 ${nextStatus}`,
+  });
+
+  if (nextStatus === "closed") {
+    const outbox = await readQueue("outbox");
+    await writeQueue(
+      "outbox",
+      outbox.filter((message) => extractTopicId((message.meta || null) as Record<string, unknown> | null) !== threadId),
+    );
+  }
+
+  await appendEvent({
+    actor: "YANG",
+    target: participants.join(", "),
+    promiseId: threadId,
+    type: "decision",
+    result: "ok",
+    summary: `Discussion ${threadId} status -> ${nextStatus}`,
+  });
+
+  revalidatePath("/dashboard/system");
+}
+
+async function clearCommandCenterHistoryAction() {
+  "use server";
+
+  await Promise.all([
+    writeQueue("inbox", []),
+    writeQueue("outbox", []),
+    clearEventChain(),
+  ]);
+
+  revalidatePath("/dashboard/system");
 }
 
 function getGatewayPort(configPath: string, fallbackPort: number) {
@@ -237,6 +346,9 @@ function keepLatestResultPerCommand(messages: Awaited<ReturnType<typeof readQueu
   const latestResultByCommandId = new Map<string, (typeof messages)[number]>();
 
   for (const message of messages) {
+    if (extractTopicId((message.meta || null) as Record<string, unknown> | null)) {
+      continue;
+    }
     const commandId = String(message.meta?.commandId || "").trim();
     if (String(message.kind || "").toLowerCase() !== "result" || !commandId) {
       continue;
@@ -245,6 +357,9 @@ function keepLatestResultPerCommand(messages: Awaited<ReturnType<typeof readQueu
   }
 
   return messages.filter((message) => {
+    if (extractTopicId((message.meta || null) as Record<string, unknown> | null)) {
+      return false;
+    }
     const commandId = String(message.meta?.commandId || "").trim();
     if (String(message.kind || "").toLowerCase() !== "result" || !commandId) {
       return true;
@@ -274,6 +389,32 @@ function extractCommandKindFromSummary(summary: string) {
   return match?.[1]?.toLowerCase() || "command";
 }
 
+function summarizeDiscussionStatus(status: DiscussionStatus) {
+  if (status === "open") return "开放讨论";
+  if (status === "deciding") return "正在收口";
+  return "已关闭";
+}
+
+function discussionStatusBadge(status: DiscussionStatus) {
+  if (status === "open") return "bg-sky-100 text-sky-800";
+  if (status === "deciding") return "bg-amber-100 text-amber-800";
+  return "bg-emerald-100 text-emerald-800";
+}
+
+function identityChip(name: string) {
+  const normalized = String(name || "").trim();
+  if (normalized === "阿三") {
+    return { avatar: "三", tone: "bg-sky-100 text-sky-800", avatarTone: "bg-sky-600 text-white" };
+  }
+  if (normalized === "零号") {
+    return { avatar: "零", tone: "bg-emerald-100 text-emerald-800", avatarTone: "bg-emerald-600 text-white" };
+  }
+  if (normalized === "YANG") {
+    return { avatar: "Y", tone: "bg-slate-200 text-slate-800", avatarTone: "bg-slate-800 text-white" };
+  }
+  return { avatar: normalized.slice(0, 1) || "?", tone: "bg-slate-100 text-slate-700", avatarTone: "bg-slate-500 text-white" };
+}
+
 function summarizeMessageTitle(text: string) {
   const normalized = String(text || "").replace(/\s+/g, " ").trim();
   if (!normalized) return "空内容";
@@ -289,15 +430,43 @@ function emphasizeQuestion(text: string) {
   return `${normalized.slice(0, 60)}…`;
 }
 
+function buildDiscussionTimeline(thread: DiscussionThread, _outboxMessages: Awaited<ReturnType<typeof readQueue>>, inboxMessages: Awaited<ReturnType<typeof readQueue>>) {
+  const topicId = thread.id;
+  const entries: DiscussionTimelineItem[] = [];
+
+  for (const message of inboxMessages) {
+    const meta = (message.meta || null) as Record<string, unknown> | null;
+    if (extractTopicId(meta) !== topicId) continue;
+    if (!isFinalDiscussionReply({ kind: message.kind, text: message.text, meta })) continue;
+    const cleanedText = cleanDiscussionReplyText(message.text);
+    if (!cleanedText) continue;
+    entries.push({
+      id: message.id,
+      createdAt: message.createdAt,
+      from: message.from,
+      to: message.to,
+      kind: message.kind,
+      text: cleanedText,
+      lane: "inbox",
+      status: String(meta?.discussionStatus || (meta?.commandMeta && typeof meta.commandMeta === "object" ? (meta.commandMeta as Record<string, unknown>).discussionStatus : "") || thread.status),
+    });
+  }
+
+  return entries.sort((a, b) => Date.parse(a.createdAt) - Date.parse(b.createdAt));
+}
+
 function buildSentHistory(items: Awaited<ReturnType<typeof readEventChain>>, inboxMessages: Awaited<ReturnType<typeof readQueue>>) {
   const latestInboxByCommandId = new Map<string, (typeof inboxMessages)[number]>();
   for (const message of inboxMessages) {
+    if (extractTopicId((message.meta || null) as Record<string, unknown> | null)) {
+      continue;
+    }
     const commandId = String(message.meta?.commandId || "").trim();
     if (commandId) latestInboxByCommandId.set(commandId, message);
   }
 
   return items
-    .filter((item) => item.actor === "YANG" && item.type === "promise_created" && (item.target || "") !== "")
+    .filter((item) => item.actor === "YANG" && item.type === "promise_created" && (item.target || "") !== "" && !(item.summary || "").startsWith("Owner opened discussion via website:"))
     .map((item) => {
       const relatedInbox = item.promiseId ? latestInboxByCommandId.get(item.promiseId) : undefined;
       return {
@@ -323,6 +492,7 @@ export default async function DashboardSystemPage() {
   const inboxMessages = await readQueue("inbox").catch(() => []);
   const visibleInboxMessages = keepLatestResultPerCommand(inboxMessages);
   const eventChain = await readEventChain().catch(() => []);
+  const discussionThreads = await readDiscussionThreads().catch(() => []);
   const agentStatuses = await readAgentStatuses().catch(() => []);
   const sentHistory = buildSentHistory(eventChain, visibleInboxMessages);
   const visibleInboxCards = [...visibleInboxMessages].reverse();
@@ -346,113 +516,187 @@ export default async function DashboardSystemPage() {
         <DashboardPageHeader
           eyebrow="Owner Backend · System"
           title="系统页"
-          description="这一页开始真正回答老板最想知道的系统问题：谁在线，桥里现在堆了什么消息，谁在往谁那里派单。"
+          description="这一页先服务新的主目标，不是先派命令，而是先让阿三和零号围绕同一问题共享讨论、看到彼此、并能及时收口。"
           right={<a href="/dashboard" className="rounded-2xl border border-white/10 bg-white px-4 py-2 text-sm font-semibold text-slate-950">返回后台</a>}
         />
 
-        <form action={sendCommandAction} className="mt-4 grid gap-3 rounded-[24px] border border-white/10 bg-white/5 p-4 md:grid-cols-[220px_140px_1fr_auto]">
+        <form action={createDiscussionAction} className="mt-4 grid gap-3 rounded-[24px] border border-white/10 bg-white/5 p-4 md:grid-cols-[220px_1fr_auto]">
+          <div className="grid gap-2">
+            <input name="title" placeholder="讨论主题，例如：Zero 与阿三如何分工" className="rounded-xl border border-white/10 bg-slate-950/60 px-3 py-2 text-sm text-white outline-none placeholder:text-slate-400" required />
+            <p className="text-[11px] text-slate-400">先发起共享讨论，不直接默认成命令。</p>
+          </div>
+          <div className="grid gap-2">
+            <input name="prompt" placeholder="输入要让阿三与零号围绕同题讨论的问题" className="rounded-xl border border-white/10 bg-slate-950/60 px-3 py-2 text-sm text-white outline-none placeholder:text-slate-400" required />
+            <p className="text-[11px] text-slate-400">默认同时推给阿三和零号，topic 状态从 open 开始。</p>
+          </div>
+          <button type="submit" className="rounded-2xl bg-white px-4 py-2 text-sm font-semibold text-slate-950">发起共享讨论</button>
+        </form>
+
+        <form action={sendCommandAction} className="mt-3 grid gap-3 rounded-[24px] border border-white/10 bg-white/5 p-4 md:grid-cols-[220px_1fr_auto]">
           <div className="grid gap-2">
             <select name="to" defaultValue="阿三" className="rounded-xl border border-white/10 bg-slate-950/60 px-3 py-2 text-sm text-white outline-none" required>
               {COMMAND_RECIPIENT_OPTIONS.map((item) => (
                 <option key={item.value} value={item.value}>{item.label}</option>
               ))}
             </select>
-            <p className="text-[11px] text-slate-400">只显示当前有消费能力的收件人，零号暂不支持网站 outbox 直投。</p>
+            <p className="text-[11px] text-slate-400">当前前台只保留可直接发命令的目标。消息类型已固定为 command。</p>
           </div>
-          <select name="kind" className="rounded-xl border border-white/10 bg-slate-950/60 px-3 py-2 text-sm text-white outline-none">
-            <option value="command">command</option>
-            <option value="text">text</option>
-            <option value="voice">voice</option>
-          </select>
-          <input name="text" placeholder="直接给 Agent 的命令内容" className="rounded-xl border border-white/10 bg-slate-950/60 px-3 py-2 text-sm text-white outline-none placeholder:text-slate-400" required />
-          <button type="submit" className="rounded-2xl bg-white px-4 py-2 text-sm font-semibold text-slate-950">网站直接发命令</button>
+          <div className="grid gap-2">
+            <input name="text" placeholder="直接给 Agent 的命令内容" className="rounded-xl border border-white/10 bg-slate-950/60 px-3 py-2 text-sm text-white outline-none placeholder:text-slate-400" required />
+            <p className="text-[11px] text-slate-400">`text` 和 `voice` 暂不单独开放，避免误导。</p>
+          </div>
+          <>
+            <input type="hidden" name="kind" value="command" />
+            <button type="submit" className="rounded-2xl bg-white px-4 py-2 text-sm font-semibold text-slate-950">网站直接发命令</button>
+          </>
         </form>
 
-        <div className="mt-4 grid gap-3 md:grid-cols-2 xl:grid-cols-4">
-          <div className="rounded-2xl border border-white/10 bg-white/5 p-4">
-            <p className="text-[11px] uppercase tracking-[0.2em] text-slate-400">在线代理</p>
-            <p className="mt-2 text-2xl font-semibold text-white">{onlineCount} / {agents.length}</p>
+        <div className="mt-4 grid gap-2 xl:grid-cols-4">
+          <div className="rounded-xl border border-white/10 bg-white/5 px-3 py-2">
+            <div className="flex items-center justify-between gap-2">
+              <div>
+                <p className="text-[10px] text-slate-400">在线代理</p>
+                <p className="mt-0.5 text-base font-semibold text-white">{onlineCount} / {agents.length}</p>
+              </div>
+              <span className="rounded-full bg-emerald-500/15 px-2 py-0.5 text-[10px] font-semibold text-emerald-300">本地</span>
+            </div>
           </div>
-          <div className="rounded-2xl border border-white/10 bg-white/5 p-4">
-            <p className="text-[11px] uppercase tracking-[0.2em] text-slate-400">事件记录</p>
-            <p className="mt-2 text-2xl font-semibold text-white">{events.length} / {allEvents.length}</p>
+          <div className="rounded-xl border border-white/10 bg-white/5 px-3 py-2">
+            <div className="flex items-center justify-between gap-2">
+              <div>
+                <p className="text-[10px] text-slate-400">事件记录</p>
+                <p className="mt-0.5 text-base font-semibold text-white">{events.length} / {allEvents.length}</p>
+              </div>
+              <span className="rounded-full bg-sky-500/15 px-2 py-0.5 text-[10px] font-semibold text-sky-300">可见</span>
+            </div>
           </div>
-          <div className="rounded-2xl border border-white/10 bg-white/5 p-4">
-            <p className="text-[11px] uppercase tracking-[0.2em] text-slate-400">历史发件箱</p>
-            <p className="mt-2 text-2xl font-semibold text-white">{sentHistory.length}</p>
+          <div className="rounded-xl border border-white/10 bg-white/5 px-3 py-2">
+            <div className="flex items-center justify-between gap-2">
+              <div>
+                <p className="text-[10px] text-slate-400">讨论主题</p>
+                <p className="mt-0.5 text-base font-semibold text-white">{discussionThreads.length}</p>
+              </div>
+              <span className="rounded-full bg-violet-500/15 px-2 py-0.5 text-[10px] font-semibold text-violet-300">网站</span>
+            </div>
           </div>
-          <div className="rounded-2xl border border-white/10 bg-white/5 p-4">
-            <p className="text-[11px] uppercase tracking-[0.2em] text-slate-400">Agent 心跳</p>
-            <p className="mt-2 text-2xl font-semibold text-white">{agentStatuses.length}</p>
-            <p className="mt-1 text-xs text-slate-400">{staleAgentCount} 个超时未更新</p>
+          <div className="rounded-xl border border-white/10 bg-white/5 px-3 py-2">
+            <div className="flex items-center justify-between gap-2">
+              <div>
+                <p className="text-[10px] text-slate-400">Agent 心跳</p>
+                <p className="mt-0.5 text-base font-semibold text-white">{agentStatuses.length}</p>
+              </div>
+              <span className={`rounded-full px-2 py-0.5 text-[10px] font-semibold ${staleAgentCount > 0 ? "bg-amber-500/15 text-amber-300" : "bg-emerald-500/15 text-emerald-300"}`}>超时 {staleAgentCount}</span>
+            </div>
           </div>
         </div>
       </div>
 
       <div className="mt-4 space-y-4">
         <DashboardCard>
-          <DashboardCardTitle title="系统状态" desc="这一层专门回答系统是否在线、谁有心跳、最近有什么系统事件。" right={<span className="rounded-full bg-slate-900 px-3 py-1 text-xs font-semibold text-white">{onlineCount} 在线 · {offlineCount} 离线</span>} />
-          <div className="mt-4 grid gap-4 xl:grid-cols-[1.05fr_0.95fr]">
-            <div>
-              <div className="grid gap-3 md:grid-cols-3">
-                {agents.map((agent) => (
-                  <div key={agent.key} className="rounded-2xl border border-slate-200 bg-slate-50 p-4">
-                    <div className="flex items-center justify-between gap-3">
-                      <div>
-                        <p className="text-sm font-semibold text-slate-900">{agent.name}</p>
-                        <p className="mt-1 text-xs text-slate-500">配置档案：{agent.profile} · 端口：{agent.port}</p>
-                      </div>
-                      <span className={`rounded-full px-3 py-1 text-xs font-semibold ${agent.online ? "bg-emerald-100 text-emerald-800" : "bg-slate-200 text-slate-700"}`}>
-                        {agent.online ? "在线" : "离线"}
-                      </span>
-                    </div>
-                  </div>
-                ))}
-              </div>
+          <DashboardCardTitle
+            title="共享讨论中心"
+            desc="先把双 AI 围绕同一问题的讨论层跑稳，确保双方都能看见彼此，并且有明确收口。"
+            right={<div className="flex items-center gap-2"><span className="rounded-full bg-slate-900 px-3 py-1 text-xs font-semibold text-white">主题 {discussionThreads.length} 个 · 回帖 {visibleInboxMessages.filter((item) => item.meta?.topicId).length} 条</span></div>}
+          />
 
-              <div className="mt-4 rounded-2xl border border-slate-200 bg-slate-50 p-3 text-[11px] leading-5 text-slate-600">
-                <div className="grid gap-2 sm:grid-cols-2 xl:grid-cols-4">
-                  <div className="rounded-xl bg-white px-3 py-2"><span className="font-semibold text-sky-700">Bridge</span> 历史发件 {sentHistory.length}，待消费 {outboxMessages.length}，可见回执 {visibleInboxMessages.length}</div>
-                  <div className="rounded-xl bg-white px-3 py-2"><span className="font-semibold text-rose-700">守望</span> 心跳 {agentStatuses.length}，超时 {staleAgentCount}，在线 {onlineCount}</div>
-                  <div className="rounded-xl bg-white px-3 py-2"><span className="font-semibold text-emerald-700">人工线</span> 重点看老板手动发出的命令和回执</div>
-                  <div className="rounded-xl bg-white px-3 py-2"><span className="font-semibold text-amber-700">后台线</span> 重点看 cron / heartbeat / 后台会话变化</div>
-                </div>
+          <div className="mt-4 grid gap-3 xl:grid-cols-[0.9fr_1.1fr]">
+            <div className="rounded-2xl border border-slate-200 bg-slate-50 p-4">
+              <p className="text-sm font-semibold text-slate-900">讨论主题列表</p>
+              <p className="mt-1 text-[11px] text-slate-500">先看 topic，再看具体来回发言。closed 后默认不再继续往返。</p>
+              <div className="mt-3 space-y-2">
+                {discussionThreads.length > 0 ? discussionThreads.map((thread) => {
+                  const effectiveStatus = deriveDiscussionStatus(thread, inboxMessages);
+                  return (
+                  <details key={thread.id} className="rounded-2xl border border-slate-200 bg-white p-3">
+                    <summary className="cursor-pointer list-none">
+                      <div className="flex flex-wrap items-center gap-2">
+                        <span className="text-[11px] text-slate-500">{formatEasternTime(thread.updatedAt)}</span>
+                        <span className={`rounded-full px-2 py-0.5 text-[10px] font-semibold ${discussionStatusBadge(effectiveStatus)}`}>{summarizeDiscussionStatus(effectiveStatus)}</span>
+                        <span className="rounded-full bg-slate-200 px-2 py-0.5 text-[10px] font-semibold text-slate-700">{thread.participants.join(" / ")}</span>
+                      </div>
+                      <p className="mt-1.5 text-xs font-semibold leading-5 text-slate-800">{thread.title}</p>
+                      <p className="mt-1 text-[11px] leading-4 text-slate-500">{emphasizeQuestion(thread.prompt)}</p>
+                    </summary>
+                    <div className="mt-2 space-y-2 border-t border-slate-100 pt-2">
+                      <p className="text-xs leading-5 text-slate-700">{thread.prompt}</p>
+                      {thread.summary ? <div className="rounded-xl bg-slate-50 px-2.5 py-2 text-[11px] text-slate-600">{thread.summary}</div> : null}
+                      <div className="flex flex-wrap gap-2">
+                        {(["open", "deciding", "closed"] as DiscussionStatus[]).map((status) => (
+                          <form key={status} action={updateDiscussionStatusAction}>
+                            <input type="hidden" name="threadId" value={thread.id} />
+                            <input type="hidden" name="title" value={thread.title} />
+                            <input type="hidden" name="prompt" value={thread.prompt} />
+                            <input type="hidden" name="participants" value={thread.participants.join(",")} />
+                            <input type="hidden" name="status" value={status} />
+                            <button type="submit" className={`rounded-full px-3 py-1 text-[11px] font-semibold ${status === effectiveStatus ? "bg-slate-900 text-white" : "border border-slate-200 bg-white text-slate-700"}`}>{summarizeDiscussionStatus(status)}</button>
+                          </form>
+                        ))}
+                      </div>
+                    </div>
+                  </details>
+                ); }) : <div className="rounded-2xl border border-dashed border-slate-200 bg-white px-3 py-4 text-sm text-slate-500">还没有讨论主题，先发起一个共享讨论</div>}
               </div>
             </div>
 
             <div className="space-y-3">
-              <div className="rounded-2xl border border-slate-200 bg-slate-50 p-4">
-                <p className="text-sm font-semibold text-slate-900">Agent 心跳 / 状态</p>
-                <div className="mt-3 space-y-2">
-                  {agentStatuses.length > 0 ? agentStatuses.map((item) => (
-                    <div key={item.agent} className="rounded-2xl bg-white p-3">
-                      <div className="flex flex-wrap items-center gap-2">
-                        <span className={`rounded-full px-2.5 py-0.5 text-[11px] font-semibold ${statusBadge(item.status)}`}>{item.status}</span>
-                        <span className={`rounded-full px-2.5 py-0.5 text-[11px] font-semibold ${isStale(item.updatedAt) ? "bg-rose-100 text-rose-800" : "bg-slate-100 text-slate-700"}`}>{displayRelativeAge(item.updatedAt)}</span>
+              {discussionThreads.length > 0 ? discussionThreads.map((thread) => {
+                const timeline = buildDiscussionTimeline(thread, outboxMessages, inboxMessages);
+                const participantStates = buildDiscussionParticipantStates(thread, outboxMessages, inboxMessages);
+                const effectiveStatus = deriveDiscussionStatus(thread, inboxMessages);
+                const typingParticipants = buildTypingParticipants(thread, inboxMessages);
+                return (
+                  <div key={thread.id} className="rounded-2xl border border-slate-200 bg-slate-50 p-4">
+                    <div className="flex items-center justify-between gap-3">
+                      <div>
+                        <p className="text-sm font-semibold text-slate-900">{thread.title}</p>
+                        <p className="mt-1 text-[11px] text-slate-500">topicId: {thread.id} · {thread.participants.join(" / ")}</p>
                       </div>
-                      <p className="mt-1 text-sm font-semibold text-slate-900">{item.agent}{item.role ? ` · ${item.role}` : ""}</p>
-                      {item.summary ? <p className="mt-1 text-sm leading-6 text-slate-600">{item.summary}</p> : null}
-                      <p className="mt-1 text-xs text-slate-500">owner: {item.owner || "-"} · backup: {item.backup || "-"} · task: {item.taskId || "-"}</p>
+                      <span className={`rounded-full px-2.5 py-0.5 text-[10px] font-semibold ${discussionStatusBadge(effectiveStatus)}`}>{summarizeDiscussionStatus(effectiveStatus)}</span>
                     </div>
-                  )) : <div className="rounded-2xl border border-dashed border-slate-200 bg-white px-3 py-4 text-sm text-slate-500">还没有 agent 上报心跳</div>}
-                </div>
-              </div>
-
-              <div className="rounded-2xl border border-slate-200 bg-slate-50 p-4">
-                <p className="text-sm font-semibold text-slate-900">最近系统事件</p>
-                <div className="mt-3 space-y-2">
-                  {events.length > 0 ? events.slice(0, 5).map((event, index) => (
-                    <div key={`${event.stamp}-${index}`} className="rounded-2xl bg-white p-3">
-                      <div className="flex flex-wrap items-center gap-2">
-                        <span className="text-xs text-slate-500">{event.stamp}</span>
-                        <span className={`rounded-full px-2.5 py-0.5 text-[11px] font-semibold ${tone(event.type)}`}>{displayEventType(event.type)}</span>
+                    <div className="mt-3 flex flex-wrap gap-2">
+                      {participantStates.map((item) => {
+                        const chip = identityChip(item.participant);
+                        return (
+                          <span key={item.participant} className={`inline-flex items-center gap-1 rounded-full px-2.5 py-1 text-[11px] font-semibold ${item.state === "replied" ? "bg-emerald-100 text-emerald-800" : "bg-amber-100 text-amber-800"}`}>
+                            <span className={`inline-flex h-4 w-4 items-center justify-center rounded-full text-[9px] font-bold ${chip.avatarTone}`}>{chip.avatar}</span>
+                            {item.participant}
+                            <span>{item.state === "replied" ? "已回复" : "待回复"}</span>
+                          </span>
+                        );
+                      })}
+                    </div>
+                    {typingParticipants.length > 0 ? (
+                      <div className="mt-3 rounded-2xl border border-sky-200 bg-sky-50 px-3 py-2 text-xs text-sky-800">
+                        {typingParticipants.join("、")} 正在输入…
                       </div>
-                      <p className="mt-1 text-sm font-semibold text-slate-900">{event.actor}</p>
-                      <p className="mt-1 text-sm leading-6 text-slate-600">{event.result}</p>
+                    ) : null}
+                    <div className="mt-3 space-y-2">
+                      {timeline.length > 0 ? timeline.map((message) => {
+                        const fromChip = identityChip(message.from);
+                        const toChip = identityChip(message.to);
+                        return (
+                          <div key={message.id} className={`rounded-2xl border px-3 py-2 ${message.lane === "outbox" ? "border-sky-200 bg-sky-50/60" : "border-emerald-200 bg-white"}`}>
+                            <div className="flex flex-wrap items-center gap-2">
+                              <span className="text-[11px] text-slate-500">{formatEasternTime(message.createdAt)}</span>
+                              <span className={`rounded-full px-2 py-0.5 text-[10px] font-semibold ${message.lane === "outbox" ? "bg-sky-100 text-sky-800" : "bg-emerald-100 text-emerald-800"}`}>{message.lane === "outbox" ? "发出" : "回帖"}</span>
+                              <span className={`inline-flex items-center gap-1 rounded-full px-2 py-0.5 text-[10px] font-semibold ${fromChip.tone}`}>
+                                <span className={`inline-flex h-4 w-4 items-center justify-center rounded-full text-[9px] font-bold ${fromChip.avatarTone}`}>{fromChip.avatar}</span>
+                                {message.from}
+                              </span>
+                              <span className="text-[10px] text-slate-400">→</span>
+                              <span className={`inline-flex items-center gap-1 rounded-full px-2 py-0.5 text-[10px] font-semibold ${toChip.tone}`}>
+                                <span className={`inline-flex h-4 w-4 items-center justify-center rounded-full text-[9px] font-bold ${toChip.avatarTone}`}>{toChip.avatar}</span>
+                                {message.to}
+                              </span>
+                            </div>
+                            <p className="mt-1 text-xs leading-5 text-slate-700">{message.text}</p>
+                          </div>
+                        );
+                      }) : <div className="rounded-2xl border border-dashed border-slate-200 bg-white px-3 py-4 text-sm text-slate-500">这个 topic 还没有正式回复。</div>}
                     </div>
-                  )) : <div className="rounded-2xl border border-dashed border-slate-200 bg-white px-3 py-4 text-sm text-slate-500">暂无事件记录</div>}
-                </div>
-              </div>
+                  </div>
+                );
+              }) : null}
             </div>
           </div>
         </DashboardCard>
@@ -460,7 +704,7 @@ export default async function DashboardSystemPage() {
         <DashboardCard>
           <DashboardCardTitle
             title="命令中心 / 回执中心"
-            desc="这一层专门回答老板发了什么、回了什么、还有哪些命令没有回执。"
+            desc="命令能力先保留，但降为第二优先，等讨论层跑稳后再继续升级。"
             right={<div className="flex items-center gap-2"><span className="rounded-full bg-slate-900 px-3 py-1 text-xs font-semibold text-white">历史发件 {sentHistory.length} 条 · 回执 {visibleInboxMessages.length} 条</span></div>}
           />
 
@@ -483,7 +727,17 @@ export default async function DashboardSystemPage() {
               <div className="rounded-2xl border border-slate-200 bg-slate-50 p-4">
                 <div className="sticky top-0 z-10 -mx-4 -mt-4 mb-3 flex items-center justify-between gap-3 rounded-t-2xl border-b border-slate-200 bg-slate-50/95 px-4 py-4 backdrop-blur">
                   <p className="text-sm font-semibold text-slate-900">历史发件箱，网站发给 Agent 的命令</p>
-                  <span className="rounded-full bg-slate-900 px-2.5 py-0.5 text-xs font-semibold text-white">{sentHistory.length} 条</span>
+                  <div className="flex items-center gap-2">
+                    <span className="rounded-full bg-slate-900 px-2.5 py-0.5 text-xs font-semibold text-white">{sentHistory.length} 条</span>
+                    <form action={clearCommandCenterHistoryAction}>
+                      <ConfirmSubmitButton
+                        message="确认清空命令中心全部历史记录吗？此操作将同时清空历史发件记录、回执记录与相关统计信息，且无法撤销。"
+                        className="rounded-full border border-rose-300 bg-rose-50 px-3 py-1 text-[11px] font-semibold text-rose-700 hover:bg-rose-100"
+                      >
+                        清空历史
+                      </ConfirmSubmitButton>
+                    </form>
+                  </div>
                 </div>
                 <div className="space-y-2 overflow-y-auto pr-1 2xl:max-h-[72vh]">
                   {sentHistory.length > 0 ? (
@@ -558,6 +812,76 @@ export default async function DashboardSystemPage() {
                   ) : (
                     <div className="rounded-2xl border border-dashed border-emerald-200 bg-white px-4 py-6 text-sm text-slate-500">当前还没有回写到 inbox 的执行结果</div>
                   )}
+                </div>
+              </div>
+            </div>
+          </div>
+        </DashboardCard>
+
+        <DashboardCard>
+          <DashboardCardTitle title="系统状态" desc="放在后面，只在需要诊断时看，不打断发命令和看回执。" right={<span className="rounded-full bg-slate-900 px-3 py-1 text-xs font-semibold text-white">{onlineCount} 在线 · {offlineCount} 离线</span>} />
+          <div className="mt-3 grid gap-3 xl:grid-cols-[0.86fr_1.14fr]">
+            <div className="space-y-3">
+              <div className="rounded-2xl border border-slate-200 bg-slate-50 p-3">
+                <p className="text-sm font-semibold text-slate-900">本地执行线</p>
+                <p className="mt-1 text-[11px] text-slate-500">这里只看当前还在用的本地入口。</p>
+                <div className="mt-2 space-y-2">
+                  {agents.map((agent) => (
+                    <div key={agent.key} className="flex items-center justify-between rounded-xl bg-white px-3 py-2">
+                      <div>
+                        <p className="text-sm font-semibold text-slate-900">{agent.name}</p>
+                        <p className="text-[11px] text-slate-500">{agent.profile} · {agent.port}</p>
+                      </div>
+                      <span className={`rounded-full px-2.5 py-0.5 text-[11px] font-semibold ${agent.online ? "bg-emerald-100 text-emerald-800" : "bg-slate-200 text-slate-700"}`}>
+                        {agent.online ? "在线" : "离线"}
+                      </span>
+                    </div>
+                  ))}
+                </div>
+              </div>
+
+              <div className="rounded-2xl border border-slate-200 bg-slate-50 p-3 text-[11px] leading-5 text-slate-600">
+                <div className="grid gap-2 sm:grid-cols-2">
+                  <div className="rounded-xl bg-white px-3 py-2"><span className="font-semibold text-sky-700">Bridge</span> 发件 {sentHistory.length}，待消费 {outboxMessages.length}，回执 {visibleInboxMessages.length}</div>
+                  <div className="rounded-xl bg-white px-3 py-2"><span className="font-semibold text-rose-700">守望</span> 心跳 {agentStatuses.length}，超时 {staleAgentCount}</div>
+                  <div className="rounded-xl bg-white px-3 py-2"><span className="font-semibold text-emerald-700">前台</span> 命令目标只保留阿三与零号</div>
+                  <div className="rounded-xl bg-white px-3 py-2"><span className="font-semibold text-amber-700">说明</span> 零号状态以右侧心跳回报为准</div>
+                </div>
+              </div>
+            </div>
+
+            <div className="grid gap-3 lg:grid-cols-2">
+              <div className="rounded-2xl border border-slate-200 bg-slate-50 p-3">
+                <p className="text-sm font-semibold text-slate-900">Agent 心跳 / 状态</p>
+                <p className="mt-1 text-[11px] text-slate-500">零号等远端状态优先在这里看。</p>
+                <div className="mt-2 space-y-2">
+                  {agentStatuses.length > 0 ? agentStatuses.map((item) => (
+                    <div key={item.agent} className="rounded-xl bg-white px-3 py-2.5">
+                      <div className="flex flex-wrap items-center gap-2">
+                        <span className={`rounded-full px-2.5 py-0.5 text-[11px] font-semibold ${statusBadge(item.status)}`}>{item.status}</span>
+                        <span className={`rounded-full px-2.5 py-0.5 text-[11px] font-semibold ${isStale(item.updatedAt) ? "bg-rose-100 text-rose-800" : "bg-slate-100 text-slate-700"}`}>{displayRelativeAge(item.updatedAt)}</span>
+                      </div>
+                      <p className="mt-1 text-sm font-semibold text-slate-900">{item.agent}{item.role ? ` · ${item.role}` : ""}</p>
+                      {item.summary ? <p className="mt-1 text-xs leading-5 text-slate-600">{item.summary}</p> : null}
+                      <p className="mt-1 text-[11px] text-slate-500">owner: {item.owner || "-"} · backup: {item.backup || "-"} · task: {item.taskId || "-"}</p>
+                    </div>
+                  )) : <div className="rounded-xl border border-dashed border-slate-200 bg-white px-3 py-4 text-sm text-slate-500">还没有 agent 上报心跳</div>}
+                </div>
+              </div>
+
+              <div className="rounded-2xl border border-slate-200 bg-slate-50 p-3">
+                <p className="text-sm font-semibold text-slate-900">最近系统事件</p>
+                <div className="mt-2 space-y-2">
+                  {events.length > 0 ? events.slice(0, 5).map((event, index) => (
+                    <div key={`${event.stamp}-${index}`} className="rounded-xl bg-white px-3 py-2.5">
+                      <div className="flex flex-wrap items-center gap-2">
+                        <span className="text-[11px] text-slate-500">{event.stamp}</span>
+                        <span className={`rounded-full px-2 py-0.5 text-[10px] font-semibold ${tone(event.type)}`}>{displayEventType(event.type)}</span>
+                      </div>
+                      <p className="mt-1 text-sm font-semibold text-slate-900">{event.actor}</p>
+                      <p className="mt-1 text-xs leading-5 text-slate-600">{event.result}</p>
+                    </div>
+                  )) : <div className="rounded-xl border border-dashed border-slate-200 bg-white px-3 py-4 text-sm text-slate-500">暂无事件记录</div>}
                 </div>
               </div>
             </div>

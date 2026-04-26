@@ -1,19 +1,15 @@
-import { existsSync, readFileSync } from "node:fs";
 import path from "node:path";
 import { revalidatePath } from "next/cache";
 import { DashboardCard, DashboardCardTitle, DashboardPageHeader } from "../components";
 import { appendEvent, readEventChain } from "@/lib/event-store";
 import { makePromiseId, readPromises, upsertPromise } from "@/lib/promise-store";
 import { appendProof, makeProofId, readProofs } from "@/lib/proof-store";
+import { safeRead } from "@/lib/fs-utils";
 import { formatEasternTime } from "@/lib/time";
 import { countTodoItems, readTodoBoard } from "@/lib/todo-board";
 import { countEventItems, countTaskItems, readEventStream, readTaskQueue } from "@/lib/task-board";
 import { readWakeQueue, upsertWakeItem } from "@/lib/wake-store";
 import { computeWatchdogAlerts } from "@/lib/watchdog";
-
-function safeRead(filePath: string) {
-  return existsSync(filePath) ? readFileSync(filePath, "utf8") : "";
-}
 
 function countMatches(raw: string, pattern: RegExp) {
   return raw.split(/\r?\n/).filter((line) => pattern.test(line.trim())).length;

@@ -3237,7 +3237,15 @@ function ClientsSection({ clients, setClients, suppliers, setSuppliers, orders, 
   function addClient() {
     if (!clientDraft.name.trim()) return;
     if (editingClientId) {
-      setClients((prev) => prev.map((item) => item.id === editingClientId ? { ...item, name: clientDraft.name.trim(), contact: clientDraft.contact || undefined, phone: clientDraft.phone || undefined, wechat: clientDraft.wechat || undefined, address: clientDraft.address || undefined, note: clientDraft.note || undefined } : item));
+      const originalClient = clients.find((item) => item.id === editingClientId);
+      const nextName = clientDraft.name.trim();
+      const nextPhone = clientDraft.phone || undefined;
+      const nextAddress = clientDraft.address || undefined;
+      setClients((prev) => prev.map((item) => item.id === editingClientId ? { ...item, name: nextName, contact: clientDraft.contact || undefined, phone: nextPhone, wechat: clientDraft.wechat || undefined, address: nextAddress, note: clientDraft.note || undefined } : item));
+      if (originalClient) {
+        setOrders((prev) => prev.map((item) => item.client_name === originalClient.name || (!!originalClient.phone && item.phone === originalClient.phone) ? { ...item, client_name: nextName, phone: nextPhone, address: nextAddress } : item));
+        setAppointments((prev) => prev.map((item) => item.client_id === originalClient.id || item.client_name === originalClient.name || (!!originalClient.phone && item.phone === originalClient.phone) ? { ...item, client_name: nextName, phone: nextPhone, address: nextAddress, client_id: originalClient.id } : item));
+      }
       setSelectedClientId(editingClientId);
     } else {
       const newId = `CL-${String(clients.length + 1).padStart(3, "0")}`;

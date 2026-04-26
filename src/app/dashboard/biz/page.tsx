@@ -352,9 +352,21 @@ function OverviewSection({
   employees: EmployeeRecord[];
 }) {
   const domains = getOverviewDomains(orderSummary, { expenses, payrolls, quotes, clients, suppliers, materials, employees });
+
+  function exportOverview() {
+    downloadCsv(`biz-overview-${todayIso()}.csv`, [
+      ["模块", "指标", "值"],
+      ...domains.flatMap((domain) => domain.stats.map((stat) => [domain.title, stat.label, stat.value])),
+    ]);
+  }
+
+  function printOverview() {
+    openPrintWindow(buildSimpleTablePrintHTML("业务总览", "当前业务概况", ["模块", "指标", "值"], domains.flatMap((domain) => domain.stats.map((stat) => [domain.title, stat.label, stat.value]))));
+  }
+
   return (
     <div>
-      <SectionHeader eyebrow="Business Overview" title="业务总览" />
+      <SectionHeader eyebrow="Business Overview" title="业务总览" actions={<><ActionBtn onClick={exportOverview}>↓ 导出总览</ActionBtn><ActionBtn onClick={printOverview}>🖨 打印总览</ActionBtn></>} />
 
       <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-3">
         {domains.map((d) => (

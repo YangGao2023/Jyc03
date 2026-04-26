@@ -177,6 +177,17 @@ function formatAppointmentCopyText(item: MeasurementAppointmentRecord) {
   ].join("\n");
 }
 
+function getSupplierCategoryOptions(settings: BizSettings) {
+  return (settings.supplier_categories || "布料\n五金\n玻璃\n物流\n其他")
+    .split(/[\n,，]+/)
+    .map((item) => item.trim())
+    .filter(Boolean);
+}
+
+function calcUsdCost(factoryPriceRmb: number, weight?: number) {
+  return Number((((weight && weight > 0 ? weight : 1) + factoryPriceRmb) / 7).toFixed(2));
+}
+
 // ─── primitives ──────────────────────────────────────────────────────────────
 
 function PageSection({ children }: { children: React.ReactNode }) {
@@ -2778,6 +2789,8 @@ function FinanceSection({ orders, setOrders, expenses, setExpenses, cashEntries,
   const [quickPayTarget, setQuickPayTarget] = useState<string | null>(null);
   const [quickPayFields, setQuickPayFields] = useState({ date: today, amount: "", method: "现金", note: "", office: false });
   const [expenseFromOffice, setExpenseFromOffice] = useState(false);
+  const [showOfficeTransferModal, setShowOfficeTransferModal] = useState(false);
+  const [officeTransferDraft, setOfficeTransferDraft] = useState({ type: "转入", amount: "", date: today, note: "" });
   const [financeDateStart, setFinanceDateStart] = useState(today);
   const [financeDateEnd, setFinanceDateEnd] = useState(today);
   const paymentRows = orders.flatMap((order) => (order.payment_history ?? []).map((record, index) => ({ order, record, key: `${order.order_number}-${index}` })));
@@ -2788,7 +2801,7 @@ function FinanceSection({ orders, setOrders, expenses, setExpenses, cashEntries,
   const totalExpense = filteredExpenses.reduce((s, item) => s + item.amount, 0);
   const totalBalance = orders.reduce((s, o) => s + (o.balance ?? 0), 0);
   const payrollAmount = payrolls.reduce((s, item) => s + item.net_salary, 0);
-  const cashBalance = filteredCashEntries.reduce((s, item) => s + (item.type === "收入" ? item.amount : -item.amount), 0);
+  const cashBalance = filteredCashEntries.reduce((s, item) => s + (["收入", "转入"].includes(item.type) ? item.amount : -item.amount), 0);
   const receivableOrders = orders.filter((o) => (o.balance ?? 0) > 0 && o.status !== "已关闭");
   const filteredReceivableOrders = receivableOrders.filter((o) => isDateInRange(o.order_date, financeDateStart, financeDateEnd));
   const financeAuditPreview = useMemo(() => buildFinanceAuditReport(orders, clients), [orders, clients]);
@@ -2915,9 +2928,17 @@ function FinanceSection({ orders, setOrders, expenses, setExpenses, cashEntries,
     setExpenses((prev) => prev.filter((item) => item.id !== expenseId));
   }
 
+  function addOfficeTransfer() {
+    const amount = Number(officeTransferDraft.amount) || 0;
+    if (amount <= 0) return;
+    setCashEntries((prev) => [{ id: `CASH-${new Date().getFullYear()}-${String(prev.length + 1).padStart(3, "0")}`, type: officeTransferDraft.type, amount, date: officeTransferDraft.date, note: officeTransferDraft.note || undefined }, ...prev]);
+    setOfficeTransferDraft({ type: "转入", amount: "", date: today, note: "" });
+    setShowOfficeTransferModal(false);
+  }
+
   return (
     <div>
-      <SectionHeader eyebrow="Finance Management" title="收支管理" actions={<><ActionBtn onClick={exportFinance}>↓ 导出当前表</ActionBtn><ActionBtn onClick={printFinance}>🖨 打印当前表</ActionBtn>{sub === "audit" ? <ActionBtn onClick={runFinanceAudit}>↻ 重新扫描</ActionBtn> : null}{sub === "audit" ? <ActionBtn tone="success" onClick={applyFinanceRepair}>🔧 应用自动修复</ActionBtn> : null}{sub === "expense" ? <ActionBtn tone="primary" onClick={() => setShowExpenseModal(true)}>+ 录入支出</ActionBtn> : null}</>} />
+      <SectionHeader eyebrow="Finance Management" title="收支管理" actions={<><ActionBtn onClick={exportFinance}>↓ 导出当前表</ActionBtn><ActionBtn onClick={printFinance}>🖨 打印当前表</ActionBtn>{sub === "audit" ? <ActionBtn onClick={runFinanceAudit}>↻ 重新扫描</ActionBtn> : null}{sub === "audit" ? <ActionBtn tone="success" onClick={applyFinanceRepair}>🔧 应用自动修复</ActionBtn> : null}{sub === "expense" ? <ActionBtn tone="primary" onClick={() => setShowExpenseModal(true)}>+ 录入支出</ActionBtn> : null}{sub === "cash" ? <ActionBtn tone="primary" onClick={() => setShowOfficeTransferModal(true)}>+ 办公室转入/转出</ActionBtn> : null}</>} />
       <div className="mb-4 rounded-xl border border-slate-200 bg-white p-4">
         <div className="flex flex-wrap items-end justify-between gap-3">
           <div>
@@ -2976,6 +2997,30 @@ function FinanceSection({ orders, setOrders, expenses, setExpenses, cashEntries,
               </div>
             </div>
           </PanelCard>
+        </div>
+      )}
+
+      {showOfficeTransferModal && sub === "cash" && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-slate-950/45 px-4">
+          <div className="w-full max-w-xl rounded-2xl border border-slate-200 bg-white p-5 shadow-2xl">
+            <div className="mb-4 flex items-start justify-between gap-3">
+              <div>
+                <h3 className="text-base font-semibold text-slate-900">办公室转入 / 转出</h3>
+                <p className="mt-1 text-sm text-slate-500">这里只记录办公室抽屉里的现金进出，不影响公司总账。</p>
+              </div>
+              <button onClick={() => setShowOfficeTransferModal(false)} className="rounded-lg border border-slate-200 px-2.5 py-1 text-xs text-slate-500 hover:border-slate-300 hover:text-slate-700 transition-colors">关闭</button>
+            </div>
+            <div className="grid gap-2 sm:grid-cols-2">
+              <SmallSelect value={officeTransferDraft.type} onChange={(v) => setOfficeTransferDraft((d) => ({ ...d, type: v }))} options={["转入", "转出"]} />
+              <SmallInput value={officeTransferDraft.amount} onChange={(v) => setOfficeTransferDraft((d) => ({ ...d, amount: v }))} type="number" placeholder="金额" />
+              <SmallInput value={officeTransferDraft.date} onChange={(v) => setOfficeTransferDraft((d) => ({ ...d, date: v }))} type="date" />
+              <SmallInput value={officeTransferDraft.note} onChange={(v) => setOfficeTransferDraft((d) => ({ ...d, note: v }))} placeholder="备注（可选）" />
+            </div>
+            <div className="mt-5 flex justify-end gap-2">
+              <ActionBtn onClick={() => setShowOfficeTransferModal(false)}>取消</ActionBtn>
+              <ActionBtn tone="primary" onClick={addOfficeTransfer}>确认记录</ActionBtn>
+            </div>
+          </div>
         </div>
       )}
 
@@ -3194,14 +3239,18 @@ function FinanceSection({ orders, setOrders, expenses, setExpenses, cashEntries,
 
 type ContactSub = "clients" | "suppliers";
 
-function ClientsSection({ clients, setClients, suppliers, setSuppliers, orders, setOrders, appointments, setAppointments, setCashEntries, onCreateAppointment }: { clients: ContactRecord[]; setClients: React.Dispatch<React.SetStateAction<ContactRecord[]>>; suppliers: SupplierRecord[]; setSuppliers: React.Dispatch<React.SetStateAction<SupplierRecord[]>>; orders: BizOrder[]; setOrders: React.Dispatch<React.SetStateAction<BizOrder[]>>; appointments: MeasurementAppointmentRecord[]; setAppointments: React.Dispatch<React.SetStateAction<MeasurementAppointmentRecord[]>>; setCashEntries: React.Dispatch<React.SetStateAction<CashEntry[]>>; onCreateAppointment: (client: ContactRecord) => void; }) {
+function ClientsSection({ clients, setClients, suppliers, setSuppliers, orders, setOrders, appointments, setAppointments, setCashEntries, purchases, setPurchases, settings, onCreateAppointment }: { clients: ContactRecord[]; setClients: React.Dispatch<React.SetStateAction<ContactRecord[]>>; suppliers: SupplierRecord[]; setSuppliers: React.Dispatch<React.SetStateAction<SupplierRecord[]>>; orders: BizOrder[]; setOrders: React.Dispatch<React.SetStateAction<BizOrder[]>>; appointments: MeasurementAppointmentRecord[]; setAppointments: React.Dispatch<React.SetStateAction<MeasurementAppointmentRecord[]>>; setCashEntries: React.Dispatch<React.SetStateAction<CashEntry[]>>; purchases: PurchaseRecord[]; setPurchases: React.Dispatch<React.SetStateAction<PurchaseRecord[]>>; settings: BizSettings; onCreateAppointment: (client: ContactRecord) => void; }) {
   const [sub, setSub] = useState<ContactSub>("clients");
   const today = new Date().toISOString().slice(0, 10);
   const [clientDraft, setClientDraft] = useState({ name: "", contact: "", phone: "", wechat: "", address: "", note: "" });
-  const [supplierDraft, setSupplierDraft] = useState({ name: "", category: "布料", contact_person: "", phone: "", address: "", remark: "" });
+  const supplierCategoryOptions = useMemo(() => getSupplierCategoryOptions(settings), [settings]);
+  const [supplierDraft, setSupplierDraft] = useState({ name: "", category: supplierCategoryOptions[0] ?? "布料", contact_person: "", phone: "", email: "", website: "", address: "", remark: "" });
+  const [supplierPurchaseDraft, setSupplierPurchaseDraft] = useState({ supplier: suppliers[0]?.name ?? "", item_name: "", quantity: "", unit_price: "", purchase_date: today, status: "未付款", office: false, note: "" });
   const [showClientModal, setShowClientModal] = useState(false);
   const [showSupplierModal, setShowSupplierModal] = useState(false);
   const [editingClientId, setEditingClientId] = useState<string | null>(null);
+  const [editingSupplierId, setEditingSupplierId] = useState<string | null>(null);
+  const [showSupplierPurchaseModal, setShowSupplierPurchaseModal] = useState(false);
   const [clientSearch, setClientSearch] = useState("");
   const [clientPage, setClientPage] = useState(1);
   const [selectedClientId, setSelectedClientId] = useState<string>(clients[0]?.id ?? "");
@@ -3271,9 +3320,42 @@ function ClientsSection({ clients, setClients, suppliers, setSuppliers, orders, 
 
   function addSupplier() {
     if (!supplierDraft.name.trim()) return;
-    setSuppliers((prev) => [{ id: `SUP-${String(prev.length + 1).padStart(3, "0")}`, name: supplierDraft.name.trim(), category: supplierDraft.category, contact_person: supplierDraft.contact_person || undefined, phone: supplierDraft.phone || undefined, address: supplierDraft.address || undefined, remark: supplierDraft.remark || undefined, last_purchase_date: today }, ...prev]);
-    setSupplierDraft({ name: "", category: "布料", contact_person: "", phone: "", address: "", remark: "" });
+    if (editingSupplierId) {
+      setSuppliers((prev) => prev.map((item) => item.id === editingSupplierId ? { ...item, name: supplierDraft.name.trim(), category: supplierDraft.category, contact_person: supplierDraft.contact_person || undefined, phone: supplierDraft.phone || undefined, email: supplierDraft.email || undefined, website: supplierDraft.website || undefined, address: supplierDraft.address || undefined, remark: supplierDraft.remark || undefined } : item));
+    } else {
+      setSuppliers((prev) => [{ id: `SUP-${String(prev.length + 1).padStart(3, "0")}`, name: supplierDraft.name.trim(), category: supplierDraft.category, contact_person: supplierDraft.contact_person || undefined, phone: supplierDraft.phone || undefined, email: supplierDraft.email || undefined, website: supplierDraft.website || undefined, address: supplierDraft.address || undefined, remark: supplierDraft.remark || undefined, last_purchase_date: today }, ...prev]);
+    }
+    setSupplierDraft({ name: "", category: supplierCategoryOptions[0] ?? "布料", contact_person: "", phone: "", email: "", website: "", address: "", remark: "" });
+    setEditingSupplierId(null);
     setShowSupplierModal(false);
+  }
+
+  function openEditSupplier(supplier: SupplierRecord) {
+    setEditingSupplierId(supplier.id);
+    setSupplierDraft({ name: supplier.name, category: supplier.category ?? supplierCategoryOptions[0] ?? "布料", contact_person: supplier.contact_person ?? "", phone: supplier.phone ?? "", email: supplier.email ?? "", website: supplier.website ?? "", address: supplier.address ?? "", remark: supplier.remark ?? "" });
+    setShowSupplierModal(true);
+  }
+
+  function deleteSupplier(supplier: SupplierRecord) {
+    if (!window.confirm(`确认删除供应商“${supplier.name}”吗？`)) return;
+    setSuppliers((prev) => prev.filter((item) => item.id !== supplier.id));
+  }
+
+  function openSupplierPurchase(supplier: SupplierRecord) {
+    setSupplierPurchaseDraft({ supplier: supplier.name, item_name: "", quantity: "", unit_price: "", purchase_date: today, status: "未付款", office: false, note: "" });
+    setShowSupplierPurchaseModal(true);
+  }
+
+  function addSupplierPurchase() {
+    const quantity = Number(supplierPurchaseDraft.quantity) || 0;
+    const unitPrice = Number(supplierPurchaseDraft.unit_price) || 0;
+    if (!supplierPurchaseDraft.supplier || !supplierPurchaseDraft.item_name.trim() || quantity <= 0) return;
+    const total = Number((quantity * unitPrice).toFixed(2));
+    setPurchases((prev) => [{ id: `PO-${new Date().getFullYear()}-${String(prev.length + 1).padStart(3, "0")}`, supplier: supplierPurchaseDraft.supplier, item_name: supplierPurchaseDraft.item_name.trim(), quantity, unit: "个", unit_price: unitPrice, total_amount: total, purchase_date: supplierPurchaseDraft.purchase_date, status: supplierPurchaseDraft.status }, ...prev]);
+    if (supplierPurchaseDraft.office) {
+      setCashEntries((prev) => [{ id: `CASH-${new Date().getFullYear()}-${String(prev.length + 1).padStart(3, "0")}`, type: "转出", amount: total, date: supplierPurchaseDraft.purchase_date, note: supplierPurchaseDraft.note || `${supplierPurchaseDraft.supplier} 采购支出` }, ...prev]);
+    }
+    setShowSupplierPurchaseModal(false);
   }
 
   const filteredClients = clients.filter((item) => {
@@ -3500,22 +3582,52 @@ function ClientsSection({ clients, setClients, suppliers, setSuppliers, orders, 
           <div className="w-full max-w-3xl rounded-2xl border border-slate-200 bg-white p-5 shadow-2xl">
             <div className="mb-4 flex items-start justify-between gap-3">
               <div>
-                <h3 className="text-base font-semibold text-slate-900">新建供应商</h3>
-                <p className="mt-1 text-sm text-slate-500">供应商新增也收进弹窗里。</p>
+                <h3 className="text-base font-semibold text-slate-900">{editingSupplierId ? "编辑供应商" : "新建供应商"}</h3>
+                <p className="mt-1 text-sm text-slate-500">供应商资料现在也支持直接新增和编辑。</p>
               </div>
               <button onClick={() => setShowSupplierModal(false)} className="rounded-lg border border-slate-200 px-2.5 py-1 text-xs text-slate-500 hover:border-slate-300 hover:text-slate-700 transition-colors">关闭</button>
             </div>
-            <div className="grid gap-2 sm:grid-cols-2 xl:grid-cols-3">
+            <div className="grid gap-2 sm:grid-cols-2 xl:grid-cols-4">
               <SmallInput value={supplierDraft.name} onChange={(v) => setSupplierDraft((d) => ({ ...d, name: v }))} placeholder="供应商名称" />
-              <SmallSelect value={supplierDraft.category} onChange={(v) => setSupplierDraft((d) => ({ ...d, category: v }))} options={["布料", "五金", "玻璃", "物流", "其他"]} />
+              <SmallSelect value={supplierDraft.category} onChange={(v) => setSupplierDraft((d) => ({ ...d, category: v }))} options={supplierCategoryOptions} />
               <SmallInput value={supplierDraft.contact_person} onChange={(v) => setSupplierDraft((d) => ({ ...d, contact_person: v }))} placeholder="联系人" />
               <SmallInput value={supplierDraft.phone} onChange={(v) => setSupplierDraft((d) => ({ ...d, phone: v }))} placeholder="电话" />
+              <SmallInput value={supplierDraft.email} onChange={(v) => setSupplierDraft((d) => ({ ...d, email: v }))} placeholder="Email" />
+              <SmallInput value={supplierDraft.website} onChange={(v) => setSupplierDraft((d) => ({ ...d, website: v }))} placeholder="网站" />
               <SmallInput value={supplierDraft.address} onChange={(v) => setSupplierDraft((d) => ({ ...d, address: v }))} placeholder="地址" />
               <SmallInput value={supplierDraft.remark} onChange={(v) => setSupplierDraft((d) => ({ ...d, remark: v }))} placeholder="备注" />
             </div>
             <div className="mt-5 flex justify-end gap-2">
               <ActionBtn onClick={() => setShowSupplierModal(false)}>取消</ActionBtn>
-              <ActionBtn tone="primary" onClick={addSupplier}>确认新建</ActionBtn>
+              <ActionBtn tone="primary" onClick={addSupplier}>{editingSupplierId ? "确认保存" : "确认新建"}</ActionBtn>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {showSupplierPurchaseModal && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-slate-950/45 px-4">
+          <div className="w-full max-w-2xl rounded-2xl border border-slate-200 bg-white p-5 shadow-2xl">
+            <div className="mb-4 flex items-start justify-between gap-3">
+              <div>
+                <h3 className="text-base font-semibold text-slate-900">新建采购</h3>
+                <p className="mt-1 text-sm text-slate-500">可以直接从供应商这里录采购，也可以选择是否从办公室抽屉里出钱。</p>
+              </div>
+              <button onClick={() => setShowSupplierPurchaseModal(false)} className="rounded-lg border border-slate-200 px-2.5 py-1 text-xs text-slate-500 hover:border-slate-300 hover:text-slate-700 transition-colors">关闭</button>
+            </div>
+            <div className="grid gap-2 sm:grid-cols-2 xl:grid-cols-3">
+              <SmallInput value={supplierPurchaseDraft.supplier} onChange={(v) => setSupplierPurchaseDraft((d) => ({ ...d, supplier: v }))} placeholder="供应商" />
+              <SmallInput value={supplierPurchaseDraft.item_name} onChange={(v) => setSupplierPurchaseDraft((d) => ({ ...d, item_name: v }))} placeholder="品名" />
+              <SmallInput value={supplierPurchaseDraft.quantity} onChange={(v) => setSupplierPurchaseDraft((d) => ({ ...d, quantity: v }))} type="number" placeholder="数量" />
+              <SmallInput value={supplierPurchaseDraft.unit_price} onChange={(v) => setSupplierPurchaseDraft((d) => ({ ...d, unit_price: v }))} type="number" placeholder="单价" />
+              <SmallInput value={supplierPurchaseDraft.purchase_date} onChange={(v) => setSupplierPurchaseDraft((d) => ({ ...d, purchase_date: v }))} type="date" />
+              <SmallSelect value={supplierPurchaseDraft.status} onChange={(v) => setSupplierPurchaseDraft((d) => ({ ...d, status: v }))} options={["未付款", "部分付款", "已付款"]} />
+            </div>
+            <div className="mt-2"><SmallInput value={supplierPurchaseDraft.note} onChange={(v) => setSupplierPurchaseDraft((d) => ({ ...d, note: v }))} placeholder="备注（可选）" /></div>
+            <label className="mt-3 flex items-center gap-2 text-xs text-slate-600"><input type="checkbox" checked={supplierPurchaseDraft.office} onChange={(e) => setSupplierPurchaseDraft((d) => ({ ...d, office: e.target.checked }))} /> 这笔采购从办公室抽屉里转出</label>
+            <div className="mt-5 flex justify-end gap-2">
+              <ActionBtn onClick={() => setShowSupplierPurchaseModal(false)}>取消</ActionBtn>
+              <ActionBtn tone="primary" onClick={addSupplierPurchase}>确认新建</ActionBtn>
             </div>
           </div>
         </div>
@@ -3829,9 +3941,11 @@ function ClientsSection({ clients, setClients, suppliers, setSuppliers, orders, 
                   <th className="px-4 py-2.5 font-semibold text-slate-600">分类</th>
                   <th className="px-4 py-2.5 font-semibold text-slate-600">联系人</th>
                   <th className="px-4 py-2.5 font-semibold text-slate-600">电话</th>
+                  <th className="px-4 py-2.5 font-semibold text-slate-600">Email</th>
+                  <th className="px-4 py-2.5 font-semibold text-slate-600">网站</th>
                   <th className="px-4 py-2.5 font-semibold text-slate-600">地址</th>
                   <th className="px-4 py-2.5 font-semibold text-slate-600">最近采购</th>
-                  <th className="px-4 py-2.5 font-semibold text-slate-600">备注</th>
+                  <th className="px-4 py-2.5 font-semibold text-slate-600">操作</th>
                 </tr>
               </thead>
               <tbody>
@@ -3841,9 +3955,17 @@ function ClientsSection({ clients, setClients, suppliers, setSuppliers, orders, 
                     <td className="px-4 py-2.5 text-slate-600">{item.category ?? "-"}</td>
                     <td className="px-4 py-2.5 text-slate-600">{item.contact_person ?? "-"}</td>
                     <td className="px-4 py-2.5 text-slate-600">{item.phone ?? "-"}</td>
+                    <td className="px-4 py-2.5 text-slate-600">{item.email ?? "-"}</td>
+                    <td className="px-4 py-2.5 text-slate-600">{item.website ?? "-"}</td>
                     <td className="px-4 py-2.5 text-slate-500">{item.address ?? "-"}</td>
                     <td className="px-4 py-2.5 text-slate-500">{item.last_purchase_date ?? "-"}</td>
-                    <td className="px-4 py-2.5 text-slate-500">{item.remark ?? "-"}</td>
+                    <td className="px-4 py-2.5">
+                      <div className="flex flex-wrap gap-2">
+                        <button onClick={() => openSupplierPurchase(item)} className="rounded border border-emerald-100 px-2 py-1 text-[11px] text-emerald-600 hover:border-emerald-300 hover:bg-emerald-50 transition-colors">新建采购</button>
+                        <button onClick={() => openEditSupplier(item)} className="rounded border border-slate-200 px-2 py-1 text-[11px] text-slate-600 hover:border-slate-300 hover:bg-slate-50 transition-colors">编辑</button>
+                        <button onClick={() => deleteSupplier(item)} className="rounded border border-rose-100 px-2 py-1 text-[11px] text-rose-500 hover:border-rose-300 hover:bg-rose-50 transition-colors">删除</button>
+                      </div>
+                    </td>
                   </tr>
                 ))}
               </tbody>
@@ -4014,43 +4136,22 @@ function getCommittedMaterialMap(materials: MaterialRecord[], orders: BizOrder[]
 function MaterialsSection({ materials, setMaterials, purchases, setPurchases, suppliers, orders }: { materials: MaterialRecord[]; setMaterials: React.Dispatch<React.SetStateAction<MaterialRecord[]>>; purchases: PurchaseRecord[]; setPurchases: React.Dispatch<React.SetStateAction<PurchaseRecord[]>>; suppliers: SupplierRecord[]; orders: BizOrder[]; }) {
   const [sub, setSub] = useState<MaterialSub>("inventory");
   const today = new Date().toISOString().slice(0, 10);
-  const [materialDraft, setMaterialDraft] = useState({ code: "", name: "", specification: "", unit: "个", stock_quantity: "", min_stock: "", purchase_price: "", supplier: suppliers[0]?.name ?? "", remark: "" });
+  const [editingMaterialId, setEditingMaterialId] = useState<string | null>(null);
+  const [materialDraft, setMaterialDraft] = useState({ code: "", name: "", specification: "", size: "", unit: "个", stock_quantity: "", factory_price_rmb: "", weight: "", usd_cost: "", sale_price_usd: "", vip_sale_price_usd: "", supplier: suppliers[0]?.name ?? "", image: "", remark: "" });
   const [purchaseDraft, setPurchaseDraft] = useState({ supplier: suppliers[0]?.name ?? "", item_name: "", quantity: "", unit: "个", unit_price: "", purchase_date: today, status: "未付款" });
   const [showMaterialModal, setShowMaterialModal] = useState(false);
   const [showPurchaseModal, setShowPurchaseModal] = useState(false);
   const [inventoryHint, setInventoryHint] = useState("");
-  const [expandedMaterialId, setExpandedMaterialId] = useState<string | null>(null);
-  const lowStockCount = materials.filter((item) => item.stock_quantity <= item.min_stock).length;
   const monthlyPurchase = purchases.filter((item) => item.purchase_date.startsWith(today.slice(0, 7))).reduce((sum, item) => sum + item.total_amount, 0);
-  const planning = useMemo(() => buildOrderMaterialInsights(materials, orders), [materials, orders]);
-  const committedMap = useMemo(() => getCommittedMaterialMap(materials, orders), [materials, orders]);
-  const inventoryRows = useMemo(
-    () => materials.map((item) => {
-      const committed = committedMap.get(item.id) ?? 0;
-      const available = item.stock_quantity - committed;
-      return {
-        ...item,
-        committed,
-        available,
-        shortage: Math.max(0, committed - item.stock_quantity),
-      };
-    }),
-    [committedMap, materials],
-  );
-  const committedTotal = inventoryRows.reduce((sum, item) => sum + item.committed, 0);
-  const shortageCount = inventoryRows.filter((item) => item.shortage > 0).length;
-  const shortageOrders = useMemo(
-    () => [...planning.byOrder.values()].filter((item) => item.shortageRows > 0 || item.missingRows > 0),
-    [planning],
-  );
+  const inventoryRows = materials;
   const materialConfigs: Record<MaterialSub, SplitTabularSchemaConfig> = {
     inventory: {
       title: "库存清单",
       filePrefix: "biz-materials",
-      exportColumns: ["编码", "名称", "规格", "单位", "库存", "占用", "可用", "预警库存", "成本单价", "供应商", "最近入库日期", "备注"],
-      printColumns: ["编码", "名称", "规格", "单位", "库存", "占用", "可用", "预警库存", "成本单价", "供应商"],
-      exportRows: () => mapRows(inventoryRows, (item) => [item.code, item.name, item.specification ?? "", item.unit, item.stock_quantity, item.committed, item.available, item.min_stock, item.purchase_price, item.supplier ?? "", item.last_stock_date ?? "", item.remark ?? ""]),
-      printRows: () => mapRows(inventoryRows, (item) => [item.code, item.name, item.specification ?? "-", item.unit, item.stock_quantity, item.committed, item.available, item.min_stock, formatMoney(item.purchase_price), item.supplier ?? "-"]),
+      exportColumns: ["编码", "名称", "规格", "尺寸", "总库存", "出厂价RMB", "美金成本USD", "卖出价USD", "VIP价USD", "单重", "供应商", "最近入库日期", "备注"],
+      printColumns: ["编码", "名称", "规格", "尺寸", "总库存", "出厂价RMB", "美金成本USD", "卖出价USD", "VIP价USD", "供应商"],
+      exportRows: () => mapRows(inventoryRows, (item) => [item.code, item.name, item.specification ?? "", item.size ?? "", item.stock_quantity, item.factory_price_rmb ?? 0, item.usd_cost ?? 0, item.sale_price_usd ?? 0, item.vip_sale_price_usd ?? 0, item.weight ?? 1, item.supplier ?? "", item.last_stock_date ?? "", item.remark ?? ""]),
+      printRows: () => mapRows(inventoryRows, (item) => [item.code, item.name, item.specification ?? "-", item.size ?? "-", item.stock_quantity, item.factory_price_rmb ?? 0, item.usd_cost ?? 0, item.sale_price_usd ?? 0, item.vip_sale_price_usd ?? 0, item.supplier ?? "-"]),
     },
     purchases: {
       title: "采购记录",
@@ -4065,12 +4166,53 @@ function MaterialsSection({ materials, setMaterials, purchases, setPurchases, su
   function exportMaterials() { exportTabularSchema(materialConfigs[sub]); }
   function printMaterials() { const config = materialConfigs[sub]; printTabularSchema(config, `共 ${config.printRows().length} 条`); }
 
+  function resetMaterialDraft() {
+    setMaterialDraft({ code: "", name: "", specification: "", size: "", unit: "个", stock_quantity: "", factory_price_rmb: "", weight: "", usd_cost: "", sale_price_usd: "", vip_sale_price_usd: "", supplier: suppliers[0]?.name ?? "", image: "", remark: "" });
+    setEditingMaterialId(null);
+  }
+
+  function syncMaterialCosts(nextFactory: string, nextWeight: string, nextSale?: string, nextVip?: string) {
+    const factory = Number(nextFactory) || 0;
+    const weight = Number(nextWeight) || 1;
+    const usd = calcUsdCost(factory, weight);
+    setMaterialDraft((d) => ({ ...d, factory_price_rmb: nextFactory, weight: nextWeight, usd_cost: String(usd), sale_price_usd: nextSale ?? d.sale_price_usd, vip_sale_price_usd: nextVip ?? d.vip_sale_price_usd }));
+  }
+
+  function handleMaterialImageUpload(file?: File | null) {
+    if (!file) return;
+    const reader = new FileReader();
+    reader.onload = () => setMaterialDraft((d) => ({ ...d, image: String(reader.result || "") }));
+    reader.readAsDataURL(file);
+  }
+
   function addMaterial() {
     if (!materialDraft.name.trim() || !materialDraft.code.trim()) return;
-    setMaterials((prev) => [{ id: `MAT-${String(prev.length + 1).padStart(3, "0")}`, code: materialDraft.code.trim(), name: materialDraft.name.trim(), specification: materialDraft.specification || undefined, unit: materialDraft.unit, stock_quantity: Number(materialDraft.stock_quantity) || 0, min_stock: Number(materialDraft.min_stock) || 0, purchase_price: Number(materialDraft.purchase_price) || 0, supplier: materialDraft.supplier || undefined, last_stock_date: today, remark: materialDraft.remark || undefined }, ...prev]);
-    setInventoryHint(`已新增物料 ${materialDraft.name.trim()}。`);
-    setMaterialDraft({ code: "", name: "", specification: "", unit: "个", stock_quantity: "", min_stock: "", purchase_price: "", supplier: suppliers[0]?.name ?? "", remark: "" });
+    const factoryPrice = Number(materialDraft.factory_price_rmb) || 0;
+    const weight = Number(materialDraft.weight) || 1;
+    const usdCost = Number(materialDraft.usd_cost) || calcUsdCost(factoryPrice, weight);
+    const salePrice = Number(materialDraft.sale_price_usd) || 0;
+    const vipPrice = Number(materialDraft.vip_sale_price_usd) || factoryPrice;
+    const nextItem = { id: editingMaterialId || `MAT-${String(materials.length + 1).padStart(3, "0")}`, code: materialDraft.code.trim(), name: materialDraft.name.trim(), specification: materialDraft.specification || undefined, size: materialDraft.size || undefined, unit: materialDraft.unit, stock_quantity: Number(materialDraft.stock_quantity) || 0, min_stock: 0, factory_price_rmb: factoryPrice, usd_cost: usdCost, sale_price_usd: salePrice, vip_sale_price_usd: vipPrice, weight, purchase_price: usdCost, supplier: materialDraft.supplier || undefined, image: materialDraft.image || undefined, last_stock_date: today, remark: materialDraft.remark || undefined } satisfies MaterialRecord;
+    if (editingMaterialId) {
+      setMaterials((prev) => prev.map((item) => item.id === editingMaterialId ? nextItem : item));
+      setInventoryHint(`已更新物料 ${nextItem.name}。`);
+    } else {
+      setMaterials((prev) => [nextItem, ...prev]);
+      setInventoryHint(`已新增物料 ${nextItem.name}。`);
+    }
+    resetMaterialDraft();
     setShowMaterialModal(false);
+  }
+
+  function openEditMaterial(item: MaterialRecord) {
+    setEditingMaterialId(item.id);
+    setMaterialDraft({ code: item.code, name: item.name, specification: item.specification ?? "", size: item.size ?? "", unit: item.unit, stock_quantity: String(item.stock_quantity ?? 0), factory_price_rmb: String(item.factory_price_rmb ?? 0), weight: String(item.weight ?? 1), usd_cost: String(item.usd_cost ?? calcUsdCost(item.factory_price_rmb ?? 0, item.weight)), sale_price_usd: String(item.sale_price_usd ?? 0), vip_sale_price_usd: String(item.vip_sale_price_usd ?? item.factory_price_rmb ?? 0), supplier: item.supplier ?? suppliers[0]?.name ?? "", image: item.image ?? "", remark: item.remark ?? "" });
+    setShowMaterialModal(true);
+  }
+
+  function deleteMaterial(id: string) {
+    if (!window.confirm("确认删除这条物料吗？")) return;
+    setMaterials((prev) => prev.filter((item) => item.id !== id));
   }
 
   function addPurchase() {
@@ -4078,68 +4220,33 @@ function MaterialsSection({ materials, setMaterials, purchases, setPurchases, su
     const unitPrice = Number(purchaseDraft.unit_price) || 0;
     const itemName = purchaseDraft.item_name.trim();
     if (!itemName || quantity <= 0) return;
-
     setPurchases((prev) => [{ id: `PO-${new Date().getFullYear()}-${String(prev.length + 1).padStart(3, "0")}`, supplier: purchaseDraft.supplier || "未指定", item_name: itemName, quantity, unit: purchaseDraft.unit, unit_price: unitPrice, total_amount: quantity * unitPrice, purchase_date: purchaseDraft.purchase_date, status: purchaseDraft.status }, ...prev]);
-
     const matched = findMaterialMatch(materials, itemName, purchaseDraft.unit);
     if (matched) {
-      setMaterials((prev) => prev.map((item) => item.id === matched.id ? { ...item, stock_quantity: item.stock_quantity + quantity, purchase_price: unitPrice || item.purchase_price, supplier: purchaseDraft.supplier || item.supplier, last_stock_date: purchaseDraft.purchase_date } : item));
-      setInventoryHint(`采购单已入库，${matched.name} 库存 +${quantity}${purchaseDraft.unit}。`);
+      setMaterials((prev) => prev.map((item) => item.id === matched.id ? { ...item, stock_quantity: item.stock_quantity + quantity, supplier: purchaseDraft.supplier || item.supplier, last_stock_date: purchaseDraft.purchase_date } : item));
+      setInventoryHint(`采购单已入库，${matched.name} 总库存 +${quantity}。`);
     } else {
-      setInventoryHint("采购单已记录，但未匹配到现有物料，库存未自动增加。可先建物料编码后再录采购。");
+      setInventoryHint("采购单已记录，但没匹配到现有物料。你可以先补建物料。") ;
     }
-
     setPurchaseDraft({ supplier: suppliers[0]?.name ?? "", item_name: "", quantity: "", unit: "个", unit_price: "", purchase_date: today, status: "未付款" });
     setShowPurchaseModal(false);
   }
 
   return (
     <div>
-      <SectionHeader eyebrow="Materials & Inventory" title="物料库存" actions={<><ActionBtn onClick={exportMaterials}>↓ 导出当前表</ActionBtn><ActionBtn onClick={printMaterials}>🖨 打印当前表</ActionBtn><ActionBtn tone="primary" onClick={() => sub === "inventory" ? setShowMaterialModal(true) : setShowPurchaseModal(true)}>+ {sub === "inventory" ? "新建物料" : "新建采购单"}</ActionBtn></>} />
-      <StatStrip items={[{ label: "物料品类", value: String(materials.length) }, { label: "订单占用", value: String(committedTotal), accent: "text-sky-600" }, { label: "低库存预警", value: String(lowStockCount), accent: "text-orange-600" }, { label: "缺货项目", value: String(shortageCount), accent: shortageCount > 0 ? "text-red-600" : "text-emerald-600" }, { label: "本月采购额", value: formatMoney(monthlyPurchase), accent: "text-red-600" }]} />
+      <SectionHeader eyebrow="Materials & Inventory" title="物料库存" actions={<><ActionBtn onClick={exportMaterials}>↓ 导出当前表</ActionBtn><ActionBtn onClick={printMaterials}>🖨 打印当前表</ActionBtn><ActionBtn tone="primary" onClick={() => sub === "inventory" ? (resetMaterialDraft(), setShowMaterialModal(true)) : setShowPurchaseModal(true)}>+ {sub === "inventory" ? "新建物料" : "新建采购单"}</ActionBtn></>} />
+      <StatStrip items={[{ label: "物料品类", value: String(materials.length) }, { label: "总库存", value: String(materials.reduce((sum, item) => sum + item.stock_quantity, 0)) }, { label: "本月采购额", value: formatMoney(monthlyPurchase), accent: "text-red-600" }, { label: "批发订单数", value: String(orders.filter((item) => item.order_type === "批发单" && item.status !== "已关闭").length), accent: "text-sky-600" }]} />
       <SegmentedControl options={[{ key: "inventory", label: "库存清单" }, { key: "purchases", label: "采购记录" }]} value={sub} onChange={setSub} />
 
-      {sub === "inventory" && shortageOrders.length > 0 ? (
-        <div className="my-4 rounded-xl border border-rose-200 bg-rose-50 px-4 py-3">
-          <div className="flex flex-wrap items-center justify-between gap-2">
-            <div>
-              <p className="text-sm font-semibold text-rose-700">缺料订单看板</p>
-              <p className="mt-1 text-xs text-rose-600">先看哪张订单会把库存吃空，仓库和下单的人不用来回翻表。</p>
-            </div>
-            <span className="rounded-full border border-rose-200 bg-white px-2 py-1 text-xs font-semibold text-rose-700">{shortageOrders.length} 张订单待补料</span>
-          </div>
-          <div className="mt-3 grid gap-2 lg:grid-cols-2">
-            {shortageOrders.map((item) => (
-              <div key={item.orderNumber} className="rounded-lg border border-rose-100 bg-white px-3 py-2 text-xs">
-                <div className="flex items-center justify-between gap-2">
-                  <div>
-                    <p className="font-semibold text-slate-800">{item.orderNumber} · {item.clientName}</p>
-                    <p className="mt-1 text-[11px] text-slate-500">{item.orderDate || "未填日期"}</p>
-                  </div>
-                  <div className="text-right">
-                    {item.shortageRows > 0 ? <p className="font-semibold text-rose-600">缺料 {item.shortageRows} 项</p> : null}
-                    {item.missingRows > 0 ? <p className="text-[11px] text-amber-600">待建物料 {item.missingRows} 项</p> : null}
-                  </div>
-                </div>
-              </div>
-            ))}
-          </div>
-        </div>
-      ) : null}
-
-      {inventoryHint ? (
-        <div className="mb-4 rounded-xl border border-sky-100 bg-sky-50 px-4 py-3 text-xs text-sky-700">
-          {inventoryHint}
-        </div>
-      ) : null}
+      {inventoryHint ? <div className="mb-4 rounded-xl border border-sky-100 bg-sky-50 px-4 py-3 text-xs text-sky-700">{inventoryHint}</div> : null}
 
       {showMaterialModal && (
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-slate-950/45 px-4">
-          <div className="w-full max-w-3xl rounded-2xl border border-slate-200 bg-white p-5 shadow-2xl">
+          <div className="w-full max-w-5xl rounded-2xl border border-slate-200 bg-white p-5 shadow-2xl">
             <div className="mb-4 flex items-start justify-between gap-3">
               <div>
-                <h3 className="text-base font-semibold text-slate-900">新建物料</h3>
-                <p className="mt-1 text-sm text-slate-500">新增物料改成弹窗，不挤占主页面。</p>
+                <h3 className="text-base font-semibold text-slate-900">{editingMaterialId ? "编辑物料" : "新建物料"}</h3>
+                <p className="mt-1 text-sm text-slate-500">支持尺寸、单重、图片、出厂价、美金成本、卖出价和 VIP 价。</p>
               </div>
               <button onClick={() => setShowMaterialModal(false)} className="rounded-lg border border-slate-200 px-2.5 py-1 text-xs text-slate-500 hover:border-slate-300 hover:text-slate-700 transition-colors">关闭</button>
             </div>
@@ -4147,16 +4254,32 @@ function MaterialsSection({ materials, setMaterials, purchases, setPurchases, su
               <SmallInput value={materialDraft.code} onChange={(v) => setMaterialDraft((d) => ({ ...d, code: v }))} placeholder="编码" />
               <SmallInput value={materialDraft.name} onChange={(v) => setMaterialDraft((d) => ({ ...d, name: v }))} placeholder="名称" />
               <SmallInput value={materialDraft.specification} onChange={(v) => setMaterialDraft((d) => ({ ...d, specification: v }))} placeholder="规格" />
+              <SmallInput value={materialDraft.size} onChange={(v) => setMaterialDraft((d) => ({ ...d, size: v }))} placeholder="尺寸" />
+              <SmallInput value={materialDraft.stock_quantity} onChange={(v) => setMaterialDraft((d) => ({ ...d, stock_quantity: v }))} type="number" placeholder="总库存" />
+              <SmallInput value={materialDraft.factory_price_rmb} onChange={(v) => syncMaterialCosts(v, materialDraft.weight)} type="number" placeholder="出厂价 RMB" />
+              <SmallInput value={materialDraft.weight} onChange={(v) => syncMaterialCosts(materialDraft.factory_price_rmb, v)} type="number" placeholder="单重（默认 1）" />
+              <SmallInput value={materialDraft.usd_cost} onChange={(v) => setMaterialDraft((d) => ({ ...d, usd_cost: v }))} type="number" placeholder="美金成本 USD" />
+              <SmallInput value={materialDraft.sale_price_usd} onChange={(v) => setMaterialDraft((d) => ({ ...d, sale_price_usd: v }))} type="number" placeholder="卖出价 USD" />
+              <SmallInput value={materialDraft.vip_sale_price_usd} onChange={(v) => setMaterialDraft((d) => ({ ...d, vip_sale_price_usd: v }))} type="number" placeholder="VIP价 USD（默认出厂价）" />
               <SmallSelect value={materialDraft.unit} onChange={(v) => setMaterialDraft((d) => ({ ...d, unit: v }))} options={["个", "米", "根", "套", "张"]} />
-              <SmallInput value={materialDraft.stock_quantity} onChange={(v) => setMaterialDraft((d) => ({ ...d, stock_quantity: v }))} type="number" placeholder="库存" />
-              <SmallInput value={materialDraft.min_stock} onChange={(v) => setMaterialDraft((d) => ({ ...d, min_stock: v }))} type="number" placeholder="预警库存" />
-              <SmallInput value={materialDraft.purchase_price} onChange={(v) => setMaterialDraft((d) => ({ ...d, purchase_price: v }))} type="number" placeholder="成本单价" />
               <SmallSelect value={materialDraft.supplier} onChange={(v) => setMaterialDraft((d) => ({ ...d, supplier: v }))} options={suppliers.length ? suppliers.map((item) => item.name) : ["未指定"]} />
             </div>
-            <div className="mt-2"><SmallInput value={materialDraft.remark} onChange={(v) => setMaterialDraft((d) => ({ ...d, remark: v }))} placeholder="备注（可选）" /></div>
+            <div className="mt-3 grid gap-3 lg:grid-cols-[1fr_180px]">
+              <div className="space-y-2">
+                <SmallInput value={materialDraft.remark} onChange={(v) => setMaterialDraft((d) => ({ ...d, remark: v }))} placeholder="备注（可选）" />
+                <label className="block rounded-xl border border-dashed border-slate-300 px-3 py-4 text-xs text-slate-500">
+                  <span className="font-semibold text-slate-700">上传图片</span>
+                  <input type="file" accept="image/*" className="mt-2 block w-full text-xs" onChange={(e) => handleMaterialImageUpload(e.target.files?.[0])} />
+                </label>
+              </div>
+              <div className="rounded-xl border border-slate-200 bg-slate-50 p-3">
+                <p className="text-xs font-semibold text-slate-700">图片预览</p>
+                {materialDraft.image ? <img src={materialDraft.image} alt="物料图片" className="mt-2 h-32 w-full rounded-lg object-cover" /> : <div className="mt-2 flex h-32 items-center justify-center rounded-lg border border-dashed border-slate-300 text-xs text-slate-400">暂无图片</div>}
+              </div>
+            </div>
             <div className="mt-5 flex justify-end gap-2">
               <ActionBtn onClick={() => setShowMaterialModal(false)}>取消</ActionBtn>
-              <ActionBtn tone="primary" onClick={addMaterial}>确认新建</ActionBtn>
+              <ActionBtn tone="primary" onClick={addMaterial}>{editingMaterialId ? "确认保存" : "确认新建"}</ActionBtn>
             </div>
           </div>
         </div>
@@ -4168,7 +4291,7 @@ function MaterialsSection({ materials, setMaterials, purchases, setPurchases, su
             <div className="mb-4 flex items-start justify-between gap-3">
               <div>
                 <h3 className="text-base font-semibold text-slate-900">新建采购单</h3>
-                <p className="mt-1 text-sm text-slate-500">采购新增也改成弹窗，保存后自动尝试回补库存。</p>
+                <p className="mt-1 text-sm text-slate-500">采购保存后会尝试自动回补对应物料的总库存。</p>
               </div>
               <button onClick={() => setShowPurchaseModal(false)} className="rounded-lg border border-slate-200 px-2.5 py-1 text-xs text-slate-500 hover:border-slate-300 hover:text-slate-700 transition-colors">关闭</button>
             </div>
@@ -4195,80 +4318,37 @@ function MaterialsSection({ materials, setMaterials, purchases, setPurchases, su
             <table className="w-full text-left text-xs">
               <thead>
                 <tr className="border-b border-slate-200 bg-slate-50">
+                  <th className="px-4 py-2.5 font-semibold text-slate-600">图片</th>
                   <th className="px-4 py-2.5 font-semibold text-slate-600">品名</th>
-                  <th className="px-4 py-2.5 font-semibold text-slate-600">规格 / 型号</th>
-                  <th className="px-4 py-2.5 font-semibold text-slate-600">单位</th>
-                  <th className="px-4 py-2.5 font-semibold text-slate-600">当前库存</th>
-                  <th className="px-4 py-2.5 font-semibold text-slate-600">订单占用</th>
-                  <th className="px-4 py-2.5 font-semibold text-slate-600">可用库存</th>
-                  <th className="px-4 py-2.5 font-semibold text-slate-600">预警库存</th>
-                  <th className="px-4 py-2.5 font-semibold text-slate-600">成本单价</th>
-                  <th className="px-4 py-2.5 font-semibold text-slate-600">最近入库日期</th>
-                  <th className="px-4 py-2.5 font-semibold text-slate-600">备注</th>
+                  <th className="px-4 py-2.5 font-semibold text-slate-600">规格</th>
+                  <th className="px-4 py-2.5 font-semibold text-slate-600">尺寸</th>
+                  <th className="px-4 py-2.5 font-semibold text-slate-600">总库存</th>
+                  <th className="px-4 py-2.5 font-semibold text-slate-600">出厂价 RMB</th>
+                  <th className="px-4 py-2.5 font-semibold text-slate-600">美金成本 USD</th>
+                  <th className="px-4 py-2.5 font-semibold text-slate-600">卖出价 USD</th>
+                  <th className="px-4 py-2.5 font-semibold text-slate-600">VIP价 USD</th>
+                  <th className="px-4 py-2.5 font-semibold text-slate-600">单重</th>
+                  <th className="px-4 py-2.5 font-semibold text-slate-600">供应商</th>
+                  <th className="px-4 py-2.5 font-semibold text-slate-600">操作</th>
                 </tr>
               </thead>
               <tbody>
-                {inventoryRows.map((item) => {
-                  const consumers = planning.byMaterial.get(item.id) ?? [];
-                  const isExpanded = expandedMaterialId === item.id;
-                  return (
-                    <Fragment key={item.id}>
-                      <tr className="border-b border-slate-100 last:border-b-0">
-                        <td className="px-4 py-2.5 font-medium text-slate-700">{item.name}<div className="text-[11px] text-slate-400">{item.code}</div></td>
-                        <td className="px-4 py-2.5 text-slate-600">{item.specification ?? "-"}</td>
-                        <td className="px-4 py-2.5 text-slate-600">{item.unit}</td>
-                        <td className={`px-4 py-2.5 font-semibold ${item.stock_quantity <= item.min_stock ? "text-orange-600" : "text-slate-700"}`}>{item.stock_quantity}</td>
-                        <td className={`px-4 py-2.5 font-semibold ${item.committed > 0 ? "text-sky-700" : "text-slate-400"}`}>{item.committed || "-"}</td>
-                        <td className={`px-4 py-2.5 font-semibold ${item.shortage > 0 ? "text-red-600" : item.available <= item.min_stock ? "text-orange-600" : "text-emerald-600"}`}>{item.available}</td>
-                        <td className="px-4 py-2.5 text-slate-600">{item.min_stock}</td>
-                        <td className="px-4 py-2.5 text-slate-700">{formatMoney(item.purchase_price)}</td>
-                        <td className="px-4 py-2.5 text-slate-500">{item.last_stock_date ?? "-"}</td>
-                        <td className="px-4 py-2.5 text-slate-500">
-                          <div className="flex items-center justify-between gap-2">
-                            <div>
-                              <div>{item.remark ?? item.supplier ?? "-"}</div>
-                              {item.shortage > 0 ? <div className="mt-1 text-[11px] font-semibold text-red-500">缺口 {item.shortage} {item.unit}</div> : null}
-                              {consumers.length ? <div className="mt-1 text-[11px] text-sky-600">被 {consumers.length} 张订单占用</div> : null}
-                            </div>
-                            {consumers.length ? (
-                              <button
-                                onClick={() => setExpandedMaterialId(isExpanded ? null : item.id)}
-                                className="shrink-0 rounded border border-slate-200 bg-white px-2 py-1 text-[11px] text-slate-600 hover:border-sky-300 hover:text-sky-700"
-                              >
-                                {isExpanded ? "收起订单" : "看占用订单"}
-                              </button>
-                            ) : null}
-                          </div>
-                        </td>
-                      </tr>
-                      {isExpanded ? (
-                        <tr key={`${item.id}-consumers`} className="border-b border-sky-100 bg-sky-50/50">
-                          <td colSpan={10} className="px-4 py-3">
-                            <div className="space-y-2">
-                              <p className="text-xs font-semibold text-sky-800">这项库存现在被哪些订单占用</p>
-                              {consumers.map((consumer, index) => (
-                                <div key={`${consumer.orderNumber}-${index}`} className="flex flex-wrap items-center justify-between gap-2 rounded-lg border border-sky-100 bg-white px-3 py-2 text-xs">
-                                  <div>
-                                    <p className="font-semibold text-slate-800">{consumer.orderNumber} · {consumer.clientName}</p>
-                                    <p className="mt-1 text-[11px] text-slate-500">需求 {consumer.requiredQty} {consumer.unit}，占用前可用 {Math.max(0, consumer.availableBefore)} {consumer.unit}</p>
-                                  </div>
-                                  <div className="text-right">
-                                    <p className="text-slate-600">占用后 {Math.max(0, consumer.availableAfter)} {consumer.unit}</p>
-                                    {consumer.shortageQty > 0 ? (
-                                      <p className="mt-1 font-semibold text-rose-600">缺 {consumer.shortageQty} {consumer.unit}</p>
-                                    ) : (
-                                      <p className="mt-1 font-semibold text-emerald-600">已覆盖</p>
-                                    )}
-                                  </div>
-                                </div>
-                              ))}
-                            </div>
-                          </td>
-                        </tr>
-                      ) : null}
-                    </Fragment>
-                  );
-                })}
+                {inventoryRows.map((item) => (
+                  <tr key={item.id} className="border-b border-slate-100 last:border-b-0">
+                    <td className="px-4 py-2.5">{item.image ? <img src={item.image} alt={item.name} className="h-12 w-12 rounded-lg object-cover" /> : <div className="flex h-12 w-12 items-center justify-center rounded-lg border border-dashed border-slate-300 text-[10px] text-slate-400">暂无</div>}</td>
+                    <td className="px-4 py-2.5 font-medium text-slate-700">{item.name}<div className="text-[11px] text-slate-400">{item.code}</div></td>
+                    <td className="px-4 py-2.5 text-slate-600">{item.specification ?? "-"}</td>
+                    <td className="px-4 py-2.5 text-slate-600">{item.size ?? "-"}</td>
+                    <td className="px-4 py-2.5 font-semibold text-slate-800">{item.stock_quantity}</td>
+                    <td className="px-4 py-2.5 text-slate-600">{item.factory_price_rmb ?? 0}</td>
+                    <td className="px-4 py-2.5 text-slate-600">{item.usd_cost ?? 0}</td>
+                    <td className="px-4 py-2.5 text-slate-600">{item.sale_price_usd ?? 0}</td>
+                    <td className="px-4 py-2.5 text-slate-600">{item.vip_sale_price_usd ?? item.factory_price_rmb ?? 0}</td>
+                    <td className="px-4 py-2.5 text-slate-600">{item.weight ?? 1}</td>
+                    <td className="px-4 py-2.5 text-slate-500">{item.supplier ?? "-"}</td>
+                    <td className="px-4 py-2.5"><div className="flex flex-wrap gap-2"><button onClick={() => openEditMaterial(item)} className="rounded border border-slate-200 px-2 py-1 text-[11px] text-slate-600 hover:border-slate-300 hover:bg-slate-50 transition-colors">编辑</button><button onClick={() => deleteMaterial(item.id)} className="rounded border border-rose-100 px-2 py-1 text-[11px] text-rose-500 hover:border-rose-300 hover:bg-rose-50 transition-colors">删除</button></div></td>
+                  </tr>
+                ))}
               </tbody>
             </table>
           </div>
@@ -4595,6 +4675,7 @@ function SettingsSection({ settings, setSettings }: { settings: BizSettings; set
   };
 
   const expenseTypeValue = settings.expense_types || "采购\n工资\n物流\n办公\n其他";
+  const supplierCategoryValue = settings.supplier_categories || "布料\n五金\n玻璃\n物流\n其他";
   const settingRows: Array<{ label: string; value: string | number }> = [
     { label: "\u516c\u53f8\u540d\u79f0", value: settings.company_name || "-" },
     { label: "\u516c\u53f8\u4e2d\u6587\u540d\u79f0", value: settings.company_name_zh || "-" },
@@ -4620,6 +4701,7 @@ function SettingsSection({ settings, setSettings }: { settings: BizSettings; set
     { label: "\u62a5\u4ef7\u9875\u811a\u5907\u6ce8", value: settings.quote_footer || "-" },
     { label: "Logo URL", value: settings.logo_url || "-" },
     { label: "支出类型", value: expenseTypeValue || "-" },
+    { label: "供应商分类", value: supplierCategoryValue || "-" },
   ];
 
   const settingsConfig: TabularSchemaConfig = {
@@ -4638,7 +4720,7 @@ function SettingsSection({ settings, setSettings }: { settings: BizSettings; set
     printTabularSchema(settingsConfig, "\u5f53\u524d\u4e1a\u52a1\u914d\u7f6e");
   }
 
-  return <div><SectionHeader eyebrow="Configuration" title="公司信息" actions={<><ActionBtn onClick={exportSettings}>↓ 导出设置</ActionBtn><ActionBtn onClick={printSettings}>🖨 打印设置</ActionBtn><ActionBtn tone="success">自动保存中</ActionBtn></>} /><div className="grid gap-4 lg:grid-cols-2"><SettingsGroup title="公司信息"><SettingsField label="公司名称" value={settings.company_name} onChange={(value) => update("company_name", value)} /><SettingsField label="公司中文名称" value={settings.company_name_zh ?? ""} onChange={(value) => update("company_name_zh", value)} /><SettingsField label="地址" value={settings.address} onChange={(value) => update("address", value)} /><SettingsField label="打印地址" value={settings.company_address ?? ""} note="留空时回退到公司地址" onChange={(value) => update("company_address", value)} /><SettingsField label="电话" value={settings.phone} onChange={(value) => update("phone", value)} /><SettingsField label="打印电话" value={settings.phones ?? ""} note="支持多行，打印时会自动拼接" onChange={(value) => update("phones", value)} /><SettingsField label="电子邮箱" value={settings.email} onChange={(value) => update("email", value)} /><SettingsField label="网站" value={settings.website} onChange={(value) => update("website", value)} /></SettingsGroup><SettingsGroup title="税务 & 财务"><SettingsField label="税号 (BN)" value={settings.tax_number} note="Business Number" onChange={(value) => update("tax_number", value)} /><SettingsField label="默认税率" value={String(settings.default_tax_rate)} onChange={(value) => update("default_tax_rate", value)} type="number" /><SettingsField label="默认货币" value={settings.default_currency} onChange={(value) => update("default_currency", value)} /><SettingsField label="财年开始月" value={String(settings.fiscal_start_month)} onChange={(value) => update("fiscal_start_month", value)} type="number" /></SettingsGroup><SettingsGroup title="收款信息"><SettingsField label="银行账户" value={settings.bank_account} onChange={(value) => update("bank_account", value)} /><SettingsField label="支付宝" value={settings.alipay} onChange={(value) => update("alipay", value)} /><SettingsField label="微信收款" value={settings.wechat_pay} onChange={(value) => update("wechat_pay", value)} /><SettingsField label="其他方式" value={settings.other_payment} onChange={(value) => update("other_payment", value)} /><SettingsField label="Zelle" value={settings.zelle ?? ""} onChange={(value) => update("zelle", value)} /></SettingsGroup><SettingsGroup title="打印模板"><SettingsField label="发票标题" value={settings.invoice_title ?? ""} onChange={(value) => update("invoice_title", value)} /><SettingsField label="领料单标题" value={settings.picking_title ?? ""} onChange={(value) => update("picking_title", value)} /><SettingsField label="发票备注模板" value={settings.invoice_note ?? ""} note="订单没填备注时自动使用这里" onChange={(value) => update("invoice_note", value)} /></SettingsGroup><SettingsGroup title="报价单模板"><SettingsField label="默认有效期" value={String(settings.quote_valid_days)} note="Days until quote expires" onChange={(value) => update("quote_valid_days", value)} type="number" /><SettingsField label="页脚备注" value={settings.quote_footer} onChange={(value) => update("quote_footer", value)} /><SettingsField label="Logo URL" value={settings.logo_url} note="Used in printed quotes" onChange={(value) => update("logo_url", value)} /></SettingsGroup><SettingsGroup title="支出类型"><div className="flex flex-col gap-1"><label className="text-xs font-semibold text-slate-600">支出类型列表</label><textarea value={expenseTypeValue} onChange={(e) => update("expense_types", e.target.value)} rows={6} className="w-full rounded-lg border border-slate-300 bg-white px-3 py-2 text-xs text-slate-700 focus:border-blue-400 focus:outline-none resize-none" /><p className="text-[11px] text-slate-400">一行一个，或者用逗号分隔。收支管理会直接读取这里。</p></div></SettingsGroup></div></div>;
+  return <div><SectionHeader eyebrow="Configuration" title="公司信息" actions={<><ActionBtn onClick={exportSettings}>↓ 导出设置</ActionBtn><ActionBtn onClick={printSettings}>🖨 打印设置</ActionBtn><ActionBtn tone="success">自动保存中</ActionBtn></>} /><div className="grid gap-4 lg:grid-cols-2"><SettingsGroup title="公司信息"><SettingsField label="公司名称" value={settings.company_name} onChange={(value) => update("company_name", value)} /><SettingsField label="公司中文名称" value={settings.company_name_zh ?? ""} onChange={(value) => update("company_name_zh", value)} /><SettingsField label="地址" value={settings.address} onChange={(value) => update("address", value)} /><SettingsField label="打印地址" value={settings.company_address ?? ""} note="留空时回退到公司地址" onChange={(value) => update("company_address", value)} /><SettingsField label="电话" value={settings.phone} onChange={(value) => update("phone", value)} /><SettingsField label="打印电话" value={settings.phones ?? ""} note="支持多行，打印时会自动拼接" onChange={(value) => update("phones", value)} /><SettingsField label="电子邮箱" value={settings.email} onChange={(value) => update("email", value)} /><SettingsField label="网站" value={settings.website} onChange={(value) => update("website", value)} /></SettingsGroup><SettingsGroup title="税务 & 财务"><SettingsField label="税号 (BN)" value={settings.tax_number} note="Business Number" onChange={(value) => update("tax_number", value)} /><SettingsField label="默认税率" value={String(settings.default_tax_rate)} onChange={(value) => update("default_tax_rate", value)} type="number" /><SettingsField label="默认货币" value={settings.default_currency} onChange={(value) => update("default_currency", value)} /><SettingsField label="财年开始月" value={String(settings.fiscal_start_month)} onChange={(value) => update("fiscal_start_month", value)} type="number" /></SettingsGroup><SettingsGroup title="收款信息"><SettingsField label="银行账户" value={settings.bank_account} onChange={(value) => update("bank_account", value)} /><SettingsField label="支付宝" value={settings.alipay} onChange={(value) => update("alipay", value)} /><SettingsField label="微信收款" value={settings.wechat_pay} onChange={(value) => update("wechat_pay", value)} /><SettingsField label="其他方式" value={settings.other_payment} onChange={(value) => update("other_payment", value)} /><SettingsField label="Zelle" value={settings.zelle ?? ""} onChange={(value) => update("zelle", value)} /></SettingsGroup><SettingsGroup title="打印模板"><SettingsField label="发票标题" value={settings.invoice_title ?? ""} onChange={(value) => update("invoice_title", value)} /><SettingsField label="领料单标题" value={settings.picking_title ?? ""} onChange={(value) => update("picking_title", value)} /><SettingsField label="发票备注模板" value={settings.invoice_note ?? ""} note="订单没填备注时自动使用这里" onChange={(value) => update("invoice_note", value)} /></SettingsGroup><SettingsGroup title="报价单模板"><SettingsField label="默认有效期" value={String(settings.quote_valid_days)} note="Days until quote expires" onChange={(value) => update("quote_valid_days", value)} type="number" /><SettingsField label="页脚备注" value={settings.quote_footer} onChange={(value) => update("quote_footer", value)} /><SettingsField label="Logo URL" value={settings.logo_url} note="Used in printed quotes" onChange={(value) => update("logo_url", value)} /></SettingsGroup><SettingsGroup title="支出类型"><div className="flex flex-col gap-1"><label className="text-xs font-semibold text-slate-600">支出类型列表</label><textarea value={expenseTypeValue} onChange={(e) => update("expense_types", e.target.value)} rows={6} className="w-full rounded-lg border border-slate-300 bg-white px-3 py-2 text-xs text-slate-700 focus:border-blue-400 focus:outline-none resize-none" /><p className="text-[11px] text-slate-400">一行一个，或者用逗号分隔。收支管理会直接读取这里。</p></div></SettingsGroup><SettingsGroup title="供应商分类"><div className="flex flex-col gap-1"><label className="text-xs font-semibold text-slate-600">供应商分类列表</label><textarea value={supplierCategoryValue} onChange={(e) => update("supplier_categories", e.target.value)} rows={6} className="w-full rounded-lg border border-slate-300 bg-white px-3 py-2 text-xs text-slate-700 focus:border-blue-400 focus:outline-none resize-none" /><p className="text-[11px] text-slate-400">一行一个，或者用逗号分隔。供应商新增/编辑会直接读取这里。</p></div></SettingsGroup></div></div>;
 }
 
 // ─── Sidebar nav ─────────────────────────────────────────────────────────────
@@ -4864,6 +4946,9 @@ export default function DashboardBizPage() {
               appointments={appointments}
               setAppointments={setAppointments}
               setCashEntries={setCashEntries}
+              purchases={purchases}
+              setPurchases={setPurchases}
+              settings={settings}
               onCreateAppointment={(client) => {
                 setAppointmentPrefill({ client_id: client.id, client_name: client.name, phone: client.phone, address: client.address, appointment_date: `${todayIso()}T10:00`, description: "" });
                 setSection("appointments");

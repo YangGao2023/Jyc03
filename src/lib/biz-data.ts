@@ -63,6 +63,7 @@ export type SupplierRecord = {
   contact_person?: string;
   phone?: string;
   email?: string;
+  website?: string;
   address?: string;
   last_purchase_date?: string;
   remark?: string;
@@ -93,11 +94,18 @@ export type MaterialRecord = {
   code: string;
   name: string;
   specification?: string;
+  size?: string;
   unit: string;
   stock_quantity: number;
   min_stock: number;
+  factory_price_rmb?: number;
+  usd_cost?: number;
+  sale_price_usd?: number;
+  vip_sale_price_usd?: number;
+  weight?: number;
   purchase_price: number;
   supplier?: string;
+  image?: string;
   last_stock_date?: string;
   remark?: string;
 };
@@ -207,6 +215,7 @@ export type BizSettings = {
   quote_footer: string;
   logo_url: string;
   expense_types?: string;
+  supplier_categories?: string;
 };
 
 function toNumber(value: unknown) {
@@ -325,6 +334,7 @@ export const bizSuppliers = normalizeList<SupplierRecord>(rawAssetsRecord.suppli
   contact_person: toString(item.contact_person) || undefined,
   phone: toString(item.phone) || undefined,
   email: toString(item.email) || undefined,
+  website: toString(item.website) || undefined,
   address: toString(item.address) || undefined,
   last_purchase_date: toString(item.last_purchase_date) || undefined,
   remark: toString(item.remark) || undefined,
@@ -355,11 +365,18 @@ export const bizMaterials = normalizeList<MaterialRecord>(rawAssetsRecord.materi
   code: toString(item.code),
   name: toString(item.name),
   specification: toString(item.specification) || undefined,
+  size: toString(item.size) || undefined,
   unit: toString(item.unit),
   stock_quantity: toNumber(item.stock_quantity),
   min_stock: toNumber(item.min_stock),
-  purchase_price: toNumber(item.purchase_price),
+  factory_price_rmb: toNumber(item.factory_price_rmb),
+  usd_cost: toNumber(item.usd_cost),
+  sale_price_usd: toNumber(item.sale_price_usd),
+  vip_sale_price_usd: item.vip_sale_price_usd == null ? undefined : toNumber(item.vip_sale_price_usd),
+  weight: item.weight == null ? undefined : toNumber(item.weight),
+  purchase_price: toNumber(item.purchase_price || item.usd_cost),
   supplier: toString(item.supplier) || undefined,
+  image: toString(item.image) || undefined,
   last_stock_date: toString(item.last_stock_date) || undefined,
   remark: toString(item.remark) || undefined,
 }));
@@ -469,6 +486,7 @@ export const bizSettings: BizSettings = {
   quote_footer: toString(rawAssetsRecord.settings && (rawAssetsRecord.settings as Record<string, unknown>).quote_footer),
   logo_url: toString(rawAssetsRecord.settings && (rawAssetsRecord.settings as Record<string, unknown>).logo_url),
   expense_types: toString(rawAssetsRecord.settings && (rawAssetsRecord.settings as Record<string, unknown>).expense_types),
+  supplier_categories: toString(rawAssetsRecord.settings && (rawAssetsRecord.settings as Record<string, unknown>).supplier_categories),
 };
 
 export function formatMoney(value: number) {

@@ -856,10 +856,28 @@ function buildCustomerInvoiceHTML(order: BizOrder, draft: DraftFields, rows: Mat
 `, { pageTitle: `Invoice ${order.order_number}`, bodyPadding: "0", maxWidth: "202mm", extraStyles: `@page{size:A4 portrait;margin:4mm}.sheet{width:202mm;height:289mm;overflow:hidden;border:1px solid #a3a3a3;background:#fff}.topbar{display:grid;grid-template-columns:1.2fr 1fr;gap:4px;padding:4px;background:${brandBlue}}.topbox{background:${brandBlue};color:#fff;padding:10px 12px;min-height:52px;display:flex;align-items:center;justify-content:space-between;border:1px solid rgba(255,255,255,.35)}.topbox h1{font-size:14px;font-weight:800;letter-spacing:.02em;color:#fff}.topbox p{font-size:10px;line-height:1.2;color:rgba(255,255,255,.92)}.sectionBlue{background:${brandBlue};color:#fff;font-weight:700;padding:7px 10px;font-size:13px}.contactInvoice{display:grid;grid-template-columns:2.4fr 1fr;gap:4px;padding:0 4px 4px;background:${brandBlue}}.panel{border:1px solid #a3a3a3;background:#fff}.rows{padding:0;background:#fff}.row{display:grid;grid-template-columns:58px 1fr 58px 1fr;border-top:1px solid #d4d4d4}.row:first-child{border-top:none}.cell{padding:8px 10px;font-size:11px}.label{font-weight:700}.invoiceBox .big{font-size:16px;font-weight:800;text-align:center;padding:14px 10px;border-top:1px solid #d4d4d4}.invoiceBox .date{font-size:14px;font-weight:800;text-align:center;padding:14px 10px;border-top:1px solid #d4d4d4}.midBlue{margin:0 4px 4px;background:${brandBlue};color:#fff;padding:7px 10px;font-size:11px;font-weight:700;display:flex;justify-content:space-between}.middle{display:grid;grid-template-columns:1.08fr 0.92fr;gap:4px;padding:0 4px 4px}.photoWrap{border:1px solid #a3a3a3;background:#fff;height:148mm;position:relative;padding:4px}.photoInner{height:100%;border:1px solid #111827;background:#e5e7eb;overflow:hidden}.photoCode{position:absolute;left:12px;bottom:8px;font-size:24px;font-weight:900;letter-spacing:.04em;color:#111}.descWrap{border:1px solid #a3a3a3;background:#fff;height:148mm;overflow:hidden}.descWrap > div{padding:10px!important;font-size:12px!important;line-height:1.45!important;min-height:auto!important}.bottom{display:grid;grid-template-columns:1.2fr .9fr;gap:4px;padding:0 4px 4px}.noteBody{border:1px solid #a3a3a3;background:#fff;padding:10px;min-height:72mm;font-size:11px;line-height:1.45;overflow:hidden}.totalBody{border:1px solid #a3a3a3;background:#fff;padding:10px 12px;min-height:72mm;display:flex;flex-direction:column;justify-content:center;gap:10px}.totalRow{display:flex;justify-content:space-between;font-size:15px;font-weight:800}.totalRow .v{color:#2b6fdb}@media print{html,body{margin:0!important;padding:0!important}.sheet{border:none;-webkit-print-color-adjust:exact;print-color-adjust:exact;break-inside:avoid;page-break-inside:avoid}}` });
 }
 
-function buildPrintShell(title: string, body: string, options?: { pageTitle?: string; maxWidth?: string; bodyPadding?: string; extraStyles?: string }) {
-  return `<!DOCTYPE html><html><head><meta charset="UTF-8"><title>${escHtml(options?.pageTitle || title)}</title>
+type PrintShellOptions = {
+  pageTitle?: string;
+  maxWidth?: string;
+  bodyPadding?: string;
+  extraStyles?: string;
+};
+
+const DEFAULT_PRINT_SHELL: Required<Pick<PrintShellOptions, "maxWidth" | "bodyPadding" | "extraStyles">> = {
+  maxWidth: "1080px",
+  bodyPadding: "28px",
+  extraStyles: "",
+};
+
+function buildPrintShell(title: string, body: string, options?: PrintShellOptions) {
+  const config = {
+    ...DEFAULT_PRINT_SHELL,
+    ...options,
+  };
+
+  return `<!DOCTYPE html><html><head><meta charset="UTF-8"><title>${escHtml(config.pageTitle || title)}</title>
 <style>
-*{box-sizing:border-box}body{font-family:Arial,sans-serif;color:#0f172a;padding:${options?.bodyPadding || "28px"};background:#fff}.sheet{max-width:${options?.maxWidth || "1080px"};margin:0 auto}${options?.extraStyles || ""}@media print{body{padding:0}.sheet{max-width:none}}
+*{box-sizing:border-box}body{font-family:Arial,sans-serif;color:#0f172a;padding:${config.bodyPadding};background:#fff}.sheet{max-width:${config.maxWidth};margin:0 auto}${config.extraStyles}@media print{body{padding:0}.sheet{max-width:none}}
 </style></head><body><div class="sheet">${body}</div><script>window.onload=function(){window.print();}<\/script></body></html>`;
 }
 

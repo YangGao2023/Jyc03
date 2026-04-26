@@ -7,6 +7,7 @@ export type PaymentRecord = {
   method: string;
   note?: string;
   type: "payment" | "refund";
+  office?: boolean;
 };
 
 export type MaterialRow = {
@@ -76,6 +77,7 @@ export type ExpenseRecord = {
   payment_method: string;
   expense_date: string;
   remark?: string;
+  office?: boolean;
 };
 
 export type CashEntry = {
@@ -204,6 +206,7 @@ export type BizSettings = {
   quote_valid_days: number;
   quote_footer: string;
   logo_url: string;
+  expense_types?: string;
 };
 
 function toNumber(value: unknown) {
@@ -239,6 +242,7 @@ function normalizeOrder(raw: Record<string, unknown>): BizOrder {
         method: String(p.method ?? ""),
         note: p.note != null ? String(p.note) : undefined,
         type: p.type === "refund" ? ("refund" as const) : ("payment" as const),
+        office: Boolean(p.office),
       }))
     : [];
 
@@ -335,6 +339,7 @@ export const bizExpenses = normalizeList<ExpenseRecord>(rawAssetsRecord.expenses
   payment_method: toString(item.payment_method),
   expense_date: toString(item.expense_date),
   remark: toString(item.remark) || undefined,
+  office: Boolean(item.office),
 }));
 
 export const bizCashEntries = normalizeList<CashEntry>(rawAssetsRecord.cash_entries, (item) => ({
@@ -463,6 +468,7 @@ export const bizSettings: BizSettings = {
   quote_valid_days: toNumber(rawAssetsRecord.settings && (rawAssetsRecord.settings as Record<string, unknown>).quote_valid_days),
   quote_footer: toString(rawAssetsRecord.settings && (rawAssetsRecord.settings as Record<string, unknown>).quote_footer),
   logo_url: toString(rawAssetsRecord.settings && (rawAssetsRecord.settings as Record<string, unknown>).logo_url),
+  expense_types: toString(rawAssetsRecord.settings && (rawAssetsRecord.settings as Record<string, unknown>).expense_types),
 };
 
 export function formatMoney(value: number) {

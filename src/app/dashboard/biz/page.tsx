@@ -525,7 +525,7 @@ function deriveStatus(totalAfterTax: number, amountPaid: number, currentStatus: 
   return "下单";
 }
 
-const PAYMENT_METHODS = ["现金", "微信", "支票", "刷卡", "转账", "银行转账", "Zelle"];
+const PAYMENT_METHODS = ["现金", "支票", "刷卡", "转账"];
 
 function EditField({
   label,
@@ -1126,6 +1126,7 @@ function OrderDetailView({
   onBack,
   onSave,
   onSavePrintArchive,
+  onOfficeEntry,
 }: {
   order: BizOrder;
   settings: BizSettings;
@@ -1134,6 +1135,7 @@ function OrderDetailView({
   onBack: () => void;
   onSave: (updated: BizOrder) => void;
   onSavePrintArchive: (record: PrintArchiveRecord) => void;
+  onOfficeEntry: (entry: CashEntry) => void;
 }) {
   const today = new Date().toISOString().slice(0, 10);
   const isCustom = order.order_type === "定制单";
@@ -1152,19 +1154,6 @@ function OrderDetailView({
   });
 
   const [materialRows, setMaterialRows] = useState<MaterialRow[]>(order.material_rows ?? []);
-  const materialInsight = useMemo(
-    () => buildOrderMaterialInsights(materials, [{ ...order, material_rows: materialRows }]).byOrder.get(order.order_number),
-    [materialRows, materials, order],
-  );
-
-  function handleMaterialRowsChange(rows: MaterialRow[]) {
-    setMaterialRows(rows);
-    if (!isCustom) {
-      // Auto-sync total_price from material subtotal for wholesale orders
-      const subtotal = rows.reduce((s, r) => s + r.qty * r.unit_price, 0);
-      setDraft((d) => ({ ...d, total_price: subtotal }));
-    }
-  }
 
   const [paymentMode, setPaymentMode] = useState<"payment" | "refund">("payment");
   const [showAddPayment, setShowAddPayment] = useState(false);
@@ -1173,6 +1162,7 @@ function OrderDetailView({
     amount: "",
     method: "现金",
     note: "",
+    office: false,
   });
   const orderPrintArchives = useMemo(
     () => printArchives.filter((item) => item.order_number === order.order_number).sort((a, b) => String(b.created_at).localeCompare(String(a.created_at))),
@@ -1254,6 +1244,7 @@ function OrderDetailView({
       method: newPayment.method,
       note: newPayment.note || undefined,
       type: paymentMode,
+      office: newPayment.office,
     };
     const history = [...(order.payment_history ?? []), record];
     const amountPaid =
@@ -1269,7 +1260,13 @@ function OrderDetailView({
       balance,
       status,
     });
-    setNewPayment({ date: today, amount: "", method: "现金", note: "" });
+    if (paymentMode === "payment" && newPayment.office) {
+      onOfficeEntry({ id: `CASH-${new Date().getFullYear()}-${Math.random().toString(36).slice(2, 8).toUpperCase()}`, type: "收入", amount, date: newPayment.date, note: `${order.order_number} 办公室收款` });
+    }
+    if (paymentMode === "refund" && newPayment.office) {
+      onOfficeEntry({ id: `CASH-${new Date().getFullYear()}-${Math.random().toString(36).slice(2, 8).toUpperCase()}`, type: "支出", amount, date: newPayment.date, note: `${order.order_number} 办公室退款` });
+    }
+    setNewPayment({ date: today, amount: "", method: "现金", note: "", office: false });
     setShowAddPayment(false);
   }
 
@@ -1444,75 +1441,6 @@ function OrderDetailView({
           </div>
         </div>
 
-        {/* Wholesale: editable material rows */}
-        {!isCustom && (
-          <div className="space-y-4">
-            <div className="rounded-xl border border-slate-200 bg-white p-4">
-              <div className="mb-3 flex items-center justify-between border-b border-slate-100 pb-2">
-                <h3 className="text-xs font-semibold uppercase tracking-wider text-slate-400">物料清单</h3>
-                <span className="text-[11px] text-slate-400">编辑行时自动同步总价</span>
-              </div>
-              <EditableMaterialRows rows={materialRows} onChange={handleMaterialRowsChange} />
-            </div>
-
-            <div className="rounded-xl border border-slate-200 bg-white p-4">
-              <div className="mb-3 flex items-center justify-between border-b border-slate-100 pb-2">
-                <h3 className="text-xs font-semibold uppercase tracking-wider text-slate-400">备料检查</h3>
-                <span className="text-[11px] text-slate-400">按当前库存顺序直接判断这张单能不能备齐</span>
-              </div>
-              {materialInsight?.allocations.length ? (
-                <div className="space-y-2">
-                  <div className="flex flex-wrap gap-2 text-[11px]">
-                    <span className={`rounded-full border px-2 py-1 font-semibold ${materialInsight.shortageRows > 0 ? "border-rose-200 bg-rose-50 text-rose-700" : materialInsight.missingRows > 0 ? "border-amber-200 bg-amber-50 text-amber-700" : "border-emerald-200 bg-emerald-50 text-emerald-700"}`}>
-                      {materialInsight.shortageRows > 0 ? `缺料 ${materialInsight.shortageRows} 项` : materialInsight.missingRows > 0 ? `待建物料 ${materialInsight.missingRows} 项` : "当前可直接备料"}
-                    </span>
-                    <span className="rounded-full border border-slate-200 bg-slate-50 px-2 py-1 text-slate-600">已匹配 {materialInsight.matchedRows}/{materialInsight.totalRows}</span>
-                    <span className="rounded-full border border-slate-200 bg-slate-50 px-2 py-1 text-slate-600">缺口 {materialInsight.totalShortageQty}</span>
-                  </div>
-                  <div className="overflow-x-auto">
-                    <table className="w-full text-left text-xs">
-                      <thead>
-                        <tr className="border-b border-slate-200 bg-slate-50">
-                          <th className="px-3 py-2 font-semibold text-slate-600">物料</th>
-                          <th className="px-3 py-2 font-semibold text-slate-600">需求</th>
-                          <th className="px-3 py-2 font-semibold text-slate-600">匹配库存</th>
-                          <th className="px-3 py-2 font-semibold text-slate-600">占用前</th>
-                          <th className="px-3 py-2 font-semibold text-slate-600">占用后</th>
-                          <th className="px-3 py-2 font-semibold text-slate-600">结果</th>
-                        </tr>
-                      </thead>
-                      <tbody>
-                        {materialInsight.allocations.map((item, index) => (
-                          <tr key={`${item.rowName}-${index}`} className="border-b border-slate-100 last:border-b-0">
-                            <td className="px-3 py-2 text-slate-700">
-                              <div className="font-medium">{item.rowName}</div>
-                              <div className="text-[11px] text-slate-400">{item.spec ?? "-"}</div>
-                            </td>
-                            <td className="px-3 py-2 text-slate-700">{item.requiredQty} {item.unit}</td>
-                            <td className="px-3 py-2 text-slate-600">{item.matched ? `${item.materialName} · ${item.materialCode}` : "未匹配库存编码"}</td>
-                            <td className="px-3 py-2 text-slate-600">{item.matched ? `${Math.max(0, item.availableBefore)} ${item.unit}` : "-"}</td>
-                            <td className="px-3 py-2 text-slate-600">{item.matched ? `${Math.max(0, item.availableAfter)} ${item.unit}` : "-"}</td>
-                            <td className="px-3 py-2">
-                              {!item.matched ? (
-                                <span className="rounded-full border border-amber-200 bg-amber-50 px-2 py-0.5 text-[11px] font-semibold text-amber-700">先建物料</span>
-                              ) : item.shortageQty > 0 ? (
-                                <span className="rounded-full border border-rose-200 bg-rose-50 px-2 py-0.5 text-[11px] font-semibold text-rose-700">缺 {item.shortageQty} {item.unit}</span>
-                              ) : (
-                                <span className="rounded-full border border-emerald-200 bg-emerald-50 px-2 py-0.5 text-[11px] font-semibold text-emerald-700">可备齐</span>
-                              )}
-                            </td>
-                          </tr>
-                        ))}
-                      </tbody>
-                    </table>
-                  </div>
-                </div>
-              ) : (
-                <div className="rounded-lg border border-dashed border-slate-200 py-8 text-center text-xs text-slate-400">先录入物料清单，再看这张单的备料结果</div>
-              )}
-            </div>
-          </div>
-        )}
 
         {/* Bottom: 金额结算 + 收款记录 */}
         <div className="grid gap-4 lg:grid-cols-[300px_1fr]">
@@ -1660,6 +1588,7 @@ function OrderDetailView({
                     />
                   </div>
                 </div>
+                <label className="mt-2 flex items-center gap-2 text-xs text-slate-600"><input type="checkbox" checked={newPayment.office} onChange={(e) => setNewPayment((p) => ({ ...p, office: e.target.checked }))} /> 这笔资金进入/流出办公室</label>
                 <div className="mt-2 flex gap-2">
                   <button
                     onClick={handleAddPayment}
@@ -1707,11 +1636,13 @@ function OrderDetailView({
 function NewOrderModal({
   type,
   existingOrders,
+  clients,
   onClose,
   onCreate,
 }: {
   type: "定制单" | "批发单";
   existingOrders: BizOrder[];
+  clients: ContactRecord[];
   onClose: () => void;
   onCreate: (order: BizOrder) => void;
 }) {
@@ -1725,10 +1656,25 @@ function NewOrderModal({
     deposit: "",
     deposit_method: "现金",
     deposit_note: "",
+    deposit_office: false,
+    preview_image: "",
   });
 
-  function set(key: string, val: string) {
+  function set(key: string, val: string | boolean) {
     setFields((f) => ({ ...f, [key]: val }));
+  }
+
+  function hydrateClient(name: string) {
+    const matched = clients.find((item) => item.name === name.trim());
+    if (!matched) return;
+    setFields((f) => ({ ...f, client_name: matched.name, phone: matched.phone ?? f.phone, address: matched.address ?? f.address }));
+  }
+
+  function handlePreviewUpload(file?: File | null) {
+    if (!file) return;
+    const reader = new FileReader();
+    reader.onload = () => setFields((f) => ({ ...f, preview_image: typeof reader.result === "string" ? reader.result : "" }));
+    reader.readAsDataURL(file);
   }
 
   function handleCreate() {
@@ -1755,6 +1701,7 @@ function NewOrderModal({
               method: fields.deposit_method,
               note: fields.deposit_note || undefined,
               type: "payment",
+              office: fields.deposit_office,
             },
           ]
         : [];
@@ -1766,6 +1713,7 @@ function NewOrderModal({
       phone: fields.phone || undefined,
       address: fields.address || undefined,
       description: fields.description || undefined,
+      preview_image: type === "定制单" ? fields.preview_image || undefined : undefined,
       total_price: totalPrice,
       amount_paid: deposit,
       balance,
@@ -1799,10 +1747,15 @@ function NewOrderModal({
               </label>
               <input
                 type="text"
+                list="order-client-options"
                 value={fields.client_name}
-                onChange={(e) => set("client_name", e.target.value)}
+                onChange={(e) => {
+                  set("client_name", e.target.value);
+                  hydrateClient(e.target.value);
+                }}
                 className="h-8 w-full rounded-lg border border-slate-300 bg-white px-3 text-xs text-slate-700 focus:border-blue-400 focus:outline-none"
               />
+              <datalist id="order-client-options">{clients.map((item) => <option key={item.id} value={item.name} />)}</datalist>
             </div>
             <div>
               <label className="mb-1 block text-[11px] font-semibold text-slate-500">联系电话</label>
@@ -1844,6 +1797,18 @@ function NewOrderModal({
               className="h-8 w-full rounded-lg border border-slate-300 bg-white px-3 text-xs text-slate-700 focus:border-blue-400 focus:outline-none"
             />
           </div>
+          {type === "定制单" && (
+            <div className="rounded-lg border border-slate-200 bg-slate-50 p-3">
+              <p className="mb-2 text-[11px] font-semibold uppercase tracking-wider text-slate-400">参考图片</p>
+              <div className="flex items-center gap-3">
+                <label className="flex h-24 w-24 cursor-pointer items-center justify-center overflow-hidden rounded-lg border border-slate-200 bg-white text-[11px] text-slate-400">
+                  {fields.preview_image ? <img src={fields.preview_image} alt="预览" className="h-full w-full object-cover" /> : "上传图片"}
+                  <input type="file" accept="image/*" className="hidden" onChange={(e) => handlePreviewUpload(e.target.files?.[0])} />
+                </label>
+                <div className="flex-1 text-[11px] text-slate-500">新建定制单时就可以先放一张参考图，后面进订单详情还能继续替换。</div>
+              </div>
+            </div>
+          )}
           <div className="rounded-lg border border-slate-200 bg-slate-50 p-3">
             <p className="mb-2 text-[11px] font-semibold uppercase tracking-wider text-slate-400">
               首付 / 定金（可选）
@@ -1882,6 +1847,7 @@ function NewOrderModal({
                 />
               </div>
             </div>
+            <label className="mt-3 flex items-center gap-2 text-xs text-slate-600"><input type="checkbox" checked={fields.deposit_office} onChange={(e) => set("deposit_office", e.target.checked)} /> 这笔收入进入办公室</label>
           </div>
         </div>
         <div className="flex justify-end gap-2 border-t border-slate-100 px-5 py-4">
@@ -1909,17 +1875,21 @@ function NewOrderModal({
 function OrdersSection({
   orders,
   materials,
+  clients,
   setOrders,
   settings,
   printArchives,
   setPrintArchives,
+  setCashEntries,
 }: {
   orders: BizOrder[];
   materials: MaterialRecord[];
+  clients: ContactRecord[];
   setOrders: React.Dispatch<React.SetStateAction<BizOrder[]>>;
   settings: BizSettings;
   printArchives: PrintArchiveRecord[];
   setPrintArchives: React.Dispatch<React.SetStateAction<PrintArchiveRecord[]>>;
+  setCashEntries: React.Dispatch<React.SetStateAction<CashEntry[]>>;
 }) {
   const [selectedOrder, setSelectedOrder] = useState<BizOrder | null>(null);
   const [typeFilter, setTypeFilter] = useState("全部");
@@ -1935,7 +1905,7 @@ function OrdersSection({
   const [bulkAction, setBulkAction] = useState<null | "pay" | "delete">(null);
   const [bulkBusy, setBulkBusy] = useState(false);
 
-  const orderListColumns = ["订单号", "类型", "客户", "描述", "总金额", "下单日期", "状态", "备料", "余款", "操作"];
+  const orderListColumns = ["订单号", "类型", "客户", "描述", "总金额", "下单日期", "状态", "余款", "操作"];
   const orderListConfig: SplitTabularSchemaConfig = {
     title: "订单列表",
     filePrefix: "biz-orders",
@@ -1961,6 +1931,10 @@ function OrdersSection({
 
   function handleCreate(newOrder: BizOrder) {
     setOrders((prev) => [newOrder, ...prev]);
+    const depositRecord = newOrder.payment_history?.[0];
+    if (depositRecord?.office) {
+      setCashEntries((prev) => [{ id: `CASH-${new Date().getFullYear()}-${String(prev.length + 1).padStart(3, "0")}`, type: "收入", amount: depositRecord.amount, date: depositRecord.date, note: `${newOrder.order_number} 新单定金` }, ...prev]);
+    }
   }
 
   function handleDelete(orderNumber: string) {
@@ -2041,11 +2015,6 @@ function OrdersSection({
     [selectedOrders],
   );
   const allFilteredSelected = filteredOrders.length > 0 && filteredOrders.every((order) => selectedOrderNumbers.includes(order.order_number));
-  const materialInsights = useMemo(() => buildOrderMaterialInsights(materials, orders).byOrder, [materials, orders]);
-  const shortageOrders = useMemo(
-    () => [...materialInsights.values()].filter((item) => item.shortageRows > 0 || item.missingRows > 0),
-    [materialInsights],
-  );
 
   async function handleBulkSettle() {
     if (!selectedOrders.length) {
@@ -2108,6 +2077,7 @@ function OrdersSection({
         onBack={() => setSelectedOrder(null)}
         onSave={handleSave}
         onSavePrintArchive={(record) => setPrintArchives((prev) => [record, ...prev])}
+        onOfficeEntry={(entry) => setCashEntries((prev) => [entry, ...prev])}
       />
     );
   }
@@ -2118,6 +2088,7 @@ function OrdersSection({
         <NewOrderModal
           type={createType}
           existingOrders={orders}
+          clients={clients}
           onClose={() => setCreateType(null)}
           onCreate={handleCreate}
         />
@@ -2305,7 +2276,6 @@ function OrdersSection({
           <tbody>
             {filteredOrders.length > 0 ? (
               filteredOrders.map((order: BizOrder) => {
-                const materialInsight = materialInsights.get(order.order_number);
                 return (
                 <tr
                   key={order.order_number}
@@ -2341,19 +2311,6 @@ function OrdersSection({
                   <td className="px-3 py-2.5 text-slate-500">{order.order_date || "-"}</td>
                   <td className="px-3 py-2.5">
                     <StatusBadge status={order.status ?? "下单"} />
-                  </td>
-                  <td className="px-3 py-2.5">
-                    {order.order_type !== "批发单" ? (
-                      <span className="rounded-full border border-slate-200 bg-slate-50 px-2 py-0.5 text-[11px] text-slate-500">无需备料</span>
-                    ) : !materialInsight || !materialInsight.totalRows ? (
-                      <span className="rounded-full border border-slate-200 bg-slate-50 px-2 py-0.5 text-[11px] text-slate-500">未录物料</span>
-                    ) : materialInsight.shortageRows > 0 ? (
-                      <span className="rounded-full border border-rose-200 bg-rose-50 px-2 py-0.5 text-[11px] font-semibold text-rose-700">缺料 {materialInsight.shortageRows} 项</span>
-                    ) : materialInsight.missingRows > 0 ? (
-                      <span className="rounded-full border border-amber-200 bg-amber-50 px-2 py-0.5 text-[11px] font-semibold text-amber-700">待建物料 {materialInsight.missingRows} 项</span>
-                    ) : (
-                      <span className="rounded-full border border-emerald-200 bg-emerald-50 px-2 py-0.5 text-[11px] font-semibold text-emerald-700">可直接备料</span>
-                    )}
                   </td>
                   <td className="px-3 py-2.5 font-medium text-red-600">
                     {formatMoney(order.balance || 0)}
@@ -2428,33 +2385,6 @@ function OrdersSection({
           </div>
         )}
 
-        {!!shortageOrders.length && (
-          <div className="rounded-xl border border-amber-200 bg-amber-50 px-4 py-3">
-            <div className="flex flex-wrap items-center justify-between gap-3">
-              <div>
-                <p className="text-sm font-semibold text-amber-800">待补料订单提醒</p>
-                <p className="mt-1 text-xs text-amber-700">现在直接能看出哪几张批发单还不能备齐，先补库存还是先建物料一眼就明白。</p>
-              </div>
-              <span className="rounded-full border border-amber-300 bg-white px-2.5 py-1 text-xs font-semibold text-amber-700">{shortageOrders.length} 张订单待处理</span>
-            </div>
-            <div className="mt-3 flex flex-wrap gap-2">
-              {shortageOrders.slice(0, 6).map((item) => (
-                <button
-                  key={item.orderNumber}
-                  onClick={() => {
-                    const target = orders.find((order) => order.order_number === item.orderNumber);
-                    if (target) setSelectedOrder(target);
-                  }}
-                  className="rounded-lg border border-amber-200 bg-white px-3 py-2 text-left text-xs text-amber-800 transition-colors hover:border-amber-400"
-                >
-                  <div className="font-semibold">{item.orderNumber} · {item.clientName}</div>
-                  <div className="mt-1 text-[11px] text-amber-700">{item.shortageRows > 0 ? `缺料 ${item.shortageRows} 项` : "待建物料"}{item.missingRows > 0 ? `，未建物料 ${item.missingRows} 项` : ""}</div>
-                </button>
-              ))}
-            </div>
-          </div>
-        )}
-
         <div className="grid gap-4 xl:grid-cols-[1.2fr_0.8fr]">
           <PanelCard title="打印闭环" note="订单打印现在支持保存归档，后面可以直接复打或下载 HTML。">
             <div className="grid gap-3 sm:grid-cols-3">
@@ -2511,11 +2441,19 @@ type FinanceDraft = {
 const FINANCE_SUBS: Array<{ key: FinanceSub; label: string }> = [
   { key: "income", label: "订单收入" },
   { key: "expense", label: "支出清单" },
-  { key: "cash", label: "现金管理" },
+  { key: "cash", label: "办公室" },
   { key: "ledger", label: "月度账单" },
   { key: "receivables", label: "应收款" },
   { key: "audit", label: "财务体检" },
 ];
+
+function getExpenseTypeOptions(settings: BizSettings) {
+  const raw = (settings.expense_types || "采购\n工资\n物流\n办公\n其他")
+    .split(/\r?\n|,|，/)
+    .map((item) => item.trim())
+    .filter(Boolean);
+  return raw.length ? Array.from(new Set(raw)) : ["采购", "工资", "物流", "办公", "其他"];
+}
 
 const RECEIVABLE_AGING_BUCKETS = [
   { key: "current", label: "0-30天", min: 0, max: 30, tone: "bg-emerald-50 text-emerald-700 border-emerald-200" },
@@ -2547,6 +2485,15 @@ function SmallSelect({ value, onChange, options }: { value: string; onChange: (v
       {options.map((option) => <option key={option} value={option}>{option || "未选择"}</option>)}
     </select>
   );
+}
+
+function isDateInRange(dateStr: string | undefined, startDate: string, endDate: string) {
+  if (!dateStr) return false;
+  const value = dateStr.slice(0, 10);
+  if (!value) return false;
+  if (startDate && value < startDate) return false;
+  if (endDate && value > endDate) return false;
+  return true;
 }
 
 function PanelCard({ title, note, children }: { title: string; note?: string; children: React.ReactNode; }) {
@@ -2779,7 +2726,7 @@ function applyFinanceAuditRepairs(orders: BizOrder[], clients: ContactRecord[]) 
   return { fixedOrders, fixedClients };
 }
 
-function FinanceSection({ orders, setOrders, expenses, setExpenses, cashEntries, setCashEntries, payrolls, clients, setClients }: {
+function FinanceSection({ orders, setOrders, expenses, setExpenses, cashEntries, setCashEntries, payrolls, clients, setClients, suppliers, employees, settings }: {
   orders: BizOrder[];
   setOrders: React.Dispatch<React.SetStateAction<BizOrder[]>>;
   expenses: ExpenseRecord[];
@@ -2789,25 +2736,38 @@ function FinanceSection({ orders, setOrders, expenses, setExpenses, cashEntries,
   payrolls: PayrollRecord[];
   clients: ContactRecord[];
   setClients: React.Dispatch<React.SetStateAction<ContactRecord[]>>;
+  suppliers: SupplierRecord[];
+  employees: EmployeeRecord[];
+  settings: BizSettings;
 }) {
   const [sub, setSub] = useState<FinanceSub>("income");
   const today = new Date().toISOString().slice(0, 10);
-  const [draft, setDraft] = useState<FinanceDraft>({ target: "", detail: "", amount: "", expense_type: "采购", payment_method: "转账", expense_date: today, remark: "" });
+  const expenseTypeOptions = useMemo(() => getExpenseTypeOptions(settings), [settings]);
+  const officeTargets = useMemo(() => Array.from(new Set([...suppliers.map((item) => item.name), ...employees.map((item) => item.name), ...clients.map((item) => item.name)])), [suppliers, employees, clients]);
+  const [draft, setDraft] = useState<FinanceDraft>({ target: "", detail: "", amount: "", expense_type: expenseTypeOptions[0] ?? "采购", payment_method: "转账", expense_date: today, remark: "" });
   const [auditReport, setAuditReport] = useState<FinanceAuditReport | null>(null);
+  const [showExpenseModal, setShowExpenseModal] = useState(false);
   const [quickPayTarget, setQuickPayTarget] = useState<string | null>(null);
-  const [quickPayFields, setQuickPayFields] = useState({ date: today, amount: "", method: "现金", note: "" });
+  const [quickPayFields, setQuickPayFields] = useState({ date: today, amount: "", method: "现金", note: "", office: false });
+  const [expenseFromOffice, setExpenseFromOffice] = useState(false);
+  const [financeDateStart, setFinanceDateStart] = useState(today);
+  const [financeDateEnd, setFinanceDateEnd] = useState(today);
   const paymentRows = orders.flatMap((order) => (order.payment_history ?? []).map((record, index) => ({ order, record, key: `${order.order_number}-${index}` })));
-  const totalIncome = orders.reduce((s, o) => s + (o.amount_paid ?? 0), 0);
-  const totalExpense = expenses.reduce((s, item) => s + item.amount, 0);
+  const filteredPaymentRows = paymentRows.filter(({ record }) => isDateInRange(record.date, financeDateStart, financeDateEnd));
+  const filteredExpenses = expenses.filter((item) => isDateInRange(item.expense_date, financeDateStart, financeDateEnd));
+  const filteredCashEntries = cashEntries.filter((item) => isDateInRange(item.date, financeDateStart, financeDateEnd));
+  const totalIncome = filteredPaymentRows.reduce((sum, { record }) => sum + (record.type === "refund" ? -record.amount : record.amount), 0);
+  const totalExpense = filteredExpenses.reduce((s, item) => s + item.amount, 0);
   const totalBalance = orders.reduce((s, o) => s + (o.balance ?? 0), 0);
   const payrollAmount = payrolls.reduce((s, item) => s + item.net_salary, 0);
-  const cashBalance = cashEntries.reduce((s, item) => s + (item.type === "收入" ? item.amount : -item.amount), 0);
+  const cashBalance = filteredCashEntries.reduce((s, item) => s + (item.type === "收入" ? item.amount : -item.amount), 0);
   const receivableOrders = orders.filter((o) => (o.balance ?? 0) > 0 && o.status !== "已关闭");
+  const filteredReceivableOrders = receivableOrders.filter((o) => isDateInRange(o.order_date, financeDateStart, financeDateEnd));
   const financeAuditPreview = useMemo(() => buildFinanceAuditReport(orders, clients), [orders, clients]);
   const activeAudit = auditReport ?? financeAuditPreview;
-  const ledgerRows = Array.from(new Set([...orders.map((o) => (o.order_date ?? "").slice(0, 7)), ...expenses.map((e) => e.expense_date.slice(0, 7)), ...payrolls.map((p) => p.month)])).filter(Boolean).sort().reverse().map((month) => {
-    const income = orders.filter((o) => (o.order_date ?? "").startsWith(month)).reduce((sum, item) => sum + (item.amount_paid ?? 0), 0);
-    const expense = expenses.filter((item) => item.expense_date.startsWith(month)).reduce((sum, item) => sum + item.amount, 0);
+  const ledgerRows = Array.from(new Set([...filteredPaymentRows.map(({ record }) => (record.date ?? "").slice(0, 7)), ...filteredExpenses.map((e) => e.expense_date.slice(0, 7)), ...payrolls.filter((p) => (!financeDateStart || `${p.month}-01` >= financeDateStart) && (!financeDateEnd || `${p.month}-31` <= financeDateEnd)).map((p) => p.month)])).filter(Boolean).sort().reverse().map((month) => {
+    const income = filteredPaymentRows.filter(({ record }) => (record.date ?? "").startsWith(month)).reduce((sum, { record }) => sum + (record.type === "refund" ? -record.amount : record.amount), 0);
+    const expense = filteredExpenses.filter((item) => item.expense_date.startsWith(month)).reduce((sum, item) => sum + item.amount, 0);
     const wage = payrolls.filter((item) => item.month === month).reduce((sum, item) => sum + item.net_salary, 0);
     return { month, income, expense, net: income - expense, wage, profit: income - expense - wage };
   });
@@ -2816,22 +2776,22 @@ function FinanceSection({ orders, setOrders, expenses, setExpenses, cashEntries,
       title: "订单收入",
       filePrefix: "biz-finance-income",
       columns: ["订单号", "客户", "金额", "支付方式", "日期", "明细", "类型"],
-      exportRows: () => mapRows(paymentRows, ({ order, record }) => [order.order_number, order.client_name, record.amount, record.method, record.date, record.note ?? "", record.type === "refund" ? "退款" : "收款"]),
-      printRows: () => mapRows(paymentRows, ({ order, record }) => [order.order_number, order.client_name, formatMoney(record.amount), record.method, record.date, record.note ?? "-", record.type === "refund" ? "退款" : "收款"]),
+      exportRows: () => mapRows(filteredPaymentRows, ({ order, record }) => [order.order_number, order.client_name, record.amount, record.method, record.date, record.note ?? "", record.type === "refund" ? "退款" : "收款"]),
+      printRows: () => mapRows(filteredPaymentRows, ({ order, record }) => [order.order_number, order.client_name, formatMoney(record.amount), record.method, record.date, record.note ?? "-", record.type === "refund" ? "退款" : "收款"]),
     },
     expense: {
       title: "支出清单",
       filePrefix: "biz-finance-expense",
       columns: ["对象", "明细", "金额", "类型", "付款方式", "日期", "备注"],
-      exportRows: () => mapRows(expenses, (item) => [item.target, item.detail, item.amount, item.expense_type, item.payment_method, item.expense_date, item.remark ?? ""]),
-      printRows: () => mapRows(expenses, (item) => [item.target, item.detail, formatMoney(item.amount), item.expense_type, item.payment_method, item.expense_date, item.remark ?? "-"]),
+      exportRows: () => mapRows(filteredExpenses, (item) => [item.target, item.detail, item.amount, item.expense_type, item.payment_method, item.expense_date, item.remark ?? ""]),
+      printRows: () => mapRows(filteredExpenses, (item) => [item.target, item.detail, formatMoney(item.amount), item.expense_type, item.payment_method, item.expense_date, item.remark ?? "-"]),
     },
     cash: {
-      title: "现金管理",
-      filePrefix: "biz-finance-cash",
+      title: "办公室",
+      filePrefix: "biz-finance-office",
       columns: ["类型", "金额", "日期", "备注"],
-      exportRows: () => mapRows(cashEntries, (item) => [item.type, item.amount, item.date, item.note ?? ""]),
-      printRows: () => mapRows(cashEntries, (item) => [item.type, formatMoney(item.amount), item.date, item.note ?? "-"]),
+      exportRows: () => mapRows(filteredCashEntries, (item) => [item.type, item.amount, item.date, item.note ?? ""]),
+      printRows: () => mapRows(filteredCashEntries, (item) => [item.type, formatMoney(item.amount), item.date, item.note ?? "-"]),
     },
     ledger: {
       title: "月度账单",
@@ -2844,8 +2804,8 @@ function FinanceSection({ orders, setOrders, expenses, setExpenses, cashEntries,
       title: "应收款",
       filePrefix: "biz-finance-receivables",
       columns: ["客户", "订单号", "总额", "已付", "余款", "下单日期", "状态"],
-      exportRows: () => mapRows(receivableOrders, (o) => [o.client_name, o.order_number, o.total_after_tax ?? o.total_price ?? 0, o.amount_paid ?? 0, o.balance ?? 0, o.order_date ?? "", o.status ?? ""]),
-      printRows: () => mapRows(receivableOrders, (o) => [o.client_name, o.order_number, formatMoney(o.total_after_tax ?? o.total_price ?? 0), formatMoney(o.amount_paid ?? 0), formatMoney(o.balance ?? 0), o.order_date ?? "-", o.status ?? "-"]),
+      exportRows: () => mapRows(filteredReceivableOrders, (o) => [o.client_name, o.order_number, o.total_after_tax ?? o.total_price ?? 0, o.amount_paid ?? 0, o.balance ?? 0, o.order_date ?? "", o.status ?? ""]),
+      printRows: () => mapRows(filteredReceivableOrders, (o) => [o.client_name, o.order_number, formatMoney(o.total_after_tax ?? o.total_price ?? 0), formatMoney(o.amount_paid ?? 0), formatMoney(o.balance ?? 0), o.order_date ?? "-", o.status ?? "-"]),
     },
     audit: {
       title: "财务体检",
@@ -2889,6 +2849,7 @@ function FinanceSection({ orders, setOrders, expenses, setExpenses, cashEntries,
       method: quickPayFields.method,
       note: quickPayFields.note || undefined,
       type: "payment",
+      office: quickPayFields.office,
     };
     setOrders((prev) =>
       prev.map((o) => {
@@ -2901,29 +2862,69 @@ function FinanceSection({ orders, setOrders, expenses, setExpenses, cashEntries,
         return { ...o, payment_history: nextHistory, amount_paid: nextPaid, balance: nextBalance, status: nextStatus };
       }),
     );
+    if (quickPayFields.office) {
+      setCashEntries((prev) => [{ id: `CASH-${new Date().getFullYear()}-${String(prev.length + 1).padStart(3, "0")}`, type: "收入", amount, date: quickPayFields.date, note: `${orderNumber} 办公室收款` }, ...prev]);
+    }
     setQuickPayTarget(null);
-    setQuickPayFields({ date: today, amount: "", method: "现金", note: "" });
+    setQuickPayFields({ date: today, amount: "", method: "现金", note: "", office: false });
   }
 
   function addExpense() {
     const amount = Number(draft.amount) || 0;
     if (!draft.target.trim() || !draft.detail.trim() || amount <= 0) return;
-    const record: ExpenseRecord = { id: `EXP-${new Date().getFullYear()}-${String(expenses.length + 1).padStart(3, "0")}`, target: draft.target.trim(), detail: draft.detail.trim(), amount, expense_type: draft.expense_type, payment_method: draft.payment_method, expense_date: draft.expense_date, remark: draft.remark || undefined };
+    const record: ExpenseRecord = { id: `EXP-${new Date().getFullYear()}-${String(expenses.length + 1).padStart(3, "0")}`, target: draft.target.trim(), detail: draft.detail.trim(), amount, expense_type: draft.expense_type, payment_method: draft.payment_method, expense_date: draft.expense_date, remark: draft.remark || undefined, office: expenseFromOffice };
     setExpenses((prev) => [record, ...prev]);
-    if (draft.payment_method === "现金") {
+    if (expenseFromOffice) {
       setCashEntries((prev) => [{ id: `CASH-${new Date().getFullYear()}-${String(prev.length + 1).padStart(3, "0")}`, type: "支出", amount, date: draft.expense_date, note: `${record.target} · ${record.detail}` }, ...prev]);
     }
-    setDraft({ target: "", detail: "", amount: "", expense_type: "采购", payment_method: "转账", expense_date: today, remark: "" });
+    setDraft({ target: "", detail: "", amount: "", expense_type: expenseTypeOptions[0] ?? "采购", payment_method: "转账", expense_date: today, remark: "" });
+    setExpenseFromOffice(false);
+    setShowExpenseModal(false);
+  }
+
+  function deleteExpense(expenseId: string) {
+    setExpenses((prev) => prev.filter((item) => item.id !== expenseId));
   }
 
   return (
     <div>
-      <SectionHeader eyebrow="Finance Management" title="收支管理" actions={<><ActionBtn onClick={exportFinance}>↓ 导出当前表</ActionBtn><ActionBtn onClick={printFinance}>🖨 打印当前表</ActionBtn>{sub === "audit" ? <ActionBtn onClick={runFinanceAudit}>↻ 重新扫描</ActionBtn> : null}{sub === "audit" ? <ActionBtn tone="success" onClick={applyFinanceRepair}>🔧 应用自动修复</ActionBtn> : <ActionBtn tone="primary" onClick={addExpense}>+ 录入支出</ActionBtn>}</>} />
-      <StatStrip items={[{ label: "订单收入", value: formatMoney(totalIncome), accent: "text-green-600" }, { label: "支出合计", value: formatMoney(totalExpense), accent: "text-red-600" }, { label: "现金余额", value: formatMoney(cashBalance), accent: "text-sky-600" }, { label: "应收余款", value: formatMoney(totalBalance), accent: "text-amber-600" }, { label: "账面利润", value: formatMoney(totalIncome - totalExpense - payrollAmount), accent: "text-emerald-600" }]} />
-      <div className="mb-4 grid gap-4 xl:grid-cols-[1.1fr_2fr]">
-        {sub === "audit" ? (
+      <SectionHeader eyebrow="Finance Management" title="收支管理" actions={<><ActionBtn onClick={exportFinance}>↓ 导出当前表</ActionBtn><ActionBtn onClick={printFinance}>🖨 打印当前表</ActionBtn>{sub === "audit" ? <ActionBtn onClick={runFinanceAudit}>↻ 重新扫描</ActionBtn> : null}{sub === "audit" ? <ActionBtn tone="success" onClick={applyFinanceRepair}>🔧 应用自动修复</ActionBtn> : null}{sub === "expense" ? <ActionBtn tone="primary" onClick={() => setShowExpenseModal(true)}>+ 录入支出</ActionBtn> : null}</>} />
+      <div className="mb-4 rounded-xl border border-slate-200 bg-white p-4">
+        <div className="flex flex-wrap items-end justify-between gap-3">
+          <div>
+            <p className="text-xs font-semibold text-slate-500">当天日期</p>
+            <p className="mt-1 text-lg font-semibold text-slate-900">{today}</p>
+          </div>
+          <div className="flex flex-wrap items-end gap-2">
+            <div>
+              <p className="mb-1 text-[11px] font-semibold text-slate-500">开始日期</p>
+              <SmallInput value={financeDateStart} onChange={setFinanceDateStart} type="date" />
+            </div>
+            <div>
+              <p className="mb-1 text-[11px] font-semibold text-slate-500">结束日期</p>
+              <SmallInput value={financeDateEnd} onChange={setFinanceDateEnd} type="date" />
+            </div>
+            <ActionBtn onClick={() => { setFinanceDateStart(today); setFinanceDateEnd(today); }}>今天</ActionBtn>
+            <ActionBtn onClick={() => { setFinanceDateStart(""); setFinanceDateEnd(""); }}>全部时间</ActionBtn>
+          </div>
+        </div>
+        <div className="mt-3 grid gap-3 sm:grid-cols-2 xl:grid-cols-4">
+          {sub === "income" ? <div className="rounded-xl border border-slate-100 bg-slate-50 p-3"><p className="text-[11px] text-slate-500">筛选收入</p><p className="mt-1 text-base font-semibold text-emerald-600">{formatMoney(totalIncome)}</p></div> : null}
+          {sub === "expense" ? <div className="rounded-xl border border-slate-100 bg-slate-50 p-3"><p className="text-[11px] text-slate-500">筛选支出</p><p className="mt-1 text-base font-semibold text-rose-600">{formatMoney(totalExpense)}</p></div> : null}
+          {sub === "cash" ? <div className="rounded-xl border border-slate-100 bg-slate-50 p-3"><p className="text-[11px] text-slate-500">办公室净额</p><p className="mt-1 text-base font-semibold text-slate-900">{formatMoney(cashBalance)}</p></div> : null}
+          {sub === "ledger" ? <div className="rounded-xl border border-slate-100 bg-slate-50 p-3"><p className="text-[11px] text-slate-500">工资合计</p><p className="mt-1 text-base font-semibold text-amber-600">{formatMoney(payrollAmount)}</p></div> : null}
+          {sub === "receivables" ? <div className="rounded-xl border border-slate-100 bg-slate-50 p-3"><p className="text-[11px] text-slate-500">筛选应收款</p><p className="mt-1 text-base font-semibold text-amber-600">{formatMoney(filteredReceivableOrders.reduce((sum, item) => sum + (item.balance ?? 0), 0))}</p></div> : null}
+          {sub === "audit" ? <div className="rounded-xl border border-slate-100 bg-slate-50 p-3"><p className="text-[11px] text-slate-500">待修复问题</p><p className="mt-1 text-base font-semibold text-rose-600">{activeAudit.autoFixableCount}</p></div> : null}
+        </div>
+      </div>
+      <div className="mb-4 flex flex-wrap border-b-2 border-slate-200 bg-white self-start">
+        {FINANCE_SUBS.map((t) => <button key={t.key} onClick={() => setSub(t.key)} className={`border-b-2 px-4 py-2 text-xs font-semibold transition-colors ${sub === t.key ? "border-blue-600 text-blue-700" : "border-transparent text-slate-500 hover:text-slate-700"}`}>{t.label}</button>)}
+      </div>
+
+      {sub === "audit" && (
+        <div className="mb-4">
           <PanelCard title="财务体检中心" note="参考源里的数据完整性检查与余款修复能力，这里落地为本地订单/客户账务扫描与自动修复。">
-            <div className="grid gap-3 sm:grid-cols-2">
+            <div className="grid gap-3 sm:grid-cols-2 xl:grid-cols-4">
               <div className="rounded-xl border border-rose-100 bg-rose-50 p-3">
                 <p className="text-[11px] uppercase tracking-[0.2em] text-rose-500">订单异常</p>
                 <p className="mt-2 text-2xl font-semibold text-rose-700">{activeAudit.orderIssueCount}</p>
@@ -2946,30 +2947,46 @@ function FinanceSection({ orders, setOrders, expenses, setExpenses, cashEntries,
               </div>
             </div>
           </PanelCard>
-        ) : (
-          <PanelCard title="新增支出" note="现金付款会自动补一条现金流水。">
+        </div>
+      )}
+
+      {showExpenseModal && sub === "expense" && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-slate-950/45 px-4">
+          <div className="w-full max-w-2xl rounded-2xl border border-slate-200 bg-white p-5 shadow-2xl">
+            <div className="mb-4 flex items-start justify-between gap-3">
+              <div>
+                <h3 className="text-base font-semibold text-slate-900">录入支出</h3>
+                <p className="mt-1 text-sm text-slate-500">现金付款会自动补一条现金流水。</p>
+              </div>
+              <button onClick={() => setShowExpenseModal(false)} className="rounded-lg border border-slate-200 px-2.5 py-1 text-xs text-slate-500 hover:border-slate-300 hover:text-slate-700 transition-colors">关闭</button>
+            </div>
             <div className="grid gap-2 sm:grid-cols-2">
-              <SmallInput value={draft.target} onChange={(v) => setDraft((d) => ({ ...d, target: v }))} placeholder="对象 / 供应商" />
+              <div>
+                <input list="expense-target-options" value={draft.target} onChange={(e) => setDraft((d) => ({ ...d, target: e.target.value }))} placeholder="对象 / 供应商 / 员工" className="h-8 w-full rounded-lg border border-slate-300 bg-white px-3 text-xs text-slate-700 focus:border-blue-400 focus:outline-none" />
+                <datalist id="expense-target-options">{officeTargets.map((item) => <option key={item} value={item} />)}</datalist>
+              </div>
               <SmallInput value={draft.detail} onChange={(v) => setDraft((d) => ({ ...d, detail: v }))} placeholder="支出明细" />
               <SmallInput value={draft.amount} onChange={(v) => setDraft((d) => ({ ...d, amount: v }))} type="number" placeholder="金额" />
-              <SmallSelect value={draft.expense_type} onChange={(v) => setDraft((d) => ({ ...d, expense_type: v }))} options={["采购", "工资", "物流", "办公", "其他"]} />
-              <SmallSelect value={draft.payment_method} onChange={(v) => setDraft((d) => ({ ...d, payment_method: v }))} options={["现金", "转账", "刷卡", "支票"]} />
+              <SmallSelect value={draft.expense_type} onChange={(v) => setDraft((d) => ({ ...d, expense_type: v }))} options={expenseTypeOptions} />
+              <SmallSelect value={draft.payment_method} onChange={(v) => setDraft((d) => ({ ...d, payment_method: v }))} options={PAYMENT_METHODS} />
               <SmallInput value={draft.expense_date} onChange={(v) => setDraft((d) => ({ ...d, expense_date: v }))} type="date" />
             </div>
             <div className="mt-2"><SmallInput value={draft.remark} onChange={(v) => setDraft((d) => ({ ...d, remark: v }))} placeholder="备注（可选）" /></div>
-          </PanelCard>
-        )}
-        <div className="mb-4 flex flex-wrap border-b-2 border-slate-200 bg-white self-start">
-          {FINANCE_SUBS.map((t) => <button key={t.key} onClick={() => setSub(t.key)} className={`border-b-2 px-4 py-2 text-xs font-semibold transition-colors ${sub === t.key ? "border-blue-600 text-blue-700" : "border-transparent text-slate-500 hover:text-slate-700"}`}>{t.label}</button>)}
+            <label className="mt-3 flex items-center gap-2 text-xs text-slate-600"><input type="checkbox" checked={expenseFromOffice} onChange={(e) => setExpenseFromOffice(e.target.checked)} /> 这笔支出从办公室抽屉里出</label>
+            <div className="mt-5 flex justify-end gap-2">
+              <ActionBtn onClick={() => setShowExpenseModal(false)}>取消</ActionBtn>
+              <ActionBtn tone="primary" onClick={addExpense}>确认录入</ActionBtn>
+            </div>
+          </div>
         </div>
-      </div>
-      {sub === "income" && <div className="overflow-x-auto rounded-xl border border-slate-200 bg-white"><table className="w-full text-left text-xs"><thead><tr className="border-b border-slate-200 bg-slate-50"><th className="px-4 py-2.5 font-semibold text-slate-600">订单号</th><th className="px-4 py-2.5 font-semibold text-slate-600">客户</th><th className="px-4 py-2.5 font-semibold text-slate-600">金额</th><th className="px-4 py-2.5 font-semibold text-slate-600">支付方式</th><th className="px-4 py-2.5 font-semibold text-slate-600">日期</th><th className="px-4 py-2.5 font-semibold text-slate-600">明细</th></tr></thead><tbody>{paymentRows.map(({ key, order, record }) => <tr key={key} className="border-b border-slate-100 last:border-b-0"><td className="px-4 py-2.5 font-medium text-slate-700">{order.order_number}</td><td className="px-4 py-2.5 text-slate-700">{order.client_name}</td><td className={`px-4 py-2.5 font-semibold ${record.type === "refund" ? "text-rose-600" : "text-green-600"}`}>{record.type === "refund" ? "-" : "+"}{formatMoney(record.amount)}</td><td className="px-4 py-2.5 text-slate-600">{record.method}</td><td className="px-4 py-2.5 text-slate-500">{record.date}</td><td className="px-4 py-2.5 text-slate-500">{record.note ?? "-"}</td></tr>)}</tbody></table></div>}
-      {sub === "expense" && <div className="overflow-x-auto rounded-xl border border-slate-200 bg-white"><table className="w-full text-left text-xs"><thead><tr className="border-b border-slate-200 bg-slate-50"><th className="px-4 py-2.5 font-semibold text-slate-600">对象</th><th className="px-4 py-2.5 font-semibold text-slate-600">明细</th><th className="px-4 py-2.5 font-semibold text-slate-600">金额</th><th className="px-4 py-2.5 font-semibold text-slate-600">类型</th><th className="px-4 py-2.5 font-semibold text-slate-600">形式</th><th className="px-4 py-2.5 font-semibold text-slate-600">日期</th></tr></thead><tbody>{expenses.map((item) => <tr key={item.id} className="border-b border-slate-100 last:border-b-0"><td className="px-4 py-2.5 text-slate-700">{item.target}</td><td className="px-4 py-2.5 text-slate-500">{item.detail}</td><td className="px-4 py-2.5 font-semibold text-rose-600">{formatMoney(item.amount)}</td><td className="px-4 py-2.5 text-slate-600">{item.expense_type}</td><td className="px-4 py-2.5 text-slate-600">{item.payment_method}</td><td className="px-4 py-2.5 text-slate-500">{item.expense_date}</td></tr>)}</tbody></table></div>}
-      {sub === "cash" && <div className="overflow-x-auto rounded-xl border border-slate-200 bg-white"><table className="w-full text-left text-xs"><thead><tr className="border-b border-slate-200 bg-slate-50"><th className="px-4 py-2.5 font-semibold text-slate-600">类型</th><th className="px-4 py-2.5 font-semibold text-slate-600">金额</th><th className="px-4 py-2.5 font-semibold text-slate-600">日期</th><th className="px-4 py-2.5 font-semibold text-slate-600">备注</th></tr></thead><tbody>{cashEntries.map((item) => <tr key={item.id} className="border-b border-slate-100 last:border-b-0"><td className="px-4 py-2.5"><span className={`rounded-full px-2 py-0.5 text-[11px] font-semibold ${item.type === "收入" ? "bg-green-50 text-green-700" : "bg-rose-50 text-rose-700"}`}>{item.type}</span></td><td className={`px-4 py-2.5 font-semibold ${item.type === "收入" ? "text-green-600" : "text-rose-600"}`}>{formatMoney(item.amount)}</td><td className="px-4 py-2.5 text-slate-500">{item.date}</td><td className="px-4 py-2.5 text-slate-500">{item.note ?? "-"}</td></tr>)}</tbody></table></div>}
+      )}
+      {sub === "income" && <div className="overflow-x-auto rounded-xl border border-slate-200 bg-white"><table className="w-full text-left text-xs"><thead><tr className="border-b border-slate-200 bg-slate-50"><th className="px-4 py-2.5 font-semibold text-slate-600">订单号</th><th className="px-4 py-2.5 font-semibold text-slate-600">客户</th><th className="px-4 py-2.5 font-semibold text-slate-600">金额</th><th className="px-4 py-2.5 font-semibold text-slate-600">支付方式</th><th className="px-4 py-2.5 font-semibold text-slate-600">日期</th><th className="px-4 py-2.5 font-semibold text-slate-600">明细</th></tr></thead><tbody>{filteredPaymentRows.length ? filteredPaymentRows.map(({ key, order, record }) => <tr key={key} className="border-b border-slate-100 last:border-b-0"><td className="px-4 py-2.5 font-medium text-slate-700">{order.order_number}</td><td className="px-4 py-2.5 text-slate-700">{order.client_name}</td><td className={`px-4 py-2.5 font-semibold ${record.type === "refund" ? "text-rose-600" : "text-green-600"}`}>{record.type === "refund" ? "-" : "+"}{formatMoney(record.amount)}</td><td className="px-4 py-2.5 text-slate-600">{record.method}</td><td className="px-4 py-2.5 text-slate-500">{record.date}</td><td className="px-4 py-2.5 text-slate-500">{record.note ?? "-"}</td></tr>) : <tr><td colSpan={6} className="py-10 text-center text-sm text-slate-400">这个日期范围内没有收入记录</td></tr>}</tbody></table></div>}
+      {sub === "expense" && <div className="overflow-x-auto rounded-xl border border-slate-200 bg-white"><table className="w-full text-left text-xs"><thead><tr className="border-b border-slate-200 bg-slate-50"><th className="px-4 py-2.5 font-semibold text-slate-600">对象</th><th className="px-4 py-2.5 font-semibold text-slate-600">明细</th><th className="px-4 py-2.5 font-semibold text-slate-600">金额</th><th className="px-4 py-2.5 font-semibold text-slate-600">类型</th><th className="px-4 py-2.5 font-semibold text-slate-600">方式</th><th className="px-4 py-2.5 font-semibold text-slate-600">办公室</th><th className="px-4 py-2.5 font-semibold text-slate-600">日期</th><th className="px-4 py-2.5 font-semibold text-slate-600">操作</th></tr></thead><tbody>{filteredExpenses.length ? filteredExpenses.map((item) => <tr key={item.id} className="border-b border-slate-100 last:border-b-0"><td className="px-4 py-2.5 text-slate-700">{item.target}</td><td className="px-4 py-2.5 text-slate-500">{item.detail}</td><td className="px-4 py-2.5 font-semibold text-rose-600">{formatMoney(item.amount)}</td><td className="px-4 py-2.5 text-slate-600">{item.expense_type}</td><td className="px-4 py-2.5 text-slate-600">{item.payment_method}</td><td className="px-4 py-2.5 text-slate-600">{item.office ? "是" : "否"}</td><td className="px-4 py-2.5 text-slate-500">{item.expense_date}</td><td className="px-4 py-2.5"><button onClick={() => deleteExpense(item.id)} className="rounded border border-red-100 px-2 py-0.5 text-xs text-red-500 hover:border-red-300 hover:bg-red-50 transition-colors">删除</button></td></tr>) : <tr><td colSpan={8} className="py-10 text-center text-sm text-slate-400">这个日期范围内没有支出记录</td></tr>}</tbody></table></div>}
+      {sub === "cash" && <div className="overflow-x-auto rounded-xl border border-slate-200 bg-white"><table className="w-full text-left text-xs"><thead><tr className="border-b border-slate-200 bg-slate-50"><th className="px-4 py-2.5 font-semibold text-slate-600">类型</th><th className="px-4 py-2.5 font-semibold text-slate-600">金额</th><th className="px-4 py-2.5 font-semibold text-slate-600">日期</th><th className="px-4 py-2.5 font-semibold text-slate-600">备注</th></tr></thead><tbody>{filteredCashEntries.length ? filteredCashEntries.map((item) => <tr key={item.id} className="border-b border-slate-100 last:border-b-0"><td className="px-4 py-2.5"><span className={`rounded-full px-2 py-0.5 text-[11px] font-semibold ${item.type === "收入" ? "bg-green-50 text-green-700" : "bg-rose-50 text-rose-700"}`}>{item.type}</span></td><td className={`px-4 py-2.5 font-semibold ${item.type === "收入" ? "text-green-600" : "text-rose-600"}`}>{formatMoney(item.amount)}</td><td className="px-4 py-2.5 text-slate-500">{item.date}</td><td className="px-4 py-2.5 text-slate-500">{item.note ?? "-"}</td></tr>) : <tr><td colSpan={4} className="py-10 text-center text-sm text-slate-400">这个日期范围内没有现金流水</td></tr>}</tbody></table></div>}
       {sub === "ledger" && <div className="overflow-x-auto rounded-xl border border-slate-200 bg-white"><table className="w-full text-left text-xs"><thead><tr className="border-b border-slate-200 bg-slate-50"><th className="px-4 py-2.5 font-semibold text-slate-600">月份</th><th className="px-4 py-2.5 font-semibold text-slate-600">收入</th><th className="px-4 py-2.5 font-semibold text-slate-600">支出</th><th className="px-4 py-2.5 font-semibold text-slate-600">净额</th><th className="px-4 py-2.5 font-semibold text-slate-600">工资</th><th className="px-4 py-2.5 font-semibold text-slate-600">净利润</th></tr></thead><tbody>{ledgerRows.map((item) => <tr key={item.month} className="border-b border-slate-100 last:border-b-0"><td className="px-4 py-2.5 font-medium text-slate-700">{item.month}</td><td className="px-4 py-2.5 text-green-600">{formatMoney(item.income)}</td><td className="px-4 py-2.5 text-rose-600">{formatMoney(item.expense)}</td><td className="px-4 py-2.5 text-slate-700">{formatMoney(item.net)}</td><td className="px-4 py-2.5 text-amber-600">{formatMoney(item.wage)}</td><td className={`px-4 py-2.5 font-semibold ${item.profit >= 0 ? "text-emerald-600" : "text-rose-600"}`}>{formatMoney(item.profit)}</td></tr>)}</tbody></table></div>}
       {sub === "receivables" && (
         <div className="space-y-3">
-          {receivableOrders.length === 0 ? (
+          {filteredReceivableOrders.length === 0 ? (
             <div className="rounded-xl border border-dashed border-slate-200 py-12 text-center text-sm text-slate-400">暂无未收款订单</div>
           ) : (
             <div className="overflow-x-auto rounded-xl border border-slate-200 bg-white">
@@ -2987,7 +3004,7 @@ function FinanceSection({ orders, setOrders, expenses, setExpenses, cashEntries,
                   </tr>
                 </thead>
                 <tbody>
-                  {receivableOrders.map((o) => {
+                  {filteredReceivableOrders.map((o) => {
                     const agingDays = diffReceivableDays(o.order_date);
                     const agingBucket = getReceivableBucket(agingDays);
                     const isExpanded = quickPayTarget === o.order_number;
@@ -3012,7 +3029,7 @@ function FinanceSection({ orders, setOrders, expenses, setExpenses, cashEntries,
                                   setQuickPayTarget(null);
                                 } else {
                                   setQuickPayTarget(o.order_number);
-                                  setQuickPayFields({ date: today, amount: String(o.balance ?? ""), method: "现金", note: "" });
+                                  setQuickPayFields({ date: today, amount: String(o.balance ?? ""), method: "现金", note: "", office: false });
                                 }
                               }}
                               className={`rounded border px-2 py-0.5 text-[11px] font-semibold transition-colors ${isExpanded ? "border-slate-300 bg-slate-100 text-slate-600" : "border-emerald-400 bg-emerald-50 text-emerald-700 hover:bg-emerald-100"}`}
@@ -3066,6 +3083,7 @@ function FinanceSection({ orders, setOrders, expenses, setExpenses, cashEntries,
                                     className="h-8 w-full rounded-lg border border-slate-300 bg-white px-2 text-xs text-slate-700 focus:border-emerald-400 focus:outline-none"
                                   />
                                 </div>
+                                <label className="flex items-center gap-2 text-xs text-slate-600"><input type="checkbox" checked={quickPayFields.office} onChange={(e) => setQuickPayFields((prev) => ({ ...prev, office: e.target.checked }))} /> 进入办公室</label>
                                 <div className="flex gap-2">
                                   <button
                                     onClick={() => handleQuickPay(o.order_number)}
@@ -3152,9 +3170,11 @@ function ClientsSection({ clients, setClients, suppliers, setSuppliers, orders, 
   const today = new Date().toISOString().slice(0, 10);
   const [clientDraft, setClientDraft] = useState({ name: "", contact: "", phone: "", wechat: "", address: "", note: "" });
   const [supplierDraft, setSupplierDraft] = useState({ name: "", category: "Fabric", contact_person: "", phone: "", address: "", remark: "" });
+  const [showClientModal, setShowClientModal] = useState(false);
+  const [showSupplierModal, setShowSupplierModal] = useState(false);
   const [clientSearch, setClientSearch] = useState("");
   const [selectedClientId, setSelectedClientId] = useState<string>(clients[0]?.id ?? "");
-  const [quickCollectDraft, setQuickCollectDraft] = useState({ orderNumber: "", amount: "", date: today, method: "现金", note: "" });
+  const [quickCollectDraft, setQuickCollectDraft] = useState({ orderNumber: "", amount: "", date: today, method: "现金", note: "", office: false });
   const contactConfigs: Record<ContactSub, SplitTabularSchemaConfig> = {
     clients: {
       title: "Client Directory",
@@ -3189,12 +3209,14 @@ function ClientsSection({ clients, setClients, suppliers, setSuppliers, orders, 
     setClients((prev) => [{ id: newId, name: clientDraft.name.trim(), contact: clientDraft.contact || undefined, phone: clientDraft.phone || undefined, wechat: clientDraft.wechat || undefined, address: clientDraft.address || undefined, note: clientDraft.note || undefined, created_at: today, balance: 0, is_vip: false }, ...prev]);
     setSelectedClientId(newId);
     setClientDraft({ name: "", contact: "", phone: "", wechat: "", address: "", note: "" });
+    setShowClientModal(false);
   }
 
   function addSupplier() {
     if (!supplierDraft.name.trim()) return;
     setSuppliers((prev) => [{ id: `SUP-${String(prev.length + 1).padStart(3, "0")}`, name: supplierDraft.name.trim(), category: supplierDraft.category, contact_person: supplierDraft.contact_person || undefined, phone: supplierDraft.phone || undefined, address: supplierDraft.address || undefined, remark: supplierDraft.remark || undefined, last_purchase_date: today }, ...prev]);
     setSupplierDraft({ name: "", category: "Fabric", contact_person: "", phone: "", address: "", remark: "" });
+    setShowSupplierModal(false);
   }
 
   const filteredClients = clients.filter((item) => {
@@ -3346,6 +3368,7 @@ function ClientsSection({ clients, setClients, suppliers, setSuppliers, orders, 
       method: quickCollectDraft.method,
       note: quickCollectDraft.note.trim() || (amount >= currentBalance ? "客户中心收清尾款" : "客户中心录入收款"),
       type: "payment",
+      office: quickCollectDraft.office,
     };
 
     const nextOrders = orders.map((order) => {
@@ -3366,33 +3389,36 @@ function ClientsSection({ clients, setClients, suppliers, setSuppliers, orders, 
     const repaired = applyFinanceAuditRepairs(nextOrders, clients);
     setOrders(repaired.fixedOrders);
     setClients(repaired.fixedClients);
-    setCashEntries((prev) => [{
-      id: `CASH-${new Date().getFullYear()}-${String(prev.length + 1).padStart(3, "0")}`,
-      type: "收入",
-      amount: Number(amount.toFixed(2)),
-      date: quickCollectDraft.date,
-      note: `${selectedClient.name} ${selectedCollectOrder.order_number} 收款`,
-    }, ...prev]);
+    if (quickCollectDraft.office) {
+      setCashEntries((prev) => [{
+        id: `CASH-${new Date().getFullYear()}-${String(prev.length + 1).padStart(3, "0")}`,
+        type: "收入",
+        amount: Number(amount.toFixed(2)),
+        date: quickCollectDraft.date,
+        note: `${selectedClient.name} ${selectedCollectOrder.order_number} 收款`,
+      }, ...prev]);
+    }
     setQuickCollectDraft((prev) => ({
       ...prev,
       orderNumber: "",
       amount: "",
       date: today,
       note: "",
+      office: false,
     }));
   }
 
   return (
     <div>
       <SectionHeader
-        eyebrow="Contacts"
-        title="Clients & Suppliers"
+        eyebrow="客户管理"
+        title="客户与供应商"
         actions={
           <>
-            <ActionBtn onClick={exportContacts}>Export current</ActionBtn>
-            <ActionBtn onClick={printContacts}>Print current</ActionBtn>
-            <ActionBtn tone="primary" onClick={sub === "clients" ? addClient : addSupplier}>
-              + New {sub === "clients" ? "client" : "supplier"}
+            <ActionBtn onClick={exportContacts}>导出当前表</ActionBtn>
+            <ActionBtn onClick={printContacts}>打印当前表</ActionBtn>
+            <ActionBtn tone="primary" onClick={() => sub === "clients" ? setShowClientModal(true) : setShowSupplierModal(true)}>
+              + 新建{sub === "clients" ? "客户" : "供应商"}
             </ActionBtn>
           </>
         }
@@ -3400,34 +3426,75 @@ function ClientsSection({ clients, setClients, suppliers, setSuppliers, orders, 
 
       <StatStrip
         items={[
-          { label: "Clients", value: String(clients.length) },
-          { label: "VIP clients", value: String(clients.filter((item) => item.is_vip).length), accent: "text-sky-600" },
-          { label: "Suppliers", value: String(suppliers.length) },
-          { label: "Clients with balance", value: String(clients.filter((item) => (item.balance ?? 0) > 0).length), accent: "text-amber-600" },
+          { label: "客户数", value: String(clients.length) },
+          { label: "VIP客户", value: String(clients.filter((item) => item.is_vip).length), accent: "text-sky-600" },
+          { label: "供应商数", value: String(suppliers.length) },
+          { label: "有欠款客户", value: String(clients.filter((item) => (item.balance ?? 0) > 0).length), accent: "text-amber-600" },
         ]}
       />
 
-      <SegmentedControl options={[{ key: "clients", label: "Client directory" }, { key: "suppliers", label: "Suppliers" }]} value={sub} onChange={setSub} />
+      <SegmentedControl options={[{ key: "clients", label: "客户档案" }, { key: "suppliers", label: "供应商" }]} value={sub} onChange={setSub} />
+
+      {showClientModal && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-slate-950/45 px-4">
+          <div className="w-full max-w-3xl rounded-2xl border border-slate-200 bg-white p-5 shadow-2xl">
+            <div className="mb-4 flex items-start justify-between gap-3">
+              <div>
+                <h3 className="text-base font-semibold text-slate-900">新建客户</h3>
+                <p className="mt-1 text-sm text-slate-500">客户新增改成弹窗，不再占主页面区域。</p>
+              </div>
+              <button onClick={() => setShowClientModal(false)} className="rounded-lg border border-slate-200 px-2.5 py-1 text-xs text-slate-500 hover:border-slate-300 hover:text-slate-700 transition-colors">关闭</button>
+            </div>
+            <div className="grid gap-2 sm:grid-cols-2 xl:grid-cols-3">
+              <SmallInput value={clientDraft.name} onChange={(v) => setClientDraft((d) => ({ ...d, name: v }))} placeholder="客户名称" />
+              <SmallInput value={clientDraft.contact} onChange={(v) => setClientDraft((d) => ({ ...d, contact: v }))} placeholder="联系人" />
+              <SmallInput value={clientDraft.phone} onChange={(v) => setClientDraft((d) => ({ ...d, phone: v }))} placeholder="电话" />
+              <SmallInput value={clientDraft.wechat} onChange={(v) => setClientDraft((d) => ({ ...d, wechat: v }))} placeholder="微信 / 邮箱" />
+              <SmallInput value={clientDraft.address} onChange={(v) => setClientDraft((d) => ({ ...d, address: v }))} placeholder="地址" />
+              <SmallInput value={clientDraft.note} onChange={(v) => setClientDraft((d) => ({ ...d, note: v }))} placeholder="备注" />
+            </div>
+            <div className="mt-5 flex justify-end gap-2">
+              <ActionBtn onClick={() => setShowClientModal(false)}>取消</ActionBtn>
+              <ActionBtn tone="primary" onClick={addClient}>确认新建</ActionBtn>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {showSupplierModal && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-slate-950/45 px-4">
+          <div className="w-full max-w-3xl rounded-2xl border border-slate-200 bg-white p-5 shadow-2xl">
+            <div className="mb-4 flex items-start justify-between gap-3">
+              <div>
+                <h3 className="text-base font-semibold text-slate-900">新建供应商</h3>
+                <p className="mt-1 text-sm text-slate-500">供应商新增也收进弹窗里。</p>
+              </div>
+              <button onClick={() => setShowSupplierModal(false)} className="rounded-lg border border-slate-200 px-2.5 py-1 text-xs text-slate-500 hover:border-slate-300 hover:text-slate-700 transition-colors">关闭</button>
+            </div>
+            <div className="grid gap-2 sm:grid-cols-2 xl:grid-cols-3">
+              <SmallInput value={supplierDraft.name} onChange={(v) => setSupplierDraft((d) => ({ ...d, name: v }))} placeholder="供应商名称" />
+              <SmallSelect value={supplierDraft.category} onChange={(v) => setSupplierDraft((d) => ({ ...d, category: v }))} options={["布料", "五金", "玻璃", "物流", "其他"]} />
+              <SmallInput value={supplierDraft.contact_person} onChange={(v) => setSupplierDraft((d) => ({ ...d, contact_person: v }))} placeholder="联系人" />
+              <SmallInput value={supplierDraft.phone} onChange={(v) => setSupplierDraft((d) => ({ ...d, phone: v }))} placeholder="电话" />
+              <SmallInput value={supplierDraft.address} onChange={(v) => setSupplierDraft((d) => ({ ...d, address: v }))} placeholder="地址" />
+              <SmallInput value={supplierDraft.remark} onChange={(v) => setSupplierDraft((d) => ({ ...d, remark: v }))} placeholder="备注" />
+            </div>
+            <div className="mt-5 flex justify-end gap-2">
+              <ActionBtn onClick={() => setShowSupplierModal(false)}>取消</ActionBtn>
+              <ActionBtn tone="primary" onClick={addSupplier}>确认新建</ActionBtn>
+            </div>
+          </div>
+        </div>
+      )}
 
       {sub === "clients" ? (
         <div className="space-y-4">
-          <PanelCard title="Quick add client">
-            <div className="grid gap-2 sm:grid-cols-2 xl:grid-cols-3">
-              <SmallInput value={clientDraft.name} onChange={(v) => setClientDraft((d) => ({ ...d, name: v }))} placeholder="Client name" />
-              <SmallInput value={clientDraft.contact} onChange={(v) => setClientDraft((d) => ({ ...d, contact: v }))} placeholder="Contact" />
-              <SmallInput value={clientDraft.phone} onChange={(v) => setClientDraft((d) => ({ ...d, phone: v }))} placeholder="Phone" />
-              <SmallInput value={clientDraft.wechat} onChange={(v) => setClientDraft((d) => ({ ...d, wechat: v }))} placeholder="WeChat / Email" />
-              <SmallInput value={clientDraft.address} onChange={(v) => setClientDraft((d) => ({ ...d, address: v }))} placeholder="Address" />
-              <SmallInput value={clientDraft.note} onChange={(v) => setClientDraft((d) => ({ ...d, note: v }))} placeholder="Note" />
-            </div>
-          </PanelCard>
-
           <div className="grid gap-4 xl:grid-cols-[0.95fr_1.45fr]">
-            <PanelCard title="Client list" note="Open a client once, then read orders, appointments, collection status, contacts, and address in one linked workspace.">
+            <PanelCard title="客户列表" note="点开一个客户后，就能在这里直接看订单、预约、收款情况、联系人和地址。">
               <div className="space-y-3">
                 <div className="relative">
                   <span className="absolute left-3 top-1/2 -translate-y-1/2 text-sm text-slate-400">⌕</span>
-                  <input value={clientSearch} onChange={(e) => setClientSearch(e.target.value)} placeholder="Search client / phone / address" className="h-9 w-full rounded-lg border border-slate-300 bg-white pl-8 pr-3 text-xs text-slate-700" />
+                  <input value={clientSearch} onChange={(e) => setClientSearch(e.target.value)} placeholder="搜索客户 / 电话 / 地址" className="h-9 w-full rounded-lg border border-slate-300 bg-white pl-8 pr-3 text-xs text-slate-700" />
                 </div>
                 <div className="max-h-[560px] space-y-2 overflow-y-auto pr-1">
                   {filteredClients.length ? filteredClients.map((item) => {
@@ -3443,82 +3510,82 @@ function ClientsSection({ clients, setClients, suppliers, setSuppliers, orders, 
                               <span className="text-sm font-semibold text-slate-900">{item.name}</span>
                               {item.is_vip ? <span className="rounded-full bg-amber-50 px-2 py-0.5 text-[11px] font-semibold text-amber-700">VIP</span> : null}
                             </div>
-                            <p className="mt-1 text-[11px] text-slate-500">{item.phone ?? item.contact ?? "No contact yet"}</p>
+                            <p className="mt-1 text-[11px] text-slate-500">{item.phone ?? item.contact ?? "暂未填写联系方式"}</p>
                           </div>
                           <span className={`rounded-full px-2 py-0.5 text-[11px] font-semibold ${itemBalance > 0 ? "bg-amber-50 text-amber-700" : "bg-emerald-50 text-emerald-700"}`}>
-                            {itemBalance > 0 ? `Balance ${formatMoney(itemBalance)}` : "Clear"}
+                            {itemBalance > 0 ? `欠款 ${formatMoney(itemBalance)}` : "已结清"}
                           </span>
                         </div>
                         <div className="mt-2 flex flex-wrap gap-3 text-[11px] text-slate-500">
-                          <span>{itemOrders.length} orders</span>
-                          <span>{itemAppointments.length} appointments</span>
-                          <span>{quotes.filter((entry) => entry.client_name === item.name).length} quotes</span>
+                          <span>{itemOrders.length} 个订单</span>
+                          <span>{itemAppointments.length} 个预约</span>
+                          <span>{quotes.filter((entry) => entry.client_name === item.name).length} 个报价</span>
                         </div>
                       </button>
                     );
-                  }) : <div className="rounded-xl border border-dashed border-slate-200 py-10 text-center text-sm text-slate-400">No matching clients</div>}
+                  }) : <div className="rounded-xl border border-dashed border-slate-200 py-10 text-center text-sm text-slate-400">没有匹配到客户</div>}
                 </div>
               </div>
             </PanelCard>
 
-            <PanelCard title={selectedClient ? `Client detail · ${selectedClient.name}` : "Client detail"} note="The client panel now links business status, receivables, appointments, and contact records directly inside the current site.">
+            <PanelCard title={selectedClient ? `客户详情 · ${selectedClient.name}` : "客户详情"} note="客户相关的业务状态、应收款、预约和联系资料，都直接在这里联动查看。">
               {selectedClient ? (
                 <div className="space-y-4">
                   <div className="flex flex-wrap items-start justify-between gap-3 rounded-xl border border-slate-200 bg-slate-50 p-4">
                     <div>
                       <div className="flex items-center gap-2">
                         <h3 className="text-base font-semibold text-slate-900">{selectedClient.name}</h3>
-                        {selectedClient.is_vip ? <span className="rounded-full bg-sky-100 px-2 py-0.5 text-[11px] font-semibold text-sky-700">VIP client</span> : null}
-                        {clientBalance > 0 ? <span className="rounded-full bg-amber-50 px-2 py-0.5 text-[11px] font-semibold text-amber-700">Needs follow-up</span> : null}
+                        {selectedClient.is_vip ? <span className="rounded-full bg-sky-100 px-2 py-0.5 text-[11px] font-semibold text-sky-700">VIP客户</span> : null}
+                        {clientBalance > 0 ? <span className="rounded-full bg-amber-50 px-2 py-0.5 text-[11px] font-semibold text-amber-700">待跟进</span> : null}
                       </div>
-                      <p className="mt-1 text-xs text-slate-500">Contact {selectedClient.contact ?? "-"}, phone {selectedClient.phone ?? "-"}</p>
-                      <p className="mt-1 text-xs text-slate-500">Address {selectedClient.address ?? "Not filled"}</p>
-                      <p className="mt-1 text-xs text-slate-500">WeChat/email {selectedClient.wechat ?? selectedClient.email ?? "Not filled"}</p>
+                      <p className="mt-1 text-xs text-slate-500">联系人 {selectedClient.contact ?? "-"}，电话 {selectedClient.phone ?? "-"}</p>
+                      <p className="mt-1 text-xs text-slate-500">地址 {selectedClient.address ?? "未填写"}</p>
+                      <p className="mt-1 text-xs text-slate-500">微信/邮箱 {selectedClient.wechat ?? selectedClient.email ?? "未填写"}</p>
                     </div>
                     <div className="flex flex-wrap gap-2">
-                      <ActionBtn onClick={() => toggleVip(selectedClient.id)}>{selectedClient.is_vip ? "Remove VIP" : "Set VIP"}</ActionBtn>
-                      <ActionBtn onClick={() => createClientAppointment(selectedClient)}>+ Quick appointment</ActionBtn>
-                      <ActionBtn onClick={() => createClientQuote(selectedClient)}>+ Quick quote</ActionBtn>
+                      <ActionBtn onClick={() => toggleVip(selectedClient.id)}>{selectedClient.is_vip ? "取消VIP" : "设为VIP"}</ActionBtn>
+                      <ActionBtn onClick={() => createClientAppointment(selectedClient)}>+ 快速预约</ActionBtn>
+                      <ActionBtn onClick={() => createClientQuote(selectedClient)}>+ 快速报价</ActionBtn>
                     </div>
                   </div>
 
                   <StatStrip
                     items={[
-                      { label: "Orders", value: String(selectedClientOrders.length) },
-                      { label: "Custom / wholesale", value: `${clientCustomOrderCount} / ${clientWholesaleOrderCount}` },
-                      { label: "Gross value", value: formatMoney(clientTotal), accent: "text-slate-800" },
-                      { label: "Paid / balance", value: `${formatMoney(clientPaid)} / ${formatMoney(clientBalance)}`, accent: clientBalance > 0 ? "text-amber-600" : "text-emerald-600" },
+                      { label: "订单数", value: String(selectedClientOrders.length) },
+                      { label: "定制 / 批发", value: `${clientCustomOrderCount} / ${clientWholesaleOrderCount}` },
+                      { label: "业务总额", value: formatMoney(clientTotal), accent: "text-slate-800" },
+                      { label: "已收 / 余款", value: `${formatMoney(clientPaid)} / ${formatMoney(clientBalance)}`, accent: clientBalance > 0 ? "text-amber-600" : "text-emerald-600" },
                     ]}
                   />
 
                   <div className="grid gap-4 lg:grid-cols-3">
                     <div className="rounded-xl border border-slate-200 bg-white p-4">
-                      <p className="text-[11px] uppercase tracking-[0.2em] text-slate-400">Contact snapshot</p>
+                      <p className="text-[11px] uppercase tracking-[0.2em] text-slate-400">联系资料</p>
                       <div className="mt-3 space-y-3 text-sm">
-                        <div className="flex items-start justify-between gap-3"><span className="text-slate-500">Primary contact</span><span className="max-w-[190px] text-right font-medium text-slate-900">{selectedClient.contact ?? selectedClient.name}</span></div>
-                        <div className="flex items-start justify-between gap-3"><span className="text-slate-500">Phone</span><span className="max-w-[190px] text-right font-medium text-slate-900">{selectedClient.phone ?? "-"}</span></div>
-                        <div className="flex items-start justify-between gap-3"><span className="text-slate-500">WeChat / email</span><span className="max-w-[190px] text-right font-medium text-slate-900">{selectedClient.wechat ?? selectedClient.email ?? "-"}</span></div>
-                        <div className="flex items-start justify-between gap-3"><span className="text-slate-500">Address</span><span className="max-w-[190px] text-right text-slate-900">{selectedClient.address ?? "Not filled"}</span></div>
+                        <div className="flex items-start justify-between gap-3"><span className="text-slate-500">主要联系人</span><span className="max-w-[190px] text-right font-medium text-slate-900">{selectedClient.contact ?? selectedClient.name}</span></div>
+                        <div className="flex items-start justify-between gap-3"><span className="text-slate-500">电话</span><span className="max-w-[190px] text-right font-medium text-slate-900">{selectedClient.phone ?? "-"}</span></div>
+                        <div className="flex items-start justify-between gap-3"><span className="text-slate-500">微信 / 邮箱</span><span className="max-w-[190px] text-right font-medium text-slate-900">{selectedClient.wechat ?? selectedClient.email ?? "-"}</span></div>
+                        <div className="flex items-start justify-between gap-3"><span className="text-slate-500">地址</span><span className="max-w-[190px] text-right text-slate-900">{selectedClient.address ?? "未填写"}</span></div>
                       </div>
                     </div>
 
                     <div className="rounded-xl border border-slate-200 bg-white p-4">
-                      <p className="text-[11px] uppercase tracking-[0.2em] text-slate-400">Account status</p>
+                      <p className="text-[11px] uppercase tracking-[0.2em] text-slate-400">业务状态</p>
                       <div className="mt-3 space-y-3 text-sm">
-                        <div className="flex items-center justify-between"><span className="text-slate-500">Last order</span><span className="font-medium text-slate-900">{clientLastOrder}</span></div>
-                        <div className="flex items-center justify-between"><span className="text-slate-500">Next appointment</span><span className="max-w-[180px] text-right font-medium text-slate-900">{nextAppointment ? formatAppointmentDate(nextAppointment.appointment_date) : "None"}</span></div>
-                        <div className="flex items-center justify-between"><span className="text-slate-500">Latest quote</span><span className="font-medium text-slate-900">{selectedClientQuotes[0]?.status ?? "None"}</span></div>
-                        <div className="flex items-center justify-between"><span className="text-slate-500">Notes</span><span className="max-w-[180px] text-right text-slate-900">{selectedClient.note ?? "-"}</span></div>
+                        <div className="flex items-center justify-between"><span className="text-slate-500">最近下单</span><span className="font-medium text-slate-900">{clientLastOrder}</span></div>
+                        <div className="flex items-center justify-between"><span className="text-slate-500">下次预约</span><span className="max-w-[180px] text-right font-medium text-slate-900">{nextAppointment ? formatAppointmentDate(nextAppointment.appointment_date) : "暂无"}</span></div>
+                        <div className="flex items-center justify-between"><span className="text-slate-500">最新报价</span><span className="font-medium text-slate-900">{selectedClientQuotes[0]?.status ?? "暂无"}</span></div>
+                        <div className="flex items-center justify-between"><span className="text-slate-500">备注</span><span className="max-w-[180px] text-right text-slate-900">{selectedClient.note ?? "-"}</span></div>
                       </div>
                     </div>
 
                     <div className="rounded-xl border border-slate-200 bg-white p-4">
-                      <p className="text-[11px] uppercase tracking-[0.2em] text-slate-400">Collection snapshot</p>
+                      <p className="text-[11px] uppercase tracking-[0.2em] text-slate-400">收款情况</p>
                       <div className="mt-3 space-y-3 text-sm">
-                        <div className="flex items-center justify-between"><span className="text-slate-500">Open balance</span><span className={`font-semibold ${clientBalance > 0 ? "text-amber-600" : "text-emerald-600"}`}>{formatMoney(clientBalance)}</span></div>
-                        <div className="flex items-center justify-between"><span className="text-slate-500">Open orders</span><span className="font-medium text-slate-900">{clientOrderCountWithBalance}</span></div>
-                        <div className="flex items-center justify-between"><span className="text-slate-500">Last collection</span><span className="max-w-[180px] text-right font-medium text-slate-900">{clientLastPayment ? `${clientLastPayment.date} · ${formatMoney(clientLastPayment.amount)}` : "No payment yet"}</span></div>
-                        <div className="flex items-center justify-between"><span className="text-slate-500">Client card balance</span><span className="font-medium text-slate-900">{formatMoney(selectedClient.balance ?? clientBalance)}</span></div>
+                        <div className="flex items-center justify-between"><span className="text-slate-500">未收余款</span><span className={`font-semibold ${clientBalance > 0 ? "text-amber-600" : "text-emerald-600"}`}>{formatMoney(clientBalance)}</span></div>
+                        <div className="flex items-center justify-between"><span className="text-slate-500">未结清订单</span><span className="font-medium text-slate-900">{clientOrderCountWithBalance}</span></div>
+                        <div className="flex items-center justify-between"><span className="text-slate-500">最近收款</span><span className="max-w-[180px] text-right font-medium text-slate-900">{clientLastPayment ? `${clientLastPayment.date} · ${formatMoney(clientLastPayment.amount)}` : "暂无收款"}</span></div>
+                        <div className="flex items-center justify-between"><span className="text-slate-500">客户档案余额</span><span className="font-medium text-slate-900">{formatMoney(selectedClient.balance ?? clientBalance)}</span></div>
                       </div>
                     </div>
                   </div>
@@ -3528,18 +3595,18 @@ function ClientsSection({ clients, setClients, suppliers, setSuppliers, orders, 
                       <div className="rounded-xl border border-slate-200 bg-white p-4">
                         <div className="mb-3 flex items-center justify-between">
                           <div>
-                            <p className="text-sm font-semibold text-slate-900">Quick collection</p>
-                            <p className="text-[11px] text-slate-400">Pick an open order, enter the payment once, and sync the client balance immediately.</p>
+                            <p className="text-sm font-semibold text-slate-900">快速收款</p>
+                            <p className="text-[11px] text-slate-400">选中未结清订单，录一次收款，就会立即同步客户余额。</p>
                           </div>
                           <span className={`rounded-full px-2 py-0.5 text-[11px] font-semibold ${receivableOrders.length ? "bg-amber-50 text-amber-700" : "bg-emerald-50 text-emerald-700"}`}>
-                            {receivableOrders.length ? `${receivableOrders.length} open` : "All clear"}
+                            {receivableOrders.length ? `${receivableOrders.length} 个未结清` : "全部结清"}
                           </span>
                         </div>
                         {receivableOrders.length ? (
                           <div className="space-y-3">
                             <div className="grid gap-2 sm:grid-cols-2 xl:grid-cols-4">
                               <div>
-                                <label className="mb-1 block text-[11px] font-semibold text-slate-500">Order</label>
+                                <label className="mb-1 block text-[11px] font-semibold text-slate-500">订单</label>
                                 <select value={quickCollectDraft.orderNumber} onChange={(e) => {
                                   const nextOrder = receivableOrders.find((item) => item.order_number === e.target.value);
                                   setQuickCollectDraft((prev) => ({ ...prev, orderNumber: e.target.value, amount: nextOrder ? String(nextOrder.balance ?? "") : prev.amount }));
@@ -3548,33 +3615,36 @@ function ClientsSection({ clients, setClients, suppliers, setSuppliers, orders, 
                                 </select>
                               </div>
                               <div>
-                                <label className="mb-1 block text-[11px] font-semibold text-slate-500">Amount</label>
+                                <label className="mb-1 block text-[11px] font-semibold text-slate-500">金额</label>
                                 <input type="number" min={0} step={0.01} value={quickCollectDraft.amount} onChange={(e) => setQuickCollectDraft((prev) => ({ ...prev, amount: e.target.value }))} className="h-9 w-full rounded-lg border border-slate-300 bg-white px-3 text-xs text-slate-700" placeholder="0.00" />
                               </div>
                               <div>
-                                <label className="mb-1 block text-[11px] font-semibold text-slate-500">Date</label>
+                                <label className="mb-1 block text-[11px] font-semibold text-slate-500">日期</label>
                                 <input type="date" value={quickCollectDraft.date} onChange={(e) => setQuickCollectDraft((prev) => ({ ...prev, date: e.target.value }))} className="h-9 w-full rounded-lg border border-slate-300 bg-white px-3 text-xs text-slate-700" />
                               </div>
                               <div>
-                                <label className="mb-1 block text-[11px] font-semibold text-slate-500">Method</label>
+                                <label className="mb-1 block text-[11px] font-semibold text-slate-500">方式</label>
                                 <select value={quickCollectDraft.method} onChange={(e) => setQuickCollectDraft((prev) => ({ ...prev, method: e.target.value }))} className="h-9 w-full rounded-lg border border-slate-300 bg-white px-3 text-xs text-slate-700">
                                   {PAYMENT_METHODS.map((m) => <option key={m}>{m}</option>)}
                                 </select>
                               </div>
                             </div>
                             <div className="grid gap-2 lg:grid-cols-[1fr_auto]">
-                              <input type="text" value={quickCollectDraft.note} onChange={(e) => setQuickCollectDraft((prev) => ({ ...prev, note: e.target.value }))} className="h-9 w-full rounded-lg border border-slate-300 bg-white px-3 text-xs text-slate-700" placeholder="Note, for example tail payment received on delivery" />
+                              <div className="space-y-2">
+                                <input type="text" value={quickCollectDraft.note} onChange={(e) => setQuickCollectDraft((prev) => ({ ...prev, note: e.target.value }))} className="h-9 w-full rounded-lg border border-slate-300 bg-white px-3 text-xs text-slate-700" placeholder="备注，比如送货时收尾款" />
+                                <label className="flex items-center gap-2 text-xs text-slate-600"><input type="checkbox" checked={quickCollectDraft.office} onChange={(e) => setQuickCollectDraft((prev) => ({ ...prev, office: e.target.checked }))} /> 进入办公室</label>
+                              </div>
                               <div className="flex flex-wrap gap-2">
-                                <ActionBtn onClick={() => applyQuickCollectPreset("half")}>Fill half</ActionBtn>
-                                <ActionBtn onClick={() => applyQuickCollectPreset("balance")} tone="success">Fill full balance</ActionBtn>
-                                <ActionBtn onClick={handleQuickCollect} tone="primary">Confirm collection</ActionBtn>
+                                <ActionBtn onClick={() => applyQuickCollectPreset("half")}>填一半</ActionBtn>
+                                <ActionBtn onClick={() => applyQuickCollectPreset("balance")} tone="success">填全额余款</ActionBtn>
+                                <ActionBtn onClick={handleQuickCollect} tone="primary">确认收款</ActionBtn>
                               </div>
                             </div>
                             {selectedCollectOrder ? (
                               <div className="rounded-xl border border-amber-100 bg-amber-50/70 p-3 text-xs text-amber-900">
                                 <div className="flex flex-wrap items-center justify-between gap-3">
                                   <span className="font-semibold">{selectedCollectOrder.order_number}</span>
-                                  <span>Outstanding {formatMoney(selectedCollectOrder.balance ?? 0)} · Paid {formatMoney(selectedCollectOrder.amount_paid ?? 0)} / Total {formatMoney(selectedCollectOrder.total_after_tax ?? selectedCollectOrder.total_price ?? 0)}</span>
+                                  <span>余款 {formatMoney(selectedCollectOrder.balance ?? 0)} · 已收 {formatMoney(selectedCollectOrder.amount_paid ?? 0)} / 总额 {formatMoney(selectedCollectOrder.total_after_tax ?? selectedCollectOrder.total_price ?? 0)}</span>
                                 </div>
                               </div>
                             ) : null}
@@ -3587,32 +3657,32 @@ function ClientsSection({ clients, setClients, suppliers, setSuppliers, orders, 
                                   </div>
                                   <div className="text-right">
                                     <p className="font-semibold text-amber-600">{formatMoney(item.balance ?? 0)}</p>
-                                    <p className="mt-1 text-[11px] text-slate-500">Tap to fill full balance</p>
+                                    <p className="mt-1 text-[11px] text-slate-500">点一下填满全部余款</p>
                                   </div>
                                 </button>
                               ))}
                             </div>
                           </div>
-                        ) : <div className="rounded-xl border border-dashed border-slate-200 py-10 text-center text-sm text-emerald-600">This client has no open receivables right now</div>}
+                        ) : <div className="rounded-xl border border-dashed border-slate-200 py-10 text-center text-sm text-emerald-600">这个客户当前没有未收款订单</div>}
                       </div>
 
                       <div className="rounded-xl border border-slate-200 bg-white p-4">
                         <div className="mb-3 flex items-center justify-between">
-                          <p className="text-sm font-semibold text-slate-900">Linked orders</p>
-                          <span className="text-[11px] text-slate-400">Status, receivable, and paid amount stay synced</span>
+                          <p className="text-sm font-semibold text-slate-900">关联订单</p>
+                          <span className="text-[11px] text-slate-400">状态、应收和已收金额会保持联动</span>
                         </div>
                         {selectedClientOrders.length ? (
                           <div className="overflow-x-auto">
                             <table className="w-full text-left text-xs">
                               <thead>
                                 <tr className="border-b border-slate-200 bg-slate-50">
-                                  <th className="px-3 py-2 font-semibold text-slate-600">Order</th>
-                                  <th className="px-3 py-2 font-semibold text-slate-600">Type</th>
-                                  <th className="px-3 py-2 font-semibold text-slate-600">Date</th>
-                                  <th className="px-3 py-2 font-semibold text-slate-600">Gross</th>
-                                  <th className="px-3 py-2 font-semibold text-slate-600">Paid</th>
-                                  <th className="px-3 py-2 font-semibold text-slate-600">Balance</th>
-                                  <th className="px-3 py-2 font-semibold text-slate-600">Action</th>
+                                  <th className="px-3 py-2 font-semibold text-slate-600">订单号</th>
+                                  <th className="px-3 py-2 font-semibold text-slate-600">类型</th>
+                                  <th className="px-3 py-2 font-semibold text-slate-600">日期</th>
+                                  <th className="px-3 py-2 font-semibold text-slate-600">总额</th>
+                                  <th className="px-3 py-2 font-semibold text-slate-600">已收</th>
+                                  <th className="px-3 py-2 font-semibold text-slate-600">余款</th>
+                                  <th className="px-3 py-2 font-semibold text-slate-600">操作</th>
                                 </tr>
                               </thead>
                               <tbody>
@@ -3625,21 +3695,21 @@ function ClientsSection({ clients, setClients, suppliers, setSuppliers, orders, 
                                     <td className="px-3 py-2 text-emerald-600">{formatMoney(item.amount_paid ?? 0)}</td>
                                     <td className={`px-3 py-2 font-semibold ${(item.balance ?? 0) > 0 ? "text-amber-600" : "text-slate-700"}`}>{formatMoney(item.balance ?? 0)}</td>
                                     <td className="px-3 py-2 text-slate-600">
-                                      {(item.balance ?? 0) > 0 ? <button onClick={() => applyQuickCollectPreset("balance", item)} className="rounded-md border border-amber-200 bg-amber-50 px-2 py-1 text-[11px] font-semibold text-amber-700 hover:bg-amber-100">Collect balance</button> : <span className="text-[11px] text-emerald-600">Clear</span>}
+                                      {(item.balance ?? 0) > 0 ? <button onClick={() => applyQuickCollectPreset("balance", item)} className="rounded-md border border-amber-200 bg-amber-50 px-2 py-1 text-[11px] font-semibold text-amber-700 hover:bg-amber-100">收清余款</button> : <span className="text-[11px] text-emerald-600">已结清</span>}
                                     </td>
                                   </tr>
                                 ))}
                               </tbody>
                             </table>
                           </div>
-                        ) : <div className="rounded-xl border border-dashed border-slate-200 py-10 text-center text-sm text-slate-400">This client has no linked orders yet</div>}
+                        ) : <div className="rounded-xl border border-dashed border-slate-200 py-10 text-center text-sm text-slate-400">这个客户还没有关联订单</div>}
                       </div>
                     </div>
 
                     <div className="rounded-xl border border-slate-200 bg-white p-4">
                       <div className="mb-3 flex items-center justify-between">
-                        <p className="text-sm font-semibold text-slate-900">Recent payments</p>
-                        <span className="text-[11px] text-slate-400">Pulled from linked orders</span>
+                        <p className="text-sm font-semibold text-slate-900">最近收款</p>
+                        <span className="text-[11px] text-slate-400">从关联订单里自动汇总</span>
                       </div>
                       {clientRecentPayments.length ? (
                         <div className="space-y-2">
@@ -3647,22 +3717,22 @@ function ClientsSection({ clients, setClients, suppliers, setSuppliers, orders, 
                             <div key={`${item.order_number}-${item.date}-${index}`} className="rounded-lg border border-slate-200 px-3 py-2">
                               <div className="flex items-center justify-between gap-2">
                                 <span className="text-xs font-medium text-slate-800">{item.order_number}</span>
-                                <span className={`text-xs font-semibold ${item.type === "refund" ? "text-rose-600" : "text-emerald-600"}`}>{item.type === "refund" ? "Refund" : "Payment"} {formatMoney(item.amount)}</span>
+                                <span className={`text-xs font-semibold ${item.type === "refund" ? "text-rose-600" : "text-emerald-600"}`}>{item.type === "refund" ? "退款" : "收款"} {formatMoney(item.amount)}</span>
                               </div>
                               <p className="mt-1 text-[11px] text-slate-500">{item.date} · {item.method} · {item.order_status}</p>
-                              <p className="mt-1 text-[11px] text-slate-400">{item.note ?? "No note"}</p>
+                              <p className="mt-1 text-[11px] text-slate-400">{item.note ?? "无备注"}</p>
                             </div>
                           ))}
                         </div>
-                      ) : <div className="rounded-xl border border-dashed border-slate-200 py-10 text-center text-sm text-slate-400">No payment history yet</div>}
+                      ) : <div className="rounded-xl border border-dashed border-slate-200 py-10 text-center text-sm text-slate-400">暂时还没有收款记录</div>}
                     </div>
                   </div>
 
                   <div className="grid gap-4 lg:grid-cols-2">
                     <div className="rounded-xl border border-slate-200 bg-white p-4">
                       <div className="mb-3 flex items-center justify-between">
-                        <p className="text-sm font-semibold text-slate-900">Appointments</p>
-                        <span className="text-[11px] text-slate-400">Linked from client detail</span>
+                        <p className="text-sm font-semibold text-slate-900">预约记录</p>
+                        <span className="text-[11px] text-slate-400">从客户详情联动过来</span>
                       </div>
                       {selectedClientAppointments.length ? (
                         <div className="space-y-2">
@@ -3674,19 +3744,19 @@ function ClientsSection({ clients, setClients, suppliers, setSuppliers, orders, 
                                   <span className="text-xs font-medium text-slate-800">{formatAppointmentDate(item.appointment_date)}</span>
                                   <AppointmentStatusBadge status={status} />
                                 </div>
-                                <p className="mt-1 text-[11px] text-slate-500">{item.address ?? "No address"}</p>
-                                <p className="mt-1 text-[11px] text-slate-400">{item.description ?? "No note"}</p>
+                                <p className="mt-1 text-[11px] text-slate-500">{item.address ?? "未填写地址"}</p>
+                                <p className="mt-1 text-[11px] text-slate-400">{item.description ?? "无备注"}</p>
                               </div>
                             );
                           })}
                         </div>
-                      ) : <div className="rounded-xl border border-dashed border-slate-200 py-10 text-center text-sm text-slate-400">No appointments yet</div>}
+                      ) : <div className="rounded-xl border border-dashed border-slate-200 py-10 text-center text-sm text-slate-400">暂时还没有预约记录</div>}
                     </div>
 
                     <div className="rounded-xl border border-slate-200 bg-white p-4">
                       <div className="mb-3 flex items-center justify-between">
-                        <p className="text-sm font-semibold text-slate-900">Business timeline</p>
-                        <span className="text-[11px] text-slate-400">Orders, payments, appointments, and quotes together</span>
+                        <p className="text-sm font-semibold text-slate-900">业务时间线</p>
+                        <span className="text-[11px] text-slate-400">订单、收款、预约、报价放在一起看</span>
                       </div>
                       {clientBusinessFeed.length ? (
                         <div className="space-y-2">
@@ -3700,38 +3770,27 @@ function ClientsSection({ clients, setClients, suppliers, setSuppliers, orders, 
                             </div>
                           ))}
                         </div>
-                      ) : <div className="rounded-xl border border-dashed border-slate-200 py-10 text-center text-sm text-slate-400">No linked activity yet</div>}
+                      ) : <div className="rounded-xl border border-dashed border-slate-200 py-10 text-center text-sm text-slate-400">暂时还没有关联动态</div>}
                     </div>
                   </div>
                 </div>
-              ) : <div className="rounded-xl border border-dashed border-slate-200 py-16 text-center text-sm text-slate-400">Select a client on the left to view linked details</div>}
+              ) : <div className="rounded-xl border border-dashed border-slate-200 py-16 text-center text-sm text-slate-400">请先在左侧选择一个客户，再看详情</div>}
             </PanelCard>
           </div>
         </div>
       ) : (
         <div className="space-y-4">
-          <PanelCard title="Quick add supplier">
-            <div className="grid gap-2 sm:grid-cols-2 xl:grid-cols-3">
-              <SmallInput value={supplierDraft.name} onChange={(v) => setSupplierDraft((d) => ({ ...d, name: v }))} placeholder="Supplier name" />
-              <SmallSelect value={supplierDraft.category} onChange={(v) => setSupplierDraft((d) => ({ ...d, category: v }))} options={["Fabric", "Hardware", "Glass", "Logistics", "Other"]} />
-              <SmallInput value={supplierDraft.contact_person} onChange={(v) => setSupplierDraft((d) => ({ ...d, contact_person: v }))} placeholder="Contact" />
-              <SmallInput value={supplierDraft.phone} onChange={(v) => setSupplierDraft((d) => ({ ...d, phone: v }))} placeholder="Phone" />
-              <SmallInput value={supplierDraft.address} onChange={(v) => setSupplierDraft((d) => ({ ...d, address: v }))} placeholder="Address" />
-              <SmallInput value={supplierDraft.remark} onChange={(v) => setSupplierDraft((d) => ({ ...d, remark: v }))} placeholder="Remark" />
-            </div>
-          </PanelCard>
-
           <div className="overflow-x-auto rounded-xl border border-slate-200 bg-white">
             <table className="w-full text-left text-xs">
               <thead>
                 <tr className="border-b border-slate-200 bg-slate-50">
-                  <th className="px-4 py-2.5 font-semibold text-slate-600">Supplier name</th>
-                  <th className="px-4 py-2.5 font-semibold text-slate-600">Category</th>
-                  <th className="px-4 py-2.5 font-semibold text-slate-600">Contact</th>
-                  <th className="px-4 py-2.5 font-semibold text-slate-600">Phone</th>
-                  <th className="px-4 py-2.5 font-semibold text-slate-600">Address</th>
-                  <th className="px-4 py-2.5 font-semibold text-slate-600">Last purchase</th>
-                  <th className="px-4 py-2.5 font-semibold text-slate-600">Remark</th>
+                  <th className="px-4 py-2.5 font-semibold text-slate-600">供应商名称</th>
+                  <th className="px-4 py-2.5 font-semibold text-slate-600">分类</th>
+                  <th className="px-4 py-2.5 font-semibold text-slate-600">联系人</th>
+                  <th className="px-4 py-2.5 font-semibold text-slate-600">电话</th>
+                  <th className="px-4 py-2.5 font-semibold text-slate-600">地址</th>
+                  <th className="px-4 py-2.5 font-semibold text-slate-600">最近采购</th>
+                  <th className="px-4 py-2.5 font-semibold text-slate-600">备注</th>
                 </tr>
               </thead>
               <tbody>
@@ -3916,6 +3975,8 @@ function MaterialsSection({ materials, setMaterials, purchases, setPurchases, su
   const today = new Date().toISOString().slice(0, 10);
   const [materialDraft, setMaterialDraft] = useState({ code: "", name: "", specification: "", unit: "个", stock_quantity: "", min_stock: "", purchase_price: "", supplier: suppliers[0]?.name ?? "", remark: "" });
   const [purchaseDraft, setPurchaseDraft] = useState({ supplier: suppliers[0]?.name ?? "", item_name: "", quantity: "", unit: "个", unit_price: "", purchase_date: today, status: "未付款" });
+  const [showMaterialModal, setShowMaterialModal] = useState(false);
+  const [showPurchaseModal, setShowPurchaseModal] = useState(false);
   const [inventoryHint, setInventoryHint] = useState("");
   const [expandedMaterialId, setExpandedMaterialId] = useState<string | null>(null);
   const lowStockCount = materials.filter((item) => item.stock_quantity <= item.min_stock).length;
@@ -3968,6 +4029,7 @@ function MaterialsSection({ materials, setMaterials, purchases, setPurchases, su
     setMaterials((prev) => [{ id: `MAT-${String(prev.length + 1).padStart(3, "0")}`, code: materialDraft.code.trim(), name: materialDraft.name.trim(), specification: materialDraft.specification || undefined, unit: materialDraft.unit, stock_quantity: Number(materialDraft.stock_quantity) || 0, min_stock: Number(materialDraft.min_stock) || 0, purchase_price: Number(materialDraft.purchase_price) || 0, supplier: materialDraft.supplier || undefined, last_stock_date: today, remark: materialDraft.remark || undefined }, ...prev]);
     setInventoryHint(`已新增物料 ${materialDraft.name.trim()}。`);
     setMaterialDraft({ code: "", name: "", specification: "", unit: "个", stock_quantity: "", min_stock: "", purchase_price: "", supplier: suppliers[0]?.name ?? "", remark: "" });
+    setShowMaterialModal(false);
   }
 
   function addPurchase() {
@@ -3987,11 +4049,12 @@ function MaterialsSection({ materials, setMaterials, purchases, setPurchases, su
     }
 
     setPurchaseDraft({ supplier: suppliers[0]?.name ?? "", item_name: "", quantity: "", unit: "个", unit_price: "", purchase_date: today, status: "未付款" });
+    setShowPurchaseModal(false);
   }
 
   return (
     <div>
-      <SectionHeader eyebrow="Materials & Inventory" title="物料库存" actions={<><ActionBtn onClick={exportMaterials}>↓ 导出当前表</ActionBtn><ActionBtn onClick={printMaterials}>🖨 打印当前表</ActionBtn><ActionBtn tone="primary" onClick={sub === "inventory" ? addMaterial : addPurchase}>+ {sub === "inventory" ? "新建物料" : "新建采购单"}</ActionBtn></>} />
+      <SectionHeader eyebrow="Materials & Inventory" title="物料库存" actions={<><ActionBtn onClick={exportMaterials}>↓ 导出当前表</ActionBtn><ActionBtn onClick={printMaterials}>🖨 打印当前表</ActionBtn><ActionBtn tone="primary" onClick={() => sub === "inventory" ? setShowMaterialModal(true) : setShowPurchaseModal(true)}>+ {sub === "inventory" ? "新建物料" : "新建采购单"}</ActionBtn></>} />
       <StatStrip items={[{ label: "物料品类", value: String(materials.length) }, { label: "订单占用", value: String(committedTotal), accent: "text-sky-600" }, { label: "低库存预警", value: String(lowStockCount), accent: "text-orange-600" }, { label: "缺货项目", value: String(shortageCount), accent: shortageCount > 0 ? "text-red-600" : "text-emerald-600" }, { label: "本月采购额", value: formatMoney(monthlyPurchase), accent: "text-red-600" }]} />
       <SegmentedControl options={[{ key: "inventory", label: "库存清单" }, { key: "purchases", label: "采购记录" }]} value={sub} onChange={setSub} />
 
@@ -4029,9 +4092,16 @@ function MaterialsSection({ materials, setMaterials, purchases, setPurchases, su
         </div>
       ) : null}
 
-      {sub === "inventory" ? (
-        <div className="space-y-4">
-          <PanelCard title="快速录入物料" note="现在会结合未关闭批发单计算占用量，直接看到可用库存。">
+      {showMaterialModal && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-slate-950/45 px-4">
+          <div className="w-full max-w-3xl rounded-2xl border border-slate-200 bg-white p-5 shadow-2xl">
+            <div className="mb-4 flex items-start justify-between gap-3">
+              <div>
+                <h3 className="text-base font-semibold text-slate-900">新建物料</h3>
+                <p className="mt-1 text-sm text-slate-500">新增物料改成弹窗，不挤占主页面。</p>
+              </div>
+              <button onClick={() => setShowMaterialModal(false)} className="rounded-lg border border-slate-200 px-2.5 py-1 text-xs text-slate-500 hover:border-slate-300 hover:text-slate-700 transition-colors">关闭</button>
+            </div>
             <div className="grid gap-2 sm:grid-cols-2 xl:grid-cols-4">
               <SmallInput value={materialDraft.code} onChange={(v) => setMaterialDraft((d) => ({ ...d, code: v }))} placeholder="编码" />
               <SmallInput value={materialDraft.name} onChange={(v) => setMaterialDraft((d) => ({ ...d, name: v }))} placeholder="名称" />
@@ -4042,8 +4112,44 @@ function MaterialsSection({ materials, setMaterials, purchases, setPurchases, su
               <SmallInput value={materialDraft.purchase_price} onChange={(v) => setMaterialDraft((d) => ({ ...d, purchase_price: v }))} type="number" placeholder="成本单价" />
               <SmallSelect value={materialDraft.supplier} onChange={(v) => setMaterialDraft((d) => ({ ...d, supplier: v }))} options={suppliers.length ? suppliers.map((item) => item.name) : ["未指定"]} />
             </div>
-          </PanelCard>
+            <div className="mt-2"><SmallInput value={materialDraft.remark} onChange={(v) => setMaterialDraft((d) => ({ ...d, remark: v }))} placeholder="备注（可选）" /></div>
+            <div className="mt-5 flex justify-end gap-2">
+              <ActionBtn onClick={() => setShowMaterialModal(false)}>取消</ActionBtn>
+              <ActionBtn tone="primary" onClick={addMaterial}>确认新建</ActionBtn>
+            </div>
+          </div>
+        </div>
+      )}
 
+      {showPurchaseModal && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-slate-950/45 px-4">
+          <div className="w-full max-w-3xl rounded-2xl border border-slate-200 bg-white p-5 shadow-2xl">
+            <div className="mb-4 flex items-start justify-between gap-3">
+              <div>
+                <h3 className="text-base font-semibold text-slate-900">新建采购单</h3>
+                <p className="mt-1 text-sm text-slate-500">采购新增也改成弹窗，保存后自动尝试回补库存。</p>
+              </div>
+              <button onClick={() => setShowPurchaseModal(false)} className="rounded-lg border border-slate-200 px-2.5 py-1 text-xs text-slate-500 hover:border-slate-300 hover:text-slate-700 transition-colors">关闭</button>
+            </div>
+            <div className="grid gap-2 sm:grid-cols-2 xl:grid-cols-4">
+              <SmallSelect value={purchaseDraft.supplier} onChange={(v) => setPurchaseDraft((d) => ({ ...d, supplier: v }))} options={suppliers.length ? suppliers.map((item) => item.name) : ["未指定"]} />
+              <SmallInput value={purchaseDraft.item_name} onChange={(v) => setPurchaseDraft((d) => ({ ...d, item_name: v }))} placeholder="品名" />
+              <SmallInput value={purchaseDraft.quantity} onChange={(v) => setPurchaseDraft((d) => ({ ...d, quantity: v }))} type="number" placeholder="数量" />
+              <SmallSelect value={purchaseDraft.unit} onChange={(v) => setPurchaseDraft((d) => ({ ...d, unit: v }))} options={["个", "米", "根", "套", "张"]} />
+              <SmallInput value={purchaseDraft.unit_price} onChange={(v) => setPurchaseDraft((d) => ({ ...d, unit_price: v }))} type="number" placeholder="单价" />
+              <SmallInput value={purchaseDraft.purchase_date} onChange={(v) => setPurchaseDraft((d) => ({ ...d, purchase_date: v }))} type="date" />
+              <SmallSelect value={purchaseDraft.status} onChange={(v) => setPurchaseDraft((d) => ({ ...d, status: v }))} options={["未付款", "部分付款", "已付款"]} />
+            </div>
+            <div className="mt-5 flex justify-end gap-2">
+              <ActionBtn onClick={() => setShowPurchaseModal(false)}>取消</ActionBtn>
+              <ActionBtn tone="primary" onClick={addPurchase}>确认新建</ActionBtn>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {sub === "inventory" ? (
+        <div className="space-y-4">
           <div className="overflow-x-auto rounded-xl border border-slate-200 bg-white">
             <table className="w-full text-left text-xs">
               <thead>
@@ -4128,18 +4234,6 @@ function MaterialsSection({ materials, setMaterials, purchases, setPurchases, su
         </div>
       ) : (
         <div className="space-y-4">
-          <PanelCard title="新增采购记录" note="若品名和单位能匹配已有物料，保存采购单时会自动回补库存。">
-            <div className="grid gap-2 sm:grid-cols-2 xl:grid-cols-4">
-              <SmallSelect value={purchaseDraft.supplier} onChange={(v) => setPurchaseDraft((d) => ({ ...d, supplier: v }))} options={suppliers.length ? suppliers.map((item) => item.name) : ["未指定"]} />
-              <SmallInput value={purchaseDraft.item_name} onChange={(v) => setPurchaseDraft((d) => ({ ...d, item_name: v }))} placeholder="品名" />
-              <SmallInput value={purchaseDraft.quantity} onChange={(v) => setPurchaseDraft((d) => ({ ...d, quantity: v }))} type="number" placeholder="数量" />
-              <SmallSelect value={purchaseDraft.unit} onChange={(v) => setPurchaseDraft((d) => ({ ...d, unit: v }))} options={["个", "米", "根", "套", "张"]} />
-              <SmallInput value={purchaseDraft.unit_price} onChange={(v) => setPurchaseDraft((d) => ({ ...d, unit_price: v }))} type="number" placeholder="单价" />
-              <SmallInput value={purchaseDraft.purchase_date} onChange={(v) => setPurchaseDraft((d) => ({ ...d, purchase_date: v }))} type="date" />
-              <SmallSelect value={purchaseDraft.status} onChange={(v) => setPurchaseDraft((d) => ({ ...d, status: v }))} options={["未付款", "部分付款", "已付款"]} />
-            </div>
-          </PanelCard>
-
           <div className="overflow-x-auto rounded-xl border border-slate-200 bg-white">
             <table className="w-full text-left text-xs">
               <thead>
@@ -4215,6 +4309,7 @@ function AppointmentsSection({ appointments, setAppointments, clients }: { appoi
   const today = todayIso();
   const [search, setSearch] = useState("");
   const [statusFilter, setStatusFilter] = useState("全部");
+  const [showAppointmentModal, setShowAppointmentModal] = useState(false);
   const [draft, setDraft] = useState({ client_id: "", client_name: "", phone: "", address: "", appointment_date: `${today}T10:00`, description: "" });
 
   const clientOptions = clients.map((item) => ({ value: item.id, label: item.name }));
@@ -4261,6 +4356,7 @@ function AppointmentsSection({ appointments, setAppointments, clients }: { appoi
       description: draft.description || undefined,
     }, ...prev]);
     setDraft({ client_id: "", client_name: "", phone: "", address: "", appointment_date: `${todayIso()}T10:00`, description: "" });
+    setShowAppointmentModal(false);
   }
 
   const appointmentConfig: TabularSchemaConfig = {
@@ -4279,7 +4375,7 @@ function AppointmentsSection({ appointments, setAppointments, clients }: { appoi
     printTabularSchema(appointmentConfig, `共 ${appointmentConfig.printRows().length} 条`);
   }
 
-  return <div><SectionHeader eyebrow="Measurement Appointments" title="测量预约" actions={<><ActionBtn onClick={exportAppointments}>↓ 导出当前表</ActionBtn><ActionBtn onClick={printAppointments}>🖨 打印当前表</ActionBtn><ActionBtn tone="primary" onClick={addAppointment}>+ 新建预约</ActionBtn></>} /><StatStrip items={[{ label: "预约总数", value: String(stats.total) }, { label: "今日上门", value: String(stats.today), accent: "text-amber-600" }, { label: "待上门", value: String(stats.upcoming), accent: "text-sky-600" }, { label: "已完成", value: String(stats.done), accent: "text-emerald-600" }]} /><div className="mb-4 grid gap-4 xl:grid-cols-[1.1fr_2fr]"><PanelCard title="新增测量预约" note="来自 Base44 的预约能力，本站先落地本地排期与客户联动，不直接同步 Google Calendar。"><div className="grid gap-2 sm:grid-cols-2 xl:grid-cols-3"><select value={draft.client_id || ""} onChange={(e) => hydrateFromClient(e.target.value)} className="h-8 rounded-lg border border-slate-300 bg-white px-3 text-xs text-slate-700"><option value="">选择客户后自动带出电话和地址</option>{clientOptions.map((item) => <option key={item.value} value={item.value}>{item.label}</option>)}</select><SmallInput value={draft.client_name} onChange={(v) => setDraft((d) => ({ ...d, client_name: v }))} placeholder="客户名称" /><SmallInput value={draft.phone} onChange={(v) => setDraft((d) => ({ ...d, phone: v }))} placeholder="电话" /><div className="sm:col-span-2 xl:col-span-2"><SmallInput value={draft.address} onChange={(v) => setDraft((d) => ({ ...d, address: v }))} placeholder="测量地址" /></div><SmallInput value={draft.appointment_date} onChange={(v) => setDraft((d) => ({ ...d, appointment_date: v }))} type="datetime-local" /><div className="sm:col-span-2 xl:col-span-3"><SmallInput value={draft.description} onChange={(v) => setDraft((d) => ({ ...d, description: v }))} placeholder="描述，例如复尺、现场确认、批发布样" /></div></div><p className="mt-2 text-[11px] text-slate-400">原始应用里预约实体还带 Google Calendar event id。当前网站架构没有外部日历凭证和同步流，所以先保留字段但只做站内排期。</p></PanelCard><PanelCard title="排期列表"><div className="mb-3 flex flex-wrap gap-2"><div className="relative min-w-[180px] flex-1"><span className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-400 text-sm">⌕</span><input value={search} onChange={(e) => setSearch(e.target.value)} placeholder="搜索客户 / 电话 / 地址" className="h-8 w-full rounded-lg border border-slate-300 bg-white pl-8 pr-3 text-xs text-slate-700" /></div><select value={statusFilter} onChange={(e) => setStatusFilter(e.target.value)} className="h-8 rounded-lg border border-slate-300 bg-white px-3 text-xs text-slate-700"><option>全部</option><option>今日预约</option><option>待上门</option><option>已完成</option></select></div><div className="space-y-2">{filteredAppointments.length ? filteredAppointments.map((item) => { const status = getAppointmentStatus(item.appointment_date); return <div key={item.id} className="rounded-xl border border-slate-200 bg-white p-3"><div className="flex flex-wrap items-start justify-between gap-2"><div><div className="flex items-center gap-2"><span className="text-sm font-semibold text-slate-900">{item.client_name}</span><AppointmentStatusBadge status={status} /></div><p className="mt-1 text-xs text-slate-500">{formatAppointmentDate(item.appointment_date)}{item.phone ? ` · ${item.phone}` : ""}</p><p className="mt-1 text-xs text-slate-500">{item.address ?? "未填写地址"}</p></div><button onClick={() => setAppointments((prev) => prev.filter((entry) => entry.id !== item.id))} className="rounded border border-rose-100 px-2 py-1 text-[11px] text-rose-500 hover:border-rose-300 hover:bg-rose-50 transition-colors">删除</button></div>{item.description ? <p className="mt-2 rounded-lg bg-slate-50 px-3 py-2 text-xs text-slate-600">{item.description}</p> : null}</div>; }) : <div className="rounded-xl border border-dashed border-slate-200 py-10 text-center text-sm text-slate-400">当前没有预约记录</div>}</div></PanelCard></div></div>;
+  return <div><SectionHeader eyebrow="Measurement Appointments" title="测量预约" actions={<><ActionBtn onClick={exportAppointments}>↓ 导出当前表</ActionBtn><ActionBtn onClick={printAppointments}>🖨 打印当前表</ActionBtn><ActionBtn tone="primary" onClick={() => setShowAppointmentModal(true)}>+ 新建预约</ActionBtn></>} /><StatStrip items={[{ label: "预约总数", value: String(stats.total) }, { label: "今日上门", value: String(stats.today), accent: "text-amber-600" }, { label: "待上门", value: String(stats.upcoming), accent: "text-sky-600" }, { label: "已完成", value: String(stats.done), accent: "text-emerald-600" }]} />{showAppointmentModal ? <div className="fixed inset-0 z-50 flex items-center justify-center bg-slate-950/45 px-4"><div className="w-full max-w-3xl rounded-2xl border border-slate-200 bg-white p-5 shadow-2xl"><div className="mb-4 flex items-start justify-between gap-3"><div><h3 className="text-base font-semibold text-slate-900">新建测量预约</h3><p className="mt-1 text-sm text-slate-500">新增预约改成弹窗，不再占主页面区域。</p></div><button onClick={() => setShowAppointmentModal(false)} className="rounded-lg border border-slate-200 px-2.5 py-1 text-xs text-slate-500 hover:border-slate-300 hover:text-slate-700 transition-colors">关闭</button></div><div className="grid gap-2 sm:grid-cols-2 xl:grid-cols-3"><select value={draft.client_id || ""} onChange={(e) => hydrateFromClient(e.target.value)} className="h-8 rounded-lg border border-slate-300 bg-white px-3 text-xs text-slate-700"><option value="">选择客户后自动带出电话和地址</option>{clientOptions.map((item) => <option key={item.value} value={item.value}>{item.label}</option>)}</select><SmallInput value={draft.client_name} onChange={(v) => setDraft((d) => ({ ...d, client_name: v }))} placeholder="客户名称" /><SmallInput value={draft.phone} onChange={(v) => setDraft((d) => ({ ...d, phone: v }))} placeholder="电话" /><div className="sm:col-span-2 xl:col-span-2"><SmallInput value={draft.address} onChange={(v) => setDraft((d) => ({ ...d, address: v }))} placeholder="测量地址" /></div><SmallInput value={draft.appointment_date} onChange={(v) => setDraft((d) => ({ ...d, appointment_date: v }))} type="datetime-local" /><div className="sm:col-span-2 xl:col-span-3"><SmallInput value={draft.description} onChange={(v) => setDraft((d) => ({ ...d, description: v }))} placeholder="描述，例如复尺、现场确认、批发布样" /></div></div><p className="mt-2 text-[11px] text-slate-400">原始应用里预约实体还带 Google Calendar event id。当前网站架构没有外部日历凭证和同步流，所以先保留字段但只做站内排期。</p><div className="mt-5 flex justify-end gap-2"><ActionBtn onClick={() => setShowAppointmentModal(false)}>取消</ActionBtn><ActionBtn tone="primary" onClick={addAppointment}>确认新建</ActionBtn></div></div></div> : null}<div className="mb-4"><PanelCard title="排期列表"><div className="mb-3 flex flex-wrap gap-2"><div className="relative min-w-[180px] flex-1"><span className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-400 text-sm">⌕</span><input value={search} onChange={(e) => setSearch(e.target.value)} placeholder="搜索客户 / 电话 / 地址" className="h-8 w-full rounded-lg border border-slate-300 bg-white pl-8 pr-3 text-xs text-slate-700" /></div><select value={statusFilter} onChange={(e) => setStatusFilter(e.target.value)} className="h-8 rounded-lg border border-slate-300 bg-white px-3 text-xs text-slate-700"><option>全部</option><option>今日预约</option><option>待上门</option><option>已完成</option></select></div><div className="space-y-2">{filteredAppointments.length ? filteredAppointments.map((item) => { const status = getAppointmentStatus(item.appointment_date); return <div key={item.id} className="rounded-xl border border-slate-200 bg-white p-3"><div className="flex flex-wrap items-start justify-between gap-2"><div><div className="flex items-center gap-2"><span className="text-sm font-semibold text-slate-900">{item.client_name}</span><AppointmentStatusBadge status={status} /></div><p className="mt-1 text-xs text-slate-500">{formatAppointmentDate(item.appointment_date)}{item.phone ? ` · ${item.phone}` : ""}</p><p className="mt-1 text-xs text-slate-500">{item.address ?? "未填写地址"}</p></div><button onClick={() => setAppointments((prev) => prev.filter((entry) => entry.id !== item.id))} className="rounded border border-rose-100 px-2 py-1 text-[11px] text-rose-500 hover:border-rose-300 hover:bg-rose-50 transition-colors">删除</button></div>{item.description ? <p className="mt-2 rounded-lg bg-slate-50 px-3 py-2 text-xs text-slate-600">{item.description}</p> : null}</div>; }) : <div className="rounded-xl border border-dashed border-slate-200 py-10 text-center text-sm text-slate-400">当前没有预约记录</div>}</div></PanelCard></div></div>;
 }
 
 type StaffSub = "staff" | "payroll";
@@ -4291,6 +4387,8 @@ function EmployeesSection({ employees, setEmployees, payrolls, setPayrolls }: { 
   const contractAlertCutoff = addDaysIso(today, 45);
   const [staffDraft, setStaffDraft] = useState({ name: "", position: "", phone: "", hire_date: today, contract_end: "", monthly_salary: "" });
   const [payrollDraft, setPayrollDraft] = useState({ employee_name: employees[0]?.name ?? "", base_salary: "", bonus: "", deduction: "", payment_status: "未发放" });
+  const [showEmployeeModal, setShowEmployeeModal] = useState(false);
+  const [showPayrollModal, setShowPayrollModal] = useState(false);
   const activeCount = employees.filter((item) => item.status === "在职").length;
   const pendingSalary = payrolls.filter((item) => item.month === month).reduce((sum, item) => sum + item.net_salary, 0);
   const paidSalary = payrolls.filter((item) => item.month === month && item.payment_status === "已发放").reduce((sum, item) => sum + item.net_salary, 0);
@@ -4313,9 +4411,9 @@ function EmployeesSection({ employees, setEmployees, payrolls, setPayrolls }: { 
   };
   function exportEmployees() { exportTabularSchema(employeeConfigs[sub]); }
   function printEmployees() { const config = employeeConfigs[sub]; printTabularSchema(config, `共 ${config.printRows().length} 条`); }
-  function addEmployee() { if (!staffDraft.name.trim()) return; setEmployees((prev) => [{ id: `EMP-${String(prev.length + 1).padStart(3, "0")}`, name: staffDraft.name.trim(), position: staffDraft.position || undefined, phone: staffDraft.phone || undefined, hire_date: staffDraft.hire_date || undefined, contract_end: staffDraft.contract_end || undefined, monthly_salary: Number(staffDraft.monthly_salary) || 0, status: "在职" }, ...prev]); setStaffDraft({ name: "", position: "", phone: "", hire_date: today, contract_end: "", monthly_salary: "" }); }
-  function addPayroll() { const base = Number(payrollDraft.base_salary) || 0; const bonus = Number(payrollDraft.bonus) || 0; const deduction = Number(payrollDraft.deduction) || 0; if (!payrollDraft.employee_name || base <= 0) return; setPayrolls((prev) => [{ id: `PAY-${month}-${String(prev.length + 1).padStart(3, "0")}`, month, employee_name: payrollDraft.employee_name, base_salary: base, bonus, deduction, net_salary: base + bonus - deduction, payment_status: payrollDraft.payment_status }, ...prev]); setPayrollDraft({ employee_name: employees[0]?.name ?? "", base_salary: "", bonus: "", deduction: "", payment_status: "未发放" }); }
-  return <div><SectionHeader eyebrow="Human Resources" title="员工管理" actions={<><ActionBtn onClick={exportEmployees}>↓ 导出当前表</ActionBtn><ActionBtn onClick={printEmployees}>🖨 打印当前表</ActionBtn><ActionBtn tone="primary" onClick={sub === "staff" ? addEmployee : addPayroll}>+ {sub === "staff" ? "新建员工" : "录入工资"}</ActionBtn></>} /><StatStrip items={[{ label: "在职员工", value: String(activeCount) }, { label: "本月应发工资", value: formatMoney(pendingSalary), accent: "text-orange-600" }, { label: "本月已发工资", value: formatMoney(paidSalary), accent: "text-green-600" }, { label: "合同即将到期", value: String(contractAlert), accent: "text-red-600" }]} /><SegmentedControl options={[{ key: "staff", label: "员工档案" }, { key: "payroll", label: "工资记录" }]} value={sub} onChange={setSub} />{sub === "staff" ? <div className="space-y-4"><PanelCard title="新增员工"><div className="grid gap-2 sm:grid-cols-2 xl:grid-cols-3"><SmallInput value={staffDraft.name} onChange={(v) => setStaffDraft((d) => ({ ...d, name: v }))} placeholder="姓名" /><SmallInput value={staffDraft.position} onChange={(v) => setStaffDraft((d) => ({ ...d, position: v }))} placeholder="职位" /><SmallInput value={staffDraft.phone} onChange={(v) => setStaffDraft((d) => ({ ...d, phone: v }))} placeholder="电话" /><SmallInput value={staffDraft.hire_date} onChange={(v) => setStaffDraft((d) => ({ ...d, hire_date: v }))} type="date" /><SmallInput value={staffDraft.contract_end} onChange={(v) => setStaffDraft((d) => ({ ...d, contract_end: v }))} type="date" /><SmallInput value={staffDraft.monthly_salary} onChange={(v) => setStaffDraft((d) => ({ ...d, monthly_salary: v }))} type="number" placeholder="月薪" /></div></PanelCard><div className="overflow-x-auto rounded-xl border border-slate-200 bg-white"><table className="w-full text-left text-xs"><thead><tr className="border-b border-slate-200 bg-slate-50"><th className="px-4 py-2.5 font-semibold text-slate-600">姓名</th><th className="px-4 py-2.5 font-semibold text-slate-600">职位</th><th className="px-4 py-2.5 font-semibold text-slate-600">电话</th><th className="px-4 py-2.5 font-semibold text-slate-600">入职日期</th><th className="px-4 py-2.5 font-semibold text-slate-600">合同到期</th><th className="px-4 py-2.5 font-semibold text-slate-600">月薪</th><th className="px-4 py-2.5 font-semibold text-slate-600">状态</th></tr></thead><tbody>{employees.map((item) => <tr key={item.id} className="border-b border-slate-100 last:border-b-0"><td className="px-4 py-2.5 font-medium text-slate-700">{item.name}</td><td className="px-4 py-2.5 text-slate-600">{item.position ?? "-"}</td><td className="px-4 py-2.5 text-slate-600">{item.phone ?? "-"}</td><td className="px-4 py-2.5 text-slate-500">{item.hire_date ?? "-"}</td><td className="px-4 py-2.5 text-slate-500">{item.contract_end ?? "-"}</td><td className="px-4 py-2.5 text-slate-700">{formatMoney(item.monthly_salary)}</td><td className="px-4 py-2.5 text-slate-600">{item.status}</td></tr>)}</tbody></table></div></div> : <div className="space-y-4"><PanelCard title="录入工资"><div className="grid gap-2 sm:grid-cols-2 xl:grid-cols-5"><SmallSelect value={payrollDraft.employee_name} onChange={(v) => setPayrollDraft((d) => ({ ...d, employee_name: v }))} options={employees.length ? employees.map((item) => item.name) : ["暂无员工"]} /><SmallInput value={payrollDraft.base_salary} onChange={(v) => setPayrollDraft((d) => ({ ...d, base_salary: v }))} type="number" placeholder="基本工资" /><SmallInput value={payrollDraft.bonus} onChange={(v) => setPayrollDraft((d) => ({ ...d, bonus: v }))} type="number" placeholder="奖金" /><SmallInput value={payrollDraft.deduction} onChange={(v) => setPayrollDraft((d) => ({ ...d, deduction: v }))} type="number" placeholder="扣款" /><SmallSelect value={payrollDraft.payment_status} onChange={(v) => setPayrollDraft((d) => ({ ...d, payment_status: v }))} options={["未发放", "已发放"]} /></div></PanelCard><div className="overflow-x-auto rounded-xl border border-slate-200 bg-white"><table className="w-full text-left text-xs"><thead><tr className="border-b border-slate-200 bg-slate-50"><th className="px-4 py-2.5 font-semibold text-slate-600">月份</th><th className="px-4 py-2.5 font-semibold text-slate-600">员工</th><th className="px-4 py-2.5 font-semibold text-slate-600">基本工资</th><th className="px-4 py-2.5 font-semibold text-slate-600">奖金</th><th className="px-4 py-2.5 font-semibold text-slate-600">扣款</th><th className="px-4 py-2.5 font-semibold text-slate-600">实发金额</th><th className="px-4 py-2.5 font-semibold text-slate-600">支付状态</th></tr></thead><tbody>{payrolls.map((item) => <tr key={item.id} className="border-b border-slate-100 last:border-b-0"><td className="px-4 py-2.5 text-slate-700">{item.month}</td><td className="px-4 py-2.5 font-medium text-slate-700">{item.employee_name}</td><td className="px-4 py-2.5 text-slate-700">{formatMoney(item.base_salary)}</td><td className="px-4 py-2.5 text-green-600">{formatMoney(item.bonus)}</td><td className="px-4 py-2.5 text-rose-600">{formatMoney(item.deduction)}</td><td className="px-4 py-2.5 font-semibold text-slate-800">{formatMoney(item.net_salary)}</td><td className="px-4 py-2.5 text-slate-600">{item.payment_status}</td></tr>)}</tbody></table></div></div>}</div>;
+  function addEmployee() { if (!staffDraft.name.trim()) return; setEmployees((prev) => [{ id: `EMP-${String(prev.length + 1).padStart(3, "0")}`, name: staffDraft.name.trim(), position: staffDraft.position || undefined, phone: staffDraft.phone || undefined, hire_date: staffDraft.hire_date || undefined, contract_end: staffDraft.contract_end || undefined, monthly_salary: Number(staffDraft.monthly_salary) || 0, status: "在职" }, ...prev]); setStaffDraft({ name: "", position: "", phone: "", hire_date: today, contract_end: "", monthly_salary: "" }); setShowEmployeeModal(false); }
+  function addPayroll() { const base = Number(payrollDraft.base_salary) || 0; const bonus = Number(payrollDraft.bonus) || 0; const deduction = Number(payrollDraft.deduction) || 0; if (!payrollDraft.employee_name || base <= 0) return; setPayrolls((prev) => [{ id: `PAY-${month}-${String(prev.length + 1).padStart(3, "0")}`, month, employee_name: payrollDraft.employee_name, base_salary: base, bonus, deduction, net_salary: base + bonus - deduction, payment_status: payrollDraft.payment_status }, ...prev]); setPayrollDraft({ employee_name: employees[0]?.name ?? "", base_salary: "", bonus: "", deduction: "", payment_status: "未发放" }); setShowPayrollModal(false); }
+  return <div><SectionHeader eyebrow="Human Resources" title="员工管理" actions={<><ActionBtn onClick={exportEmployees}>↓ 导出当前表</ActionBtn><ActionBtn onClick={printEmployees}>🖨 打印当前表</ActionBtn><ActionBtn tone="primary" onClick={() => sub === "staff" ? setShowEmployeeModal(true) : setShowPayrollModal(true)}>+ {sub === "staff" ? "新建员工" : "录入工资"}</ActionBtn></>} /><StatStrip items={[{ label: "在职员工", value: String(activeCount) }, { label: "本月应发工资", value: formatMoney(pendingSalary), accent: "text-orange-600" }, { label: "本月已发工资", value: formatMoney(paidSalary), accent: "text-green-600" }, { label: "合同即将到期", value: String(contractAlert), accent: "text-red-600" }]} /><SegmentedControl options={[{ key: "staff", label: "员工档案" }, { key: "payroll", label: "工资记录" }]} value={sub} onChange={setSub} />{showEmployeeModal ? <div className="fixed inset-0 z-50 flex items-center justify-center bg-slate-950/45 px-4"><div className="w-full max-w-3xl rounded-2xl border border-slate-200 bg-white p-5 shadow-2xl"><div className="mb-4 flex items-start justify-between gap-3"><div><h3 className="text-base font-semibold text-slate-900">新建员工</h3><p className="mt-1 text-sm text-slate-500">员工新增改成弹窗，不占主区域。</p></div><button onClick={() => setShowEmployeeModal(false)} className="rounded-lg border border-slate-200 px-2.5 py-1 text-xs text-slate-500 hover:border-slate-300 hover:text-slate-700 transition-colors">关闭</button></div><div className="grid gap-2 sm:grid-cols-2 xl:grid-cols-3"><SmallInput value={staffDraft.name} onChange={(v) => setStaffDraft((d) => ({ ...d, name: v }))} placeholder="姓名" /><SmallInput value={staffDraft.position} onChange={(v) => setStaffDraft((d) => ({ ...d, position: v }))} placeholder="职位" /><SmallInput value={staffDraft.phone} onChange={(v) => setStaffDraft((d) => ({ ...d, phone: v }))} placeholder="电话" /><SmallInput value={staffDraft.hire_date} onChange={(v) => setStaffDraft((d) => ({ ...d, hire_date: v }))} type="date" /><SmallInput value={staffDraft.contract_end} onChange={(v) => setStaffDraft((d) => ({ ...d, contract_end: v }))} type="date" /><SmallInput value={staffDraft.monthly_salary} onChange={(v) => setStaffDraft((d) => ({ ...d, monthly_salary: v }))} type="number" placeholder="月薪" /></div><div className="mt-5 flex justify-end gap-2"><ActionBtn onClick={() => setShowEmployeeModal(false)}>取消</ActionBtn><ActionBtn tone="primary" onClick={addEmployee}>确认新建</ActionBtn></div></div></div> : null}{showPayrollModal ? <div className="fixed inset-0 z-50 flex items-center justify-center bg-slate-950/45 px-4"><div className="w-full max-w-3xl rounded-2xl border border-slate-200 bg-white p-5 shadow-2xl"><div className="mb-4 flex items-start justify-between gap-3"><div><h3 className="text-base font-semibold text-slate-900">录入工资</h3><p className="mt-1 text-sm text-slate-500">工资录入也改成弹窗。</p></div><button onClick={() => setShowPayrollModal(false)} className="rounded-lg border border-slate-200 px-2.5 py-1 text-xs text-slate-500 hover:border-slate-300 hover:text-slate-700 transition-colors">关闭</button></div><div className="grid gap-2 sm:grid-cols-2 xl:grid-cols-5"><SmallSelect value={payrollDraft.employee_name} onChange={(v) => setPayrollDraft((d) => ({ ...d, employee_name: v }))} options={employees.length ? employees.map((item) => item.name) : ["暂无员工"]} /><SmallInput value={payrollDraft.base_salary} onChange={(v) => setPayrollDraft((d) => ({ ...d, base_salary: v }))} type="number" placeholder="基本工资" /><SmallInput value={payrollDraft.bonus} onChange={(v) => setPayrollDraft((d) => ({ ...d, bonus: v }))} type="number" placeholder="奖金" /><SmallInput value={payrollDraft.deduction} onChange={(v) => setPayrollDraft((d) => ({ ...d, deduction: v }))} type="number" placeholder="扣款" /><SmallSelect value={payrollDraft.payment_status} onChange={(v) => setPayrollDraft((d) => ({ ...d, payment_status: v }))} options={["未发放", "已发放"]} /></div><div className="mt-5 flex justify-end gap-2"><ActionBtn onClick={() => setShowPayrollModal(false)}>取消</ActionBtn><ActionBtn tone="primary" onClick={addPayroll}>确认录入</ActionBtn></div></div></div> : null}{sub === "staff" ? <div className="space-y-4"><div className="overflow-x-auto rounded-xl border border-slate-200 bg-white"><table className="w-full text-left text-xs"><thead><tr className="border-b border-slate-200 bg-slate-50"><th className="px-4 py-2.5 font-semibold text-slate-600">姓名</th><th className="px-4 py-2.5 font-semibold text-slate-600">职位</th><th className="px-4 py-2.5 font-semibold text-slate-600">电话</th><th className="px-4 py-2.5 font-semibold text-slate-600">入职日期</th><th className="px-4 py-2.5 font-semibold text-slate-600">合同到期</th><th className="px-4 py-2.5 font-semibold text-slate-600">月薪</th><th className="px-4 py-2.5 font-semibold text-slate-600">状态</th></tr></thead><tbody>{employees.map((item) => <tr key={item.id} className="border-b border-slate-100 last:border-b-0"><td className="px-4 py-2.5 font-medium text-slate-700">{item.name}</td><td className="px-4 py-2.5 text-slate-600">{item.position ?? "-"}</td><td className="px-4 py-2.5 text-slate-600">{item.phone ?? "-"}</td><td className="px-4 py-2.5 text-slate-500">{item.hire_date ?? "-"}</td><td className="px-4 py-2.5 text-slate-500">{item.contract_end ?? "-"}</td><td className="px-4 py-2.5 text-slate-700">{formatMoney(item.monthly_salary)}</td><td className="px-4 py-2.5 text-slate-600">{item.status}</td></tr>)}</tbody></table></div></div> : <div className="space-y-4"><div className="overflow-x-auto rounded-xl border border-slate-200 bg-white"><table className="w-full text-left text-xs"><thead><tr className="border-b border-slate-200 bg-slate-50"><th className="px-4 py-2.5 font-semibold text-slate-600">月份</th><th className="px-4 py-2.5 font-semibold text-slate-600">员工</th><th className="px-4 py-2.5 font-semibold text-slate-600">基本工资</th><th className="px-4 py-2.5 font-semibold text-slate-600">奖金</th><th className="px-4 py-2.5 font-semibold text-slate-600">扣款</th><th className="px-4 py-2.5 font-semibold text-slate-600">实发金额</th><th className="px-4 py-2.5 font-semibold text-slate-600">支付状态</th></tr></thead><tbody>{payrolls.map((item) => <tr key={item.id} className="border-b border-slate-100 last:border-b-0"><td className="px-4 py-2.5 text-slate-700">{item.month}</td><td className="px-4 py-2.5 font-medium text-slate-700">{item.employee_name}</td><td className="px-4 py-2.5 text-slate-700">{formatMoney(item.base_salary)}</td><td className="px-4 py-2.5 text-green-600">{formatMoney(item.bonus)}</td><td className="px-4 py-2.5 text-rose-600">{formatMoney(item.deduction)}</td><td className="px-4 py-2.5 font-semibold text-slate-800">{formatMoney(item.net_salary)}</td><td className="px-4 py-2.5 text-slate-600">{item.payment_status}</td></tr>)}</tbody></table></div></div>}</div>;
 }
 
 // ─── Quotes ──────────────────────────────────────────────────────────────────
@@ -4392,6 +4490,7 @@ function SettingsSection({ settings, setSettings }: { settings: BizSettings; set
     }));
   };
 
+  const expenseTypeValue = settings.expense_types || "采购\n工资\n物流\n办公\n其他";
   const settingRows: Array<{ label: string; value: string | number }> = [
     { label: "\u516c\u53f8\u540d\u79f0", value: settings.company_name || "-" },
     { label: "\u516c\u53f8\u4e2d\u6587\u540d\u79f0", value: settings.company_name_zh || "-" },
@@ -4416,6 +4515,7 @@ function SettingsSection({ settings, setSettings }: { settings: BizSettings; set
     { label: "\u62a5\u4ef7\u9ed8\u8ba4\u6709\u6548\u671f", value: String(settings.quote_valid_days ?? "-") },
     { label: "\u62a5\u4ef7\u9875\u811a\u5907\u6ce8", value: settings.quote_footer || "-" },
     { label: "Logo URL", value: settings.logo_url || "-" },
+    { label: "支出类型", value: expenseTypeValue || "-" },
   ];
 
   const settingsConfig: TabularSchemaConfig = {
@@ -4434,7 +4534,7 @@ function SettingsSection({ settings, setSettings }: { settings: BizSettings; set
     printTabularSchema(settingsConfig, "\u5f53\u524d\u4e1a\u52a1\u914d\u7f6e");
   }
 
-  return <div><SectionHeader eyebrow="Configuration" title="公司信息" actions={<><ActionBtn onClick={exportSettings}>↓ 导出设置</ActionBtn><ActionBtn onClick={printSettings}>🖨 打印设置</ActionBtn><ActionBtn tone="success">自动保存中</ActionBtn></>} /><div className="grid gap-4 lg:grid-cols-2"><SettingsGroup title="公司信息"><SettingsField label="公司名称" value={settings.company_name} onChange={(value) => update("company_name", value)} /><SettingsField label="公司中文名称" value={settings.company_name_zh ?? ""} onChange={(value) => update("company_name_zh", value)} /><SettingsField label="地址" value={settings.address} onChange={(value) => update("address", value)} /><SettingsField label="打印地址" value={settings.company_address ?? ""} note="留空时回退到公司地址" onChange={(value) => update("company_address", value)} /><SettingsField label="电话" value={settings.phone} onChange={(value) => update("phone", value)} /><SettingsField label="打印电话" value={settings.phones ?? ""} note="支持多行，打印时会自动拼接" onChange={(value) => update("phones", value)} /><SettingsField label="电子邮箱" value={settings.email} onChange={(value) => update("email", value)} /><SettingsField label="网站" value={settings.website} onChange={(value) => update("website", value)} /></SettingsGroup><SettingsGroup title="税务 & 财务"><SettingsField label="税号 (BN)" value={settings.tax_number} note="Business Number" onChange={(value) => update("tax_number", value)} /><SettingsField label="默认税率" value={String(settings.default_tax_rate)} onChange={(value) => update("default_tax_rate", value)} type="number" /><SettingsField label="默认货币" value={settings.default_currency} onChange={(value) => update("default_currency", value)} /><SettingsField label="财年开始月" value={String(settings.fiscal_start_month)} onChange={(value) => update("fiscal_start_month", value)} type="number" /></SettingsGroup><SettingsGroup title="收款信息"><SettingsField label="银行账户" value={settings.bank_account} onChange={(value) => update("bank_account", value)} /><SettingsField label="支付宝" value={settings.alipay} onChange={(value) => update("alipay", value)} /><SettingsField label="微信收款" value={settings.wechat_pay} onChange={(value) => update("wechat_pay", value)} /><SettingsField label="其他方式" value={settings.other_payment} onChange={(value) => update("other_payment", value)} /><SettingsField label="Zelle" value={settings.zelle ?? ""} onChange={(value) => update("zelle", value)} /></SettingsGroup><SettingsGroup title="打印模板"><SettingsField label="发票标题" value={settings.invoice_title ?? ""} onChange={(value) => update("invoice_title", value)} /><SettingsField label="领料单标题" value={settings.picking_title ?? ""} onChange={(value) => update("picking_title", value)} /><SettingsField label="发票备注模板" value={settings.invoice_note ?? ""} note="订单没填备注时自动使用这里" onChange={(value) => update("invoice_note", value)} /></SettingsGroup><SettingsGroup title="报价单模板"><SettingsField label="默认有效期" value={String(settings.quote_valid_days)} note="Days until quote expires" onChange={(value) => update("quote_valid_days", value)} type="number" /><SettingsField label="页脚备注" value={settings.quote_footer} onChange={(value) => update("quote_footer", value)} /><SettingsField label="Logo URL" value={settings.logo_url} note="Used in printed quotes" onChange={(value) => update("logo_url", value)} /></SettingsGroup></div></div>;
+  return <div><SectionHeader eyebrow="Configuration" title="公司信息" actions={<><ActionBtn onClick={exportSettings}>↓ 导出设置</ActionBtn><ActionBtn onClick={printSettings}>🖨 打印设置</ActionBtn><ActionBtn tone="success">自动保存中</ActionBtn></>} /><div className="grid gap-4 lg:grid-cols-2"><SettingsGroup title="公司信息"><SettingsField label="公司名称" value={settings.company_name} onChange={(value) => update("company_name", value)} /><SettingsField label="公司中文名称" value={settings.company_name_zh ?? ""} onChange={(value) => update("company_name_zh", value)} /><SettingsField label="地址" value={settings.address} onChange={(value) => update("address", value)} /><SettingsField label="打印地址" value={settings.company_address ?? ""} note="留空时回退到公司地址" onChange={(value) => update("company_address", value)} /><SettingsField label="电话" value={settings.phone} onChange={(value) => update("phone", value)} /><SettingsField label="打印电话" value={settings.phones ?? ""} note="支持多行，打印时会自动拼接" onChange={(value) => update("phones", value)} /><SettingsField label="电子邮箱" value={settings.email} onChange={(value) => update("email", value)} /><SettingsField label="网站" value={settings.website} onChange={(value) => update("website", value)} /></SettingsGroup><SettingsGroup title="税务 & 财务"><SettingsField label="税号 (BN)" value={settings.tax_number} note="Business Number" onChange={(value) => update("tax_number", value)} /><SettingsField label="默认税率" value={String(settings.default_tax_rate)} onChange={(value) => update("default_tax_rate", value)} type="number" /><SettingsField label="默认货币" value={settings.default_currency} onChange={(value) => update("default_currency", value)} /><SettingsField label="财年开始月" value={String(settings.fiscal_start_month)} onChange={(value) => update("fiscal_start_month", value)} type="number" /></SettingsGroup><SettingsGroup title="收款信息"><SettingsField label="银行账户" value={settings.bank_account} onChange={(value) => update("bank_account", value)} /><SettingsField label="支付宝" value={settings.alipay} onChange={(value) => update("alipay", value)} /><SettingsField label="微信收款" value={settings.wechat_pay} onChange={(value) => update("wechat_pay", value)} /><SettingsField label="其他方式" value={settings.other_payment} onChange={(value) => update("other_payment", value)} /><SettingsField label="Zelle" value={settings.zelle ?? ""} onChange={(value) => update("zelle", value)} /></SettingsGroup><SettingsGroup title="打印模板"><SettingsField label="发票标题" value={settings.invoice_title ?? ""} onChange={(value) => update("invoice_title", value)} /><SettingsField label="领料单标题" value={settings.picking_title ?? ""} onChange={(value) => update("picking_title", value)} /><SettingsField label="发票备注模板" value={settings.invoice_note ?? ""} note="订单没填备注时自动使用这里" onChange={(value) => update("invoice_note", value)} /></SettingsGroup><SettingsGroup title="报价单模板"><SettingsField label="默认有效期" value={String(settings.quote_valid_days)} note="Days until quote expires" onChange={(value) => update("quote_valid_days", value)} type="number" /><SettingsField label="页脚备注" value={settings.quote_footer} onChange={(value) => update("quote_footer", value)} /><SettingsField label="Logo URL" value={settings.logo_url} note="Used in printed quotes" onChange={(value) => update("logo_url", value)} /></SettingsGroup><SettingsGroup title="支出类型"><div className="flex flex-col gap-1"><label className="text-xs font-semibold text-slate-600">支出类型列表</label><textarea value={expenseTypeValue} onChange={(e) => update("expense_types", e.target.value)} rows={6} className="w-full rounded-lg border border-slate-300 bg-white px-3 py-2 text-xs text-slate-700 focus:border-blue-400 focus:outline-none resize-none" /><p className="text-[11px] text-slate-400">一行一个，或者用逗号分隔。收支管理会直接读取这里。</p></div></SettingsGroup></div></div>;
 }
 
 // ─── Sidebar nav ─────────────────────────────────────────────────────────────
@@ -4468,7 +4568,6 @@ const NAV_GROUPS: Array<{
     items: [
       { key: "clients", label: "客户档案", icon: "⊙" },
       { key: "appointments", label: "测量预约", icon: "◷" },
-      { key: "materials", label: "物料库存", icon: "▤" },
       { key: "employees", label: "员工管理", icon: "♟" },
     ],
   },
@@ -4584,13 +4683,6 @@ export default function DashboardBizPage() {
         description={`订单、财务、客户、物料、员工与设置的统一操作界面。${saveState === "saving" ? " 正在保存…" : saveState === "saved" ? " 已持久化保存" : saveState === "error" ? " 保存异常" : ""}`}
       />
 
-      <div className="mt-4 flex flex-wrap gap-2">
-        <a href="/dashboard" className="rounded-full border border-slate-200 bg-white px-3 py-1.5 text-xs font-semibold text-slate-700 hover:bg-slate-50">返回后台</a>
-        <a href="/dashboard/overview" className="rounded-full border border-slate-200 bg-white px-3 py-1.5 text-xs font-semibold text-slate-700 hover:bg-slate-50">回总览页</a>
-        <a href="/dashboard/tasks" className="rounded-full border border-slate-200 bg-white px-3 py-1.5 text-xs font-semibold text-slate-700 hover:bg-slate-50">去任务页处理</a>
-        <a href="/dashboard/system" className="rounded-full border border-slate-200 bg-white px-3 py-1.5 text-xs font-semibold text-slate-700 hover:bg-slate-50">去系统页排查</a>
-      </div>
-
       <div className="mt-4 flex min-h-[600px] overflow-hidden rounded-[20px] bg-white shadow-sm">
         <nav className="w-40 shrink-0 border-r border-slate-100 bg-slate-50 py-4">
           {NAV_GROUPS.map((group) => (
@@ -4630,7 +4722,7 @@ export default function DashboardBizPage() {
               employees={employees}
             />
           )}
-          {section === "orders" && <OrdersSection orders={orders} materials={materials} setOrders={setOrders} settings={settings} printArchives={printArchives} setPrintArchives={setPrintArchives} />}
+          {section === "orders" && <OrdersSection orders={orders} materials={materials} clients={clients} setOrders={setOrders} settings={settings} printArchives={printArchives} setPrintArchives={setPrintArchives} setCashEntries={setCashEntries} />}
           {section === "finance" && (
             <FinanceSection
               orders={orders}
@@ -4642,6 +4734,9 @@ export default function DashboardBizPage() {
               payrolls={payrolls}
               clients={clients}
               setClients={setClients}
+              suppliers={suppliers}
+              employees={employees}
+              settings={settings}
             />
           )}
           {section === "quotes" && (

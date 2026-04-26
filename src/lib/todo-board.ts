@@ -16,6 +16,10 @@ export function readTodoBoard() {
   return safeRead(TODO_PATH);
 }
 
+export function countTodoItems(raw = readTodoBoard()) {
+  return raw.split(/\r?\n/).filter((line) => /^### \[TODO-/.test(line.trim())).length;
+}
+
 export function parseTodoBoard(raw: string): TodoItem[] {
   const activePart = raw.split(/\n## 已完成/)[0] || raw;
   const completedPart = raw.includes("## 已完成") ? raw.split(/\n## 已完成/)[1] || "" : "";

@@ -2,6 +2,7 @@ import { existsSync, readFileSync } from "node:fs";
 import path from "node:path";
 import { homedir } from "node:os";
 import net from "node:net";
+import { countTodoItems, readTodoBoard } from "@/lib/todo-board";
 
 type AgentSpec = {
   key: string;
@@ -76,17 +77,18 @@ function countMatches(raw: string, pattern: RegExp) {
 
 const workspaceLinks = [
   ["总览页", "/dashboard/overview", "先看今天整体状态和重点"],
+  ["业务页", "/dashboard/biz", "先做一句话下单、收据/PDF、导入导出"],
   ["任务页", "/dashboard/tasks", "只看正式任务与执行动作"],
   ["记忆页", "/dashboard/memory", "只看共享资料与长期记忆"],
   ["系统页", "/dashboard/system", "只看在线状态、来源和事件"],
 ] as const;
 
 export default async function DashboardPage() {
-  const todoRaw = safeRead(path.join(process.cwd(), "..", "共享协作区", "任务", "TODO.md"));
+  const todoRaw = readTodoBoard();
   const taskRaw = safeRead(path.join(process.cwd(), "..", "共享协作区", "任务", "任务队列.md"));
   const eventRaw = safeRead(path.join(process.cwd(), "..", "共享协作区", "日志", "事件流.md"));
 
-  const todoCount = countMatches(todoRaw, /^### \[TODO-/);
+  const todoCount = countTodoItems(todoRaw);
   const taskCount = countMatches(taskRaw, /^### \[TASK-/);
   const blockedCount = taskRaw.split(/\r?\n/).filter((line) => line.includes("- status: blocked")).length;
   const eventCount = eventRaw.split(/\r?\n/).filter((line) => line.trim().startsWith("- [")).length;
@@ -141,7 +143,7 @@ export default async function DashboardPage() {
               <div className="flex items-center justify-between gap-3">
                 <div>
                   <p className="text-sm font-medium text-sky-700">工作区入口</p>
-                  <p className="mt-1 text-sm text-slate-500">从首页分流，不再把 {workspaceLinks.length} 个区堆在同一页里</p>
+                  <p className="mt-1 text-sm text-slate-500">从首页分流，不再把 {workspaceLinks.length} 个区堆在同一页里。业务页是这次新建设的第一入口。</p>
                 </div>
                 <span className="rounded-full bg-slate-900 px-3 py-1 text-xs font-semibold text-white">{workspaceLinks.length} 区</span>
               </div>

@@ -6,6 +6,7 @@ import { appendEvent, readEventChain } from "@/lib/event-store";
 import { makePromiseId, readPromises, upsertPromise } from "@/lib/promise-store";
 import { appendProof, makeProofId, readProofs } from "@/lib/proof-store";
 import { formatEasternTime } from "@/lib/time";
+import { countTodoItems, readTodoBoard } from "@/lib/todo-board";
 import { readWakeQueue, upsertWakeItem } from "@/lib/wake-store";
 import { computeWatchdogAlerts } from "@/lib/watchdog";
 
@@ -190,12 +191,11 @@ async function completePromiseAction(formData: FormData) {
 }
 
 export default async function DashboardOverviewPage() {
-  const todoPath = path.join(process.cwd(), "..", "共享协作区", "任务", "TODO.md");
   const taskPath = path.join(process.cwd(), "..", "共享协作区", "任务", "任务队列.md");
   const handoffPath = path.join(process.cwd(), "..", "共享协作区", "任务", "待接手任务.md");
   const eventPath = path.join(process.cwd(), "..", "共享协作区", "日志", "事件流.md");
 
-  const todoRaw = safeRead(todoPath);
+  const todoRaw = readTodoBoard();
   const taskRaw = safeRead(taskPath);
   const handoffRaw = safeRead(handoffPath);
   const eventRaw = safeRead(eventPath);
@@ -205,7 +205,7 @@ export default async function DashboardOverviewPage() {
   const alerts = await computeWatchdogAlerts().catch(() => []);
   const events = await readEventChain().catch(() => []);
 
-  const todoCount = countMatches(todoRaw, /^### \[TODO-/);
+  const todoCount = countTodoItems(todoRaw);
   const taskCount = countMatches(taskRaw, /^### \[TASK-/);
   const handoffCount = countMatches(handoffRaw, /^### /);
   const recentEvents = parseRecentEvents(eventRaw);

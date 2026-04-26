@@ -452,6 +452,7 @@ export default async function DashboardSystemPage() {
   const consumedWakeItems = await readWakeQueue({ includeConsumed: true, limit: 20 }).then((items) => items.filter((item) => item.consumedAt)).catch(() => []);
   const watchdogAlerts = await computeWatchdogAlerts().catch(() => []);
   const handedOffPromises = await readPromises().then((items) => items.filter((item) => item.status === "handed_off")).catch(() => []);
+  const watchdogOutboxMessages = outboxMessages.filter((item) => item.kind.startsWith("watchdog_"));
   const sentHistory = buildSentHistory(eventChain, visibleInboxMessages);
   const visibleInboxCards = [...visibleInboxMessages].reverse();
   const recipientSummary = summarizeRecipients(sentHistory.map((item) => ({ to: item.to } as (typeof outboxMessages)[number])) as Awaited<ReturnType<typeof readQueue>>);
@@ -821,7 +822,7 @@ export default async function DashboardSystemPage() {
                   <div className="rounded-xl bg-white px-3 py-2"><span className="font-semibold text-sky-700">Bridge</span> 发件 {sentHistory.length}，待消费 {outboxMessages.length}，回执 {visibleInboxMessages.length}</div>
                   <div className="rounded-xl bg-white px-3 py-2"><span className="font-semibold text-rose-700">守望</span> 心跳 {agentStatuses.length}，超时 {staleAgentCount}</div>
                   <div className="rounded-xl bg-white px-3 py-2"><span className="font-semibold text-amber-700">Wake</span> 待消费 {wakeItems.length}，已消费 {consumedWakeItems.length}</div>
-                  <div className="rounded-xl bg-white px-3 py-2"><span className="font-semibold text-violet-700">Watchdog</span> 告警 {watchdogAlerts.length}，交接 {handedOffPromises.length}</div>
+                  <div className="rounded-xl bg-white px-3 py-2"><span className="font-semibold text-violet-700">Watchdog</span> 告警 {watchdogAlerts.length}，交接 {handedOffPromises.length}，提醒 {watchdogOutboxMessages.length}</div>
                 </div>
               </div>
             </div>
@@ -932,6 +933,24 @@ export default async function DashboardSystemPage() {
                       <p className="mt-1 text-xs leading-5 text-slate-600">backup: {item.backup || "-"} · reason: {item.blockedReason || "-"}</p>
                     </div>
                   )) : <div className="rounded-xl border border-dashed border-slate-200 bg-white px-3 py-4 text-sm text-slate-500">当前没有 handed_off 的 promise</div>}
+                </div>
+              </div>
+
+              <div className="rounded-2xl border border-slate-200 bg-slate-50 p-3">
+                <p className="text-sm font-semibold text-slate-900">Watchdog 提醒发件</p>
+                <p className="mt-1 text-[11px] text-slate-500">单独展示 watchdog 自动塞进 outbox 的提醒，避免它们混在普通人工发件里看不出来。</p>
+                <div className="mt-2 space-y-2">
+                  {watchdogOutboxMessages.length > 0 ? watchdogOutboxMessages.slice(-8).reverse().map((item) => (
+                    <div key={item.id} className="rounded-xl bg-white px-3 py-2.5">
+                      <div className="flex flex-wrap items-center gap-2">
+                        <span className="text-[11px] text-slate-500">{formatEasternTime(item.createdAt)}</span>
+                        <span className="rounded-full bg-rose-100 px-2 py-0.5 text-[10px] font-semibold text-rose-800">{item.kind}</span>
+                        <span className="rounded-full bg-slate-200 px-2 py-0.5 text-[10px] font-semibold text-slate-700">watchdog → {item.to}</span>
+                      </div>
+                      <p className="mt-1 text-xs leading-5 text-slate-700">{item.text}</p>
+                      <p className="mt-1 text-[11px] text-slate-500">related: {String(item.meta?.relatedId || "-")}</p>
+                    </div>
+                  )) : <div className="rounded-xl border border-dashed border-slate-200 bg-white px-3 py-4 text-sm text-slate-500">当前没有 watchdog 自动提醒发件</div>}
                 </div>
               </div>
             </div>

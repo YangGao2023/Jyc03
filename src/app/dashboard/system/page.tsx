@@ -552,6 +552,11 @@ export default async function DashboardSystemPage() {
           right={<a href="/dashboard" className="rounded-2xl border border-white/10 bg-white px-4 py-2 text-sm font-semibold text-slate-950">返回后台</a>}
         />
 
+        <div className="mt-4 flex flex-wrap gap-2">
+          <a href="/dashboard/overview" className="rounded-full border border-white/10 px-3 py-1.5 text-xs font-semibold text-sky-200 hover:bg-white/10">回总览页</a>
+          <a href="/dashboard/tasks" className="rounded-full border border-white/10 px-3 py-1.5 text-xs font-semibold text-sky-200 hover:bg-white/10">去任务页处理</a>
+        </div>
+
         <form action={createDiscussionAction} className="mt-4 grid gap-3 rounded-[24px] border border-white/10 bg-white/5 p-4 md:grid-cols-[220px_1fr_auto]">
           <div className="grid gap-2">
             <input name="title" placeholder="讨论主题，例如：Zero 与阿三如何分工" className="rounded-xl border border-white/10 bg-slate-950/60 px-3 py-2 text-sm text-white outline-none placeholder:text-slate-400" required />

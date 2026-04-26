@@ -14,6 +14,7 @@ import { cleanDiscussionReplyText, deriveDiscussionStatus, discussionParticipant
 import { readDiscussionThreads, upsertDiscussionThread, type DiscussionStatus, type DiscussionThread } from "@/lib/discussion-store";
 import { appendEvent, clearEventChain, readEventChain } from "@/lib/event-store";
 import { formatEasternTime } from "@/lib/time";
+import { displayTaskEventType, parseEventStream, taskEventTone } from "@/lib/task-board";
 
 const profileSpecs = [
   {
@@ -24,14 +25,6 @@ const profileSpecs = [
     fallbackPort: 18789,
   },
 ] as const;
-
-type EventItem = {
-  stamp: string;
-  actor: string;
-  type: string;
-  task: string;
-  result: string;
-};
 
 type BridgeRecipientSummary = {
   recipient: string;
@@ -236,48 +229,6 @@ function probePort(port: number) {
     socket.once("timeout", () => finish(false));
     socket.once("error", () => finish(false));
   });
-}
-
-function parseEventStream(raw: string): EventItem[] {
-  return raw
-    .split(/\r?\n/)
-    .filter((line) => line.trim().startsWith("- ["))
-    .map((line) => {
-      const match = line.match(/^\- \[(.+?)\]\s+actor=(.+?)\s+type=(.+?)\s+task=(.+?)\s+result=(.+)$/);
-      return {
-        stamp: match?.[1] || "未知时间",
-        actor: match?.[2] || "未知",
-        type: match?.[3] || "unknown",
-        task: match?.[4] || "-",
-        result: match?.[5] || line.trim(),
-      };
-    });
-}
-
-function tone(type: string) {
-  if (type === "status_change") return "bg-sky-100 text-sky-800";
-  if (type === "task_created") return "bg-cyan-100 text-cyan-800";
-  if (type === "task_claimed") return "bg-fuchsia-100 text-fuchsia-800";
-  if (type === "memory_promoted") return "bg-indigo-100 text-indigo-800";
-  if (type === "blocked") return "bg-rose-100 text-rose-800";
-  if (type === "handoff") return "bg-violet-100 text-violet-800";
-  if (type === "decision") return "bg-amber-100 text-amber-800";
-  if (type === "completed") return "bg-emerald-100 text-emerald-800";
-  return "bg-slate-100 text-slate-700";
-}
-
-function displayEventType(value: string) {
-  const normalized = value.trim().toLowerCase();
-  if (normalized === "status_change") return "状态变更";
-  if (normalized === "task_created") return "任务创建";
-  if (normalized === "task_claimed") return "任务认领";
-  if (normalized === "handoff") return "交接";
-  if (normalized === "decision") return "决策";
-  if (normalized === "memory_promoted") return "记忆提升";
-  if (normalized === "blocked") return "阻塞";
-  if (normalized === "completed") return "完成";
-  if (normalized === "unknown") return "未知事件";
-  return value;
 }
 
 function summarizeRecipients(messages: Awaited<ReturnType<typeof readQueue>>): BridgeRecipientSummary[] {
@@ -876,7 +827,7 @@ export default async function DashboardSystemPage() {
                     <div key={`${event.stamp}-${index}`} className="rounded-xl bg-white px-3 py-2.5">
                       <div className="flex flex-wrap items-center gap-2">
                         <span className="text-[11px] text-slate-500">{event.stamp}</span>
-                        <span className={`rounded-full px-2 py-0.5 text-[10px] font-semibold ${tone(event.type)}`}>{displayEventType(event.type)}</span>
+                        <span className={`rounded-full px-2 py-0.5 text-[10px] font-semibold ${taskEventTone(event.type)}`}>{displayTaskEventType(event.type)}</span>
                       </div>
                       <p className="mt-1 text-sm font-semibold text-slate-900">{event.actor}</p>
                       <p className="mt-1 text-xs leading-5 text-slate-600">{event.result}</p>

@@ -1,5 +1,5 @@
 import { DashboardCard, DashboardCardTitle, DashboardPageHeader } from "../components";
-import { getSortValue, parseEventStream, parseTaskQueue, readEventStream, readTaskQueue } from "@/lib/task-board";
+import { displayTaskEventType, getSortValue, parseEventStream, parseTaskQueue, readEventStream, readTaskQueue } from "@/lib/task-board";
 import { formatEasternTime } from "@/lib/time";
 import { parseTodoBoard, readTodoBoard } from "@/lib/todo-board";
 
@@ -22,20 +22,6 @@ function displayStatus(value: string) {
   if (normalized === "new") return "待开始";
   if (normalized === "claimed") return "已认领";
   if (normalized === "dropped") return "已放弃";
-  return value;
-}
-
-function displayEventType(value: string) {
-  const normalized = value.trim().toLowerCase();
-  if (normalized === "status_change") return "状态变更";
-  if (normalized === "task_created") return "任务创建";
-  if (normalized === "task_claimed") return "任务认领";
-  if (normalized === "handoff") return "交接";
-  if (normalized === "decision") return "决策";
-  if (normalized === "memory_promoted") return "记忆提升";
-  if (normalized === "blocked") return "阻塞";
-  if (normalized === "completed") return "完成";
-  if (normalized === "unknown") return "未知事件";
   return value;
 }
 
@@ -208,7 +194,7 @@ export default async function DashboardTasksPage({
                           <div className="mt-2 space-y-2">
                             {relatedEvents.map((event, index) => (
                               <div key={`${event.stamp}-${index}`} className="rounded-xl bg-slate-50 px-3 py-2 text-xs text-slate-600">
-                                <span className="font-medium text-slate-800">{displayEventType(event.type)}</span>
+                                <span className="font-medium text-slate-800">{displayTaskEventType(event.type)}</span>
                                 <span className="mx-2 text-slate-400">·</span>
                                 <span>{event.result}</span>
                                 <span className="mx-2 text-slate-300">·</span>

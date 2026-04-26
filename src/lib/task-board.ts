@@ -80,6 +80,33 @@ export function parseEventStream(raw: string): EventItem[] {
     });
 }
 
+export function displayTaskEventType(value: string) {
+  const normalized = value.trim().toLowerCase();
+  if (normalized === "status_change") return "状态变更";
+  if (normalized === "task_created") return "任务创建";
+  if (normalized === "task_claimed") return "任务认领";
+  if (normalized === "handoff") return "交接";
+  if (normalized === "decision") return "决策";
+  if (normalized === "memory_promoted") return "记忆提升";
+  if (normalized === "blocked") return "阻塞";
+  if (normalized === "completed") return "完成";
+  if (normalized === "unknown") return "未知事件";
+  return value;
+}
+
+export function taskEventTone(value: string) {
+  const normalized = value.trim().toLowerCase();
+  if (normalized === "status_change") return "bg-sky-100 text-sky-800";
+  if (normalized === "task_created") return "bg-cyan-100 text-cyan-800";
+  if (normalized === "task_claimed") return "bg-fuchsia-100 text-fuchsia-800";
+  if (normalized === "memory_promoted") return "bg-indigo-100 text-indigo-800";
+  if (normalized === "blocked") return "bg-rose-100 text-rose-800";
+  if (normalized === "handoff") return "bg-violet-100 text-violet-800";
+  if (normalized === "decision") return "bg-amber-100 text-amber-800";
+  if (normalized === "completed") return "bg-emerald-100 text-emerald-800";
+  return "bg-slate-100 text-slate-700";
+}
+
 export function readTaskQueue() {
   return safeRead(TASK_QUEUE_PATH);
 }

@@ -1695,6 +1695,9 @@ function OrdersSection({
     ];
     downloadCsv(`biz-orders-${todayIso()}.csv`, rows);
   }
+  function printOrders() {
+    openPrintWindow(buildSimpleTablePrintHTML("订单列表", `共 ${filteredOrders.length} 条`, ["订单号", "类型", "客户", "电话", "总额", "已付", "余款", "状态", "日期"], filteredOrders.map((item) => [item.order_number, item.order_type, item.client_name, item.phone ?? "-", formatMoney(item.total_after_tax ?? item.total_price ?? 0), formatMoney(item.amount_paid ?? 0), formatMoney(item.balance ?? 0), item.status ?? "-", item.order_date ?? "-"])));
+  }
   const [selectedOrder, setSelectedOrder] = useState<BizOrder | null>(null);
   const [typeFilter, setTypeFilter] = useState("全部");
   const [statusFilter, setStatusFilter] = useState("全部");
@@ -1776,6 +1779,7 @@ function OrdersSection({
         actions={
           <>
             <ActionBtn onClick={exportOrders}>↓ 导出订单</ActionBtn>
+            <ActionBtn onClick={printOrders}>🖨 打印当前表</ActionBtn>
             <button
               onClick={() => setCreateType("定制单")}
               className="flex items-center gap-1.5 rounded-lg bg-slate-900 px-3 py-1.5 text-xs font-semibold text-white hover:bg-slate-700 transition-colors"

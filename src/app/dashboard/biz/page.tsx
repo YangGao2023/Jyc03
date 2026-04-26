@@ -2035,6 +2035,7 @@ const FINANCE_SUBS: Array<{ key: FinanceSub; label: string }> = [
   { key: "cash", label: "现金管理" },
   { key: "ledger", label: "月度账单" },
   { key: "receivables", label: "应收款" },
+  { key: "audit", label: "财务体检" },
 ];
 
 function SmallInput({ value, onChange, placeholder, type = "text" }: { value: string | number; onChange: (v: string) => void; placeholder?: string; type?: string; }) {

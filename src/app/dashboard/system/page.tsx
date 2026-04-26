@@ -54,6 +54,7 @@ type DiscussionTimelineItem = {
   text: string;
   lane: "outbox" | "inbox";
   status: string;
+  stage: "processing" | "result";
 };
 
 type DiscussionParticipantState = {
@@ -402,9 +403,16 @@ function buildDiscussionTimeline(thread: DiscussionThread, _outboxMessages: Awai
   for (const message of inboxMessages) {
     const meta = (message.meta || null) as Record<string, unknown> | null;
     if (extractTopicId(meta) !== topicId) continue;
-    if (!isFinalDiscussionReply({ kind: message.kind, text: message.text, meta })) continue;
-    const cleanedText = cleanDiscussionReplyText(message.text);
+
+    const isFinal = isFinalDiscussionReply({ kind: message.kind, text: message.text, meta });
+    const rawStage = String(meta?.stage || (meta?.commandMeta && typeof meta.commandMeta === "object" ? (meta.commandMeta as Record<string, unknown>).stage : "") || "").trim().toLowerCase();
+    const isProcessing = rawStage === "processing";
+
+    if (!isFinal && !isProcessing) continue;
+
+    const cleanedText = isFinal ? cleanDiscussionReplyText(message.text) : String(message.text || "").trim();
     if (!cleanedText) continue;
+
     entries.push({
       id: message.id,
       createdAt: message.createdAt,
@@ -414,6 +422,7 @@ function buildDiscussionTimeline(thread: DiscussionThread, _outboxMessages: Awai
       text: cleanedText,
       lane: "inbox",
       status: String(meta?.discussionStatus || (meta?.commandMeta && typeof meta.commandMeta === "object" ? (meta.commandMeta as Record<string, unknown>).discussionStatus : "") || thread.status),
+      stage: isFinal ? "result" : "processing",
     });
   }
 
@@ -673,10 +682,11 @@ export default async function DashboardSystemPage() {
                         const fromChip = identityChip(message.from);
                         const toChip = identityChip(message.to);
                         return (
-                          <div key={message.id} className={`rounded-2xl border px-3 py-2 ${message.lane === "outbox" ? "border-sky-200 bg-sky-50/60" : "border-emerald-200 bg-white"}`}>
+                          <div key={message.id} className={`rounded-2xl border px-3 py-2 ${message.stage === "processing" ? "border-amber-200 bg-amber-50/60" : message.lane === "outbox" ? "border-sky-200 bg-sky-50/60" : "border-emerald-200 bg-white"}`}>
                             <div className="flex flex-wrap items-center gap-2">
                               <span className="text-[11px] text-slate-500">{formatEasternTime(message.createdAt)}</span>
                               <span className={`rounded-full px-2 py-0.5 text-[10px] font-semibold ${message.lane === "outbox" ? "bg-sky-100 text-sky-800" : "bg-emerald-100 text-emerald-800"}`}>{message.lane === "outbox" ? "发出" : "回帖"}</span>
+                              <span className={`rounded-full px-2 py-0.5 text-[10px] font-semibold ${message.stage === "processing" ? "bg-amber-100 text-amber-800" : "bg-emerald-100 text-emerald-800"}`}>{message.stage === "processing" ? "处理中" : "最终结果"}</span>
                               <span className={`inline-flex items-center gap-1 rounded-full px-2 py-0.5 text-[10px] font-semibold ${fromChip.tone}`}>
                                 <span className={`inline-flex h-4 w-4 items-center justify-center rounded-full text-[9px] font-bold ${fromChip.avatarTone}`}>{fromChip.avatar}</span>
                                 {message.from}

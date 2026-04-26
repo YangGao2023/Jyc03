@@ -3259,6 +3259,7 @@ function ClientsSection({ clients, setClients, suppliers, setSuppliers, orders, 
   const [showSupplierModal, setShowSupplierModal] = useState(false);
   const [editingClientId, setEditingClientId] = useState<string | null>(null);
   const [editingSupplierId, setEditingSupplierId] = useState<string | null>(null);
+  const [confirmingClientId, setConfirmingClientId] = useState<string | null>(null);
   const [confirmingSupplierId, setConfirmingSupplierId] = useState<string | null>(null);
   const [showSupplierPurchaseModal, setShowSupplierPurchaseModal] = useState(false);
   const [clientSearch, setClientSearch] = useState("");
@@ -3323,9 +3324,9 @@ function ClientsSection({ clients, setClients, suppliers, setSuppliers, orders, 
   }
 
   function deleteClient(client: ContactRecord) {
-    if (!window.confirm(`确认删除客户“${client.name}”吗？`)) return;
     setClients((prev) => prev.filter((item) => item.id !== client.id));
     if (selectedClientId === client.id) setSelectedClientId("");
+    setConfirmingClientId(null);
   }
 
   function addSupplier() {
@@ -3705,7 +3706,14 @@ function ClientsSection({ clients, setClients, suppliers, setSuppliers, orders, 
                       <ActionBtn onClick={() => toggleVip(selectedClient.id)}>{selectedClient.is_vip ? "取消VIP" : "设为VIP"}</ActionBtn>
                       <ActionBtn onClick={() => onCreateAppointment(selectedClient)}>+ 新建预约</ActionBtn>
                       <ActionBtn onClick={() => openEditClient(selectedClient)}>编辑客户</ActionBtn>
-                      <ActionBtn tone="danger" onClick={() => deleteClient(selectedClient)}>删除客户</ActionBtn>
+                      {confirmingClientId === selectedClient.id ? (
+                        <>
+                          <button onClick={() => deleteClient(selectedClient)} className="rounded-lg border border-red-500 bg-red-500 px-3 py-1.5 text-xs font-semibold text-white hover:bg-red-600 transition-colors">确认删除</button>
+                          <button onClick={() => setConfirmingClientId(null)} className="rounded-lg border border-slate-200 px-3 py-1.5 text-xs text-slate-500 hover:border-slate-300 transition-colors">取消</button>
+                        </>
+                      ) : (
+                        <ActionBtn tone="danger" onClick={() => setConfirmingClientId(selectedClient.id)}>删除客户</ActionBtn>
+                      )}
                     </div>
                   </div>
 
@@ -4144,6 +4152,7 @@ function MaterialsSection({ materials, setMaterials, purchases, setPurchases, su
   const [sub, setSub] = useState<MaterialSub>("inventory");
   const today = new Date().toISOString().slice(0, 10);
   const [editingMaterialId, setEditingMaterialId] = useState<string | null>(null);
+  const [confirmingMaterialId, setConfirmingMaterialId] = useState<string | null>(null);
   const [materialDraft, setMaterialDraft] = useState({ code: "", name: "", specification: "", size: "", unit: "个", stock_quantity: "", factory_price_rmb: "", weight: "", usd_cost: "", sale_price_usd: "", vip_sale_price_usd: "", supplier: suppliers[0]?.name ?? "", image: "", remark: "" });
   const [purchaseDraft, setPurchaseDraft] = useState({ supplier: suppliers[0]?.name ?? "", item_name: "", quantity: "", unit: "个", unit_price: "", purchase_date: today, status: "未付款" });
   const [showMaterialModal, setShowMaterialModal] = useState(false);
@@ -4218,8 +4227,8 @@ function MaterialsSection({ materials, setMaterials, purchases, setPurchases, su
   }
 
   function deleteMaterial(id: string) {
-    if (!window.confirm("确认删除这条物料吗？")) return;
     setMaterials((prev) => prev.filter((item) => item.id !== id));
+    setConfirmingMaterialId(null);
   }
 
   function addPurchase() {
@@ -4353,7 +4362,7 @@ function MaterialsSection({ materials, setMaterials, purchases, setPurchases, su
                     <td className="px-4 py-2.5 text-slate-600">{item.vip_sale_price_usd ?? item.factory_price_rmb ?? 0}</td>
                     <td className="px-4 py-2.5 text-slate-600">{item.weight ?? 1}</td>
                     <td className="px-4 py-2.5 text-slate-500">{item.supplier ?? "-"}</td>
-                    <td className="px-4 py-2.5"><div className="flex flex-wrap gap-2"><button onClick={() => openEditMaterial(item)} className="rounded border border-slate-200 px-2 py-1 text-[11px] text-slate-600 hover:border-slate-300 hover:bg-slate-50 transition-colors">编辑</button><button onClick={() => deleteMaterial(item.id)} className="rounded border border-rose-100 px-2 py-1 text-[11px] text-rose-500 hover:border-rose-300 hover:bg-rose-50 transition-colors">删除</button></div></td>
+                    <td className="px-4 py-2.5"><div className="flex flex-wrap gap-2"><button onClick={() => openEditMaterial(item)} className="rounded border border-slate-200 px-2 py-1 text-[11px] text-slate-600 hover:border-slate-300 hover:bg-slate-50 transition-colors">编辑</button>{confirmingMaterialId === item.id ? <><button onClick={() => deleteMaterial(item.id)} className="rounded border border-red-400 bg-red-500 px-2 py-1 text-[11px] font-semibold text-white hover:bg-red-600 transition-colors">确认</button><button onClick={() => setConfirmingMaterialId(null)} className="rounded border border-slate-200 px-2 py-1 text-[11px] text-slate-500 hover:border-slate-300 transition-colors">取消</button></> : <button onClick={() => setConfirmingMaterialId(item.id)} className="rounded border border-rose-100 px-2 py-1 text-[11px] text-rose-500 hover:border-rose-300 hover:bg-rose-50 transition-colors">删除</button>}</div></td>
                   </tr>
                 ))}
               </tbody>
@@ -4442,6 +4451,7 @@ function AppointmentsSection({ appointments, setAppointments, clients, prefillCl
   const [rangeStart, setRangeStart] = useState(`${today}T00:00`);
   const [rangeEnd, setRangeEnd] = useState(`${tomorrow}T23:59`);
   const [showAppointmentModal, setShowAppointmentModal] = useState(false);
+  const [confirmingAppointmentId, setConfirmingAppointmentId] = useState<string | null>(null);
   const [copyState, setCopyState] = useState("");
   const [draft, setDraft] = useState({ client_id: "", client_name: "", phone: "", address: "", appointment_date: `${today}T10:00`, description: "" });
 
@@ -4543,8 +4553,8 @@ function AppointmentsSection({ appointments, setAppointments, clients, prefillCl
   }
 
   function deleteAppointment(item: MeasurementAppointmentRecord) {
-    if (!window.confirm(`确认删除 ${item.client_name} 的预约吗？`)) return;
     setAppointments((prev) => prev.filter((entry) => entry.id !== item.id));
+    setConfirmingAppointmentId(null);
   }
 
   const appointmentConfig: TabularSchemaConfig = {
@@ -4563,10 +4573,10 @@ function AppointmentsSection({ appointments, setAppointments, clients, prefillCl
     printTabularSchema(appointmentConfig, `共 ${appointmentConfig.printRows().length} 条`);
   }
 
-  return <div><SectionHeader eyebrow="Measurement Appointments" title="测量预约" actions={<><ActionBtn onClick={copyAppointmentList}>复制当前列表</ActionBtn><ActionBtn onClick={exportAppointments}>↓ 导出当前表</ActionBtn><ActionBtn onClick={printAppointments}>🖨 打印当前表</ActionBtn><ActionBtn tone="primary" onClick={() => setShowAppointmentModal(true)}>+ 新建预约</ActionBtn></>} /><StatStrip items={[{ label: "预约总数", value: String(stats.total) }, { label: "今日上门", value: String(stats.today), accent: "text-amber-600" }, { label: "待上门", value: String(stats.upcoming), accent: "text-sky-600" }, { label: "已完成", value: String(stats.done), accent: "text-emerald-600" }]} />{showAppointmentModal ? <div className="fixed inset-0 z-50 flex items-center justify-center bg-slate-950/45 px-4"><div className="w-full max-w-3xl rounded-2xl border border-slate-200 bg-white p-5 shadow-2xl"><div className="mb-4 flex items-start justify-between gap-3"><div><h3 className="text-base font-semibold text-slate-900">新建测量预约</h3><p className="mt-1 text-sm text-slate-500">支持直接搜索客户并自动带出电话和地址。</p></div><button onClick={() => setShowAppointmentModal(false)} className="rounded-lg border border-slate-200 px-2.5 py-1 text-xs text-slate-500 hover:border-slate-300 hover:text-slate-700 transition-colors">关闭</button></div><div className="grid gap-2 sm:grid-cols-2 xl:grid-cols-3"><select value={draft.client_id || ""} onChange={(e) => hydrateFromClient(e.target.value)} className="h-8 rounded-lg border border-slate-300 bg-white px-3 text-xs text-slate-700"><option value="">选择客户后自动带出电话和地址</option>{clientOptions.map((item) => <option key={item.value} value={item.value}>{item.label}</option>)}</select><div><input list="appointment-client-options" value={draft.client_name} onChange={(e) => hydrateFromClientName(e.target.value)} placeholder="客户名称" className="h-8 w-full rounded-lg border border-slate-300 bg-white px-3 text-xs text-slate-700 focus:border-blue-400 focus:outline-none" /><datalist id="appointment-client-options">{clients.map((item) => <option key={item.id} value={item.name} />)}</datalist></div><SmallInput value={draft.phone} onChange={(v) => setDraft((d) => ({ ...d, phone: v }))} placeholder="电话" /><div className="sm:col-span-2 xl:col-span-2"><SmallInput value={draft.address} onChange={(v) => setDraft((d) => ({ ...d, address: v }))} placeholder="测量地址" /></div><SmallInput value={draft.appointment_date} onChange={(v) => setDraft((d) => ({ ...d, appointment_date: v }))} type="datetime-local" /><div className="sm:col-span-2 xl:col-span-3"><SmallInput value={draft.description} onChange={(v) => setDraft((d) => ({ ...d, description: v }))} placeholder="描述，例如栏杆、复尺、现场确认" /></div></div><p className="mt-2 text-[11px] text-slate-400">原始应用里预约实体还带 Google Calendar event id。当前网站架构没有外部日历凭证和同步流，所以先保留字段但只做站内排期。</p><div className="mt-5 flex justify-end gap-2"><ActionBtn onClick={() => setShowAppointmentModal(false)}>取消</ActionBtn><ActionBtn tone="primary" onClick={addAppointment}>确认新建</ActionBtn></div></div></div> : null}<div className="mb-4"><PanelCard title="排期列表"><div className="mb-3 flex flex-wrap gap-2"><div className="relative min-w-[180px] flex-1"><span className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-400 text-sm">⌕</span><input value={search} onChange={(e) => setSearch(e.target.value)} placeholder="搜索客户 / 电话 / 地址" className="h-8 w-full rounded-lg border border-slate-300 bg-white pl-8 pr-3 text-xs text-slate-700" /></div><select value={statusFilter} onChange={(e) => setStatusFilter(e.target.value)} className="h-8 rounded-lg border border-slate-300 bg-white px-3 text-xs text-slate-700"><option>全部</option><option>今日预约</option><option>待上门</option><option>已完成</option></select><select value={datePreset} onChange={(e) => setDatePreset(e.target.value)} className="h-8 rounded-lg border border-slate-300 bg-white px-3 text-xs text-slate-700"><option>全部</option><option>今日</option><option>明日</option><option>近7天</option><option>自定义</option></select><input type="datetime-local" value={rangeStart} onChange={(e) => setRangeStart(e.target.value)} className="h-8 rounded-lg border border-slate-300 bg-white px-3 text-xs text-slate-700" /><input type="datetime-local" value={rangeEnd} onChange={(e) => setRangeEnd(e.target.value)} className="h-8 rounded-lg border border-slate-300 bg-white px-3 text-xs text-slate-700" /></div>{copyState ? <p className="mb-3 text-xs text-emerald-600">{copyState}</p> : null}<div className="space-y-2">{filteredAppointments.length ? filteredAppointments.map((item) => { const status = getAppointmentStatus(item.appointment_date); return <div key={item.id} className="rounded-xl border border-slate-200 bg-white p-3"><div className="flex flex-wrap items-start justify-between gap-2"><div><div className="flex items-center gap-2"><span className="text-sm font-semibold text-slate-900">{item.client_name}</span><AppointmentStatusBadge status={status} /></div><p className="mt-1 text-xs text-slate-500">{formatAppointmentDate(item.appointment_date)}{item.phone ? ` · ${item.phone}` : ""}</p><p className="mt-1 text-xs text-slate-500">{item.address ?? "未填写地址"}</p></div><div className="flex flex-wrap gap-2"><button onClick={() => copyAppointment(item)} className="rounded border border-sky-100 px-2 py-1 text-[11px] text-sky-600 hover:border-sky-300 hover:bg-sky-50 transition-colors">复制信息</button><button onClick={() => deleteAppointment(item)} className="rounded border border-rose-100 px-2 py-1 text-[11px] text-rose-500 hover:border-rose-300 hover:bg-rose-50 transition-colors">删除</button></div></div>{item.description ? <p className="mt-2 rounded-lg bg-slate-50 px-3 py-2 text-xs text-slate-600">{item.description}</p> : null}</div>; }) : <div className="rounded-xl border border-dashed border-slate-200 py-10 text-center text-sm text-slate-400">当前没有预约记录</div>}</div></PanelCard></div></div>;
+  return <div><SectionHeader eyebrow="Measurement Appointments" title="测量预约" actions={<><ActionBtn onClick={copyAppointmentList}>复制当前列表</ActionBtn><ActionBtn onClick={exportAppointments}>↓ 导出当前表</ActionBtn><ActionBtn onClick={printAppointments}>🖨 打印当前表</ActionBtn><ActionBtn tone="primary" onClick={() => setShowAppointmentModal(true)}>+ 新建预约</ActionBtn></>} /><StatStrip items={[{ label: "预约总数", value: String(stats.total) }, { label: "今日上门", value: String(stats.today), accent: "text-amber-600" }, { label: "待上门", value: String(stats.upcoming), accent: "text-sky-600" }, { label: "已完成", value: String(stats.done), accent: "text-emerald-600" }]} />{showAppointmentModal ? <div className="fixed inset-0 z-50 flex items-center justify-center bg-slate-950/45 px-4"><div className="w-full max-w-3xl rounded-2xl border border-slate-200 bg-white p-5 shadow-2xl"><div className="mb-4 flex items-start justify-between gap-3"><div><h3 className="text-base font-semibold text-slate-900">新建测量预约</h3><p className="mt-1 text-sm text-slate-500">支持直接搜索客户并自动带出电话和地址。</p></div><button onClick={() => setShowAppointmentModal(false)} className="rounded-lg border border-slate-200 px-2.5 py-1 text-xs text-slate-500 hover:border-slate-300 hover:text-slate-700 transition-colors">关闭</button></div><div className="grid gap-2 sm:grid-cols-2 xl:grid-cols-3"><select value={draft.client_id || ""} onChange={(e) => hydrateFromClient(e.target.value)} className="h-8 rounded-lg border border-slate-300 bg-white px-3 text-xs text-slate-700"><option value="">选择客户后自动带出电话和地址</option>{clientOptions.map((item) => <option key={item.value} value={item.value}>{item.label}</option>)}</select><div><input list="appointment-client-options" value={draft.client_name} onChange={(e) => hydrateFromClientName(e.target.value)} placeholder="客户名称" className="h-8 w-full rounded-lg border border-slate-300 bg-white px-3 text-xs text-slate-700 focus:border-blue-400 focus:outline-none" /><datalist id="appointment-client-options">{clients.map((item) => <option key={item.id} value={item.name} />)}</datalist></div><SmallInput value={draft.phone} onChange={(v) => setDraft((d) => ({ ...d, phone: v }))} placeholder="电话" /><div className="sm:col-span-2 xl:col-span-2"><SmallInput value={draft.address} onChange={(v) => setDraft((d) => ({ ...d, address: v }))} placeholder="测量地址" /></div><SmallInput value={draft.appointment_date} onChange={(v) => setDraft((d) => ({ ...d, appointment_date: v }))} type="datetime-local" /><div className="sm:col-span-2 xl:col-span-3"><SmallInput value={draft.description} onChange={(v) => setDraft((d) => ({ ...d, description: v }))} placeholder="描述，例如栏杆、复尺、现场确认" /></div></div><p className="mt-2 text-[11px] text-slate-400">原始应用里预约实体还带 Google Calendar event id。当前网站架构没有外部日历凭证和同步流，所以先保留字段但只做站内排期。</p><div className="mt-5 flex justify-end gap-2"><ActionBtn onClick={() => setShowAppointmentModal(false)}>取消</ActionBtn><ActionBtn tone="primary" onClick={addAppointment}>确认新建</ActionBtn></div></div></div> : null}<div className="mb-4"><PanelCard title="排期列表"><div className="mb-3 flex flex-wrap gap-2"><div className="relative min-w-[180px] flex-1"><span className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-400 text-sm">⌕</span><input value={search} onChange={(e) => setSearch(e.target.value)} placeholder="搜索客户 / 电话 / 地址" className="h-8 w-full rounded-lg border border-slate-300 bg-white pl-8 pr-3 text-xs text-slate-700" /></div><select value={statusFilter} onChange={(e) => setStatusFilter(e.target.value)} className="h-8 rounded-lg border border-slate-300 bg-white px-3 text-xs text-slate-700"><option>全部</option><option>今日预约</option><option>待上门</option><option>已完成</option></select><select value={datePreset} onChange={(e) => setDatePreset(e.target.value)} className="h-8 rounded-lg border border-slate-300 bg-white px-3 text-xs text-slate-700"><option>全部</option><option>今日</option><option>明日</option><option>近7天</option><option>自定义</option></select><input type="datetime-local" value={rangeStart} onChange={(e) => setRangeStart(e.target.value)} className="h-8 rounded-lg border border-slate-300 bg-white px-3 text-xs text-slate-700" /><input type="datetime-local" value={rangeEnd} onChange={(e) => setRangeEnd(e.target.value)} className="h-8 rounded-lg border border-slate-300 bg-white px-3 text-xs text-slate-700" /></div>{copyState ? <p className="mb-3 text-xs text-emerald-600">{copyState}</p> : null}<div className="space-y-2">{filteredAppointments.length ? filteredAppointments.map((item) => { const status = getAppointmentStatus(item.appointment_date); return <div key={item.id} className="rounded-xl border border-slate-200 bg-white p-3"><div className="flex flex-wrap items-start justify-between gap-2"><div><div className="flex items-center gap-2"><span className="text-sm font-semibold text-slate-900">{item.client_name}</span><AppointmentStatusBadge status={status} /></div><p className="mt-1 text-xs text-slate-500">{formatAppointmentDate(item.appointment_date)}{item.phone ? ` · ${item.phone}` : ""}</p><p className="mt-1 text-xs text-slate-500">{item.address ?? "未填写地址"}</p></div><div className="flex flex-wrap gap-2"><button onClick={() => copyAppointment(item)} className="rounded border border-sky-100 px-2 py-1 text-[11px] text-sky-600 hover:border-sky-300 hover:bg-sky-50 transition-colors">复制信息</button>{confirmingAppointmentId === item.id ? <><button onClick={() => deleteAppointment(item)} className="rounded border border-red-400 bg-red-500 px-2 py-1 text-[11px] font-semibold text-white hover:bg-red-600 transition-colors">确认</button><button onClick={() => setConfirmingAppointmentId(null)} className="rounded border border-slate-200 px-2 py-1 text-[11px] text-slate-500 hover:border-slate-300 transition-colors">取消</button></> : <button onClick={() => setConfirmingAppointmentId(item.id)} className="rounded border border-rose-100 px-2 py-1 text-[11px] text-rose-500 hover:border-rose-300 hover:bg-rose-50 transition-colors">删除</button>}</div></div>{item.description ? <p className="mt-2 rounded-lg bg-slate-50 px-3 py-2 text-xs text-slate-600">{item.description}</p> : null}</div>; }) : <div className="rounded-xl border border-dashed border-slate-200 py-10 text-center text-sm text-slate-400">当前没有预约记录</div>}</div></PanelCard></div></div>;
 }
 
-type StaffSub = "attendance" | "payroll";
+type StaffSub = "profiles" | "attendance" | "payroll" | "rules";
 type AttendanceFilter = "today" | "thisWeek" | "lastWeek";
 type PayrollWeekFilter = "lastWeek" | "thisWeek";
 
@@ -4695,7 +4705,8 @@ function ensureAttendanceRows(employees: EmployeeRecord[], attendances: Attendan
 }
 
 function EmployeesSection({ employees, setEmployees, attendances, setAttendances, payrolls, setPayrolls, expenses, setExpenses, settings, setSettings }: { employees: EmployeeRecord[]; setEmployees: React.Dispatch<React.SetStateAction<EmployeeRecord[]>>; attendances: AttendanceRecord[]; setAttendances: React.Dispatch<React.SetStateAction<AttendanceRecord[]>>; payrolls: PayrollRecord[]; setPayrolls: React.Dispatch<React.SetStateAction<PayrollRecord[]>>; expenses: ExpenseRecord[]; setExpenses: React.Dispatch<React.SetStateAction<ExpenseRecord[]>>; settings: BizSettings; setSettings: React.Dispatch<React.SetStateAction<BizSettings>>; }) {
-  const [sub, setSub] = useState<StaffSub>("attendance");
+  const [sub, setSub] = useState<StaffSub>("profiles");
+  const [profileEthnicityFilter, setProfileEthnicityFilter] = useState("全部");
   const [attendanceFilter, setAttendanceFilter] = useState<AttendanceFilter>("today");
   const [attendanceEthnicityFilter, setAttendanceEthnicityFilter] = useState("全部");
   const [payrollWeekFilter, setPayrollWeekFilter] = useState<PayrollWeekFilter>("lastWeek");
@@ -4727,10 +4738,10 @@ function EmployeesSection({ employees, setEmployees, attendances, setAttendances
     if (seededAttendances.length !== attendances.length) setAttendances(seededAttendances);
   }, [seededAttendances, attendances.length, setAttendances]);
 
-  const attendanceEmployeeRows = useMemo(() => normalizedEmployees
+  const profileRows = useMemo(() => normalizedEmployees
     .filter((item) => item.status === "在职")
-    .filter((item) => attendanceEthnicityFilter === "全部" || item.ethnicity === attendanceEthnicityFilter)
-    .sort((a, b) => String(a.code || a.id).localeCompare(String(b.code || b.id))), [normalizedEmployees, attendanceEthnicityFilter]);
+    .filter((item) => profileEthnicityFilter === "全部" || item.ethnicity === profileEthnicityFilter)
+    .sort((a, b) => String(a.code || a.id).localeCompare(String(b.code || b.id))), [normalizedEmployees, profileEthnicityFilter]);
 
   const attendanceRows = useMemo(() => seededAttendances
     .filter((item) => item.date >= attendanceRange.start && item.date <= attendanceRange.end)
@@ -4755,12 +4766,12 @@ function EmployeesSection({ employees, setEmployees, attendances, setAttendances
       return { employee, totalMinutes, mealCount, hourlyRate, wage, payrollId, paid: existing?.payment_status === "已发放" };
     }), [normalizedEmployees, attendances, payrollRange, settings, payrolls, payrollEthnicityFilter]);
 
-  const [employeeDraft, setEmployeeDraft] = useState({ name: "", phone: "", hourly_rate: "", workdays: ["Mon", "Tue", "Wed", "Thu", "Fri"], meal_allowance_eligible: true, ethnicity: "华人", position: "", hire_date: today, contract_end: "" });
+  const [employeeDraft, setEmployeeDraft] = useState({ name: "", phone: "", hourly_rate: "", workdays: ["Mon", "Tue", "Wed", "Thu", "Fri"], meal_allowance_eligible: true, ethnicity: "华人", position: "" });
   const [attendanceDraft, setAttendanceDraft] = useState({ employee_id: "", date: today, leave_minutes: "0", overtime_minutes: "0" });
 
   function openCreateEmployee() {
     setEditingEmployeeId(null);
-    setEmployeeDraft({ name: "", phone: "", hourly_rate: "", workdays: ["Mon", "Tue", "Wed", "Thu", "Fri"], meal_allowance_eligible: true, ethnicity: "华人", position: "", hire_date: today, contract_end: "" });
+    setEmployeeDraft({ name: "", phone: "", hourly_rate: "", workdays: ["Mon", "Tue", "Wed", "Thu", "Fri"], meal_allowance_eligible: true, ethnicity: "华人", position: "" });
     setShowEmployeeModal(true);
   }
 
@@ -4774,8 +4785,6 @@ function EmployeesSection({ employees, setEmployees, attendances, setAttendances
       meal_allowance_eligible: employee.meal_allowance_eligible ?? true,
       ethnicity: employee.ethnicity || "华人",
       position: employee.position || "",
-      hire_date: employee.hire_date || today,
-      contract_end: employee.contract_end || "",
     });
     setShowEmployeeModal(true);
   }
@@ -4783,14 +4792,14 @@ function EmployeesSection({ employees, setEmployees, attendances, setAttendances
   function saveEmployee() {
     if (!employeeDraft.name.trim()) return;
     const code = editingEmployeeId ? normalizedEmployees.find((item) => item.id === editingEmployeeId)?.code || nextEmployeeCode(normalizedEmployees) : nextEmployeeCode(normalizedEmployees);
+    const current = editingEmployeeId ? employees.find((item) => item.id === editingEmployeeId) : undefined;
     const payload: EmployeeRecord = {
+      ...(current || {}),
       id: editingEmployeeId || `EMP-${code}`,
       code,
       name: employeeDraft.name.trim(),
       position: employeeDraft.position || undefined,
       phone: employeeDraft.phone || undefined,
-      hire_date: employeeDraft.hire_date || undefined,
-      contract_end: employeeDraft.contract_end || undefined,
       monthly_salary: Number(employeeDraft.hourly_rate) || 0,
       hourly_rate: Number(employeeDraft.hourly_rate) || 0,
       workdays: employeeDraft.workdays,
@@ -4798,6 +4807,8 @@ function EmployeesSection({ employees, setEmployees, attendances, setAttendances
       ethnicity: employeeDraft.ethnicity,
       status: "在职",
     };
+    delete payload.hire_date;
+    delete payload.contract_end;
     setEmployees((prev) => editingEmployeeId ? prev.map((item) => item.id === editingEmployeeId ? payload : item) : [payload, ...prev]);
     setShowEmployeeModal(false);
   }
@@ -4890,7 +4901,22 @@ function EmployeesSection({ employees, setEmployees, attendances, setAttendances
     ]);
   }
 
+  const ruleRows = [
+    { label: "饭补金额", value: formatMoney(settings.meal_allowance_amount || 0) },
+    { label: "自动考勤时区", value: settings.auto_attendance_timezone || "America/New_York" },
+    { label: "自动执行时间", value: settings.auto_attendance_run_time || "01:00" },
+    { label: "自动默认工时", value: formatMinutes(settings.auto_attendance_default_minutes || 600) },
+    { label: "自动规则说明", value: `在职员工按工作日自动生成 10 小时考勤，再叠加请假 / 加班修正。` },
+  ];
+
   const configs: Record<StaffSub, TabularSchemaConfig> = {
+    profiles: {
+      title: "员工档案",
+      filePrefix: "biz-employees",
+      columns: ["工号", "姓名", "电话", "职位", "时薪", "工作日", "饭补资格", "分组"],
+      exportRows: () => profileRows.map((item) => [item.code || "", item.name, item.phone || "", item.position || "", item.hourly_rate || 0, (item.workdays || []).join("/"), item.meal_allowance_eligible ? "是" : "否", item.ethnicity]),
+      printRows: () => profileRows.map((item) => [item.code || "-", item.name, item.phone || "-", item.position || "-", formatMoney(item.hourly_rate || 0), (item.workdays || []).map((day) => WORKDAY_OPTIONS.find((option) => option.key === day)?.label || day).join("、"), item.meal_allowance_eligible ? "可用" : "关闭", item.ethnicity]),
+    },
     attendance: {
       title: "考勤记录",
       filePrefix: "biz-attendance",
@@ -4905,17 +4931,67 @@ function EmployeesSection({ employees, setEmployees, attendances, setAttendances
       exportRows: () => payrollRows.map((item) => [item.employee.name, item.hourlyRate, minutesToHours(item.totalMinutes), item.wage, item.paid ? "是" : "否"]),
       printRows: () => payrollRows.map((item) => [item.employee.name, formatMoney(item.hourlyRate), formatMinutes(item.totalMinutes), formatMoney(item.wage), item.paid ? "已发放" : "未发放"]),
     },
+    rules: {
+      title: "员工系统规则",
+      filePrefix: "biz-employee-rules",
+      columns: ["规则项", "当前值"],
+      exportRows: () => ruleRows.map((item) => [item.label, item.value]),
+      printRows: () => ruleRows.map((item) => [item.label, item.value]),
+    },
   };
+
+  const printSubtitle = sub === "attendance"
+    ? `${attendanceRange.label} ${attendanceRange.start} ~ ${attendanceRange.end}`
+    : sub === "payroll"
+      ? `${payrollRange.label} ${payrollRange.start} ~ ${payrollRange.end}`
+      : "当前员工模块数据";
 
   return (
     <div>
-      <SectionHeader eyebrow="Human Resources" title="员工管理" actions={<><ActionBtn onClick={() => exportTabularSchema(configs[sub])}>↓ 导出当前表</ActionBtn><ActionBtn onClick={() => printTabularSchema(configs[sub], sub === "attendance" ? `${attendanceRange.label} ${attendanceRange.start} ~ ${attendanceRange.end}` : `${payrollRange.label} ${payrollRange.start} ~ ${payrollRange.end}`)}>🖨 打印当前表</ActionBtn>{sub === "attendance" ? <><ActionBtn tone="primary" onClick={openCreateEmployee}>+ 新建员工</ActionBtn><ActionBtn tone="primary" onClick={() => { setAttendanceDraft({ employee_id: normalizedEmployees[0]?.id || "", date: attendanceRange.start, leave_minutes: "0", overtime_minutes: "0" }); setShowAttendanceModal(true); }}>+ 手工补录</ActionBtn></> : null}{sub === "payroll" ? <ActionBtn tone="success" onClick={markAllVisiblePaid}>一键发放当前工资</ActionBtn> : null}</>} />
+      <SectionHeader
+        eyebrow="Human Resources"
+        title="员工管理"
+        actions={
+          <>
+            <ActionBtn onClick={() => exportTabularSchema(configs[sub])}>↓ 导出当前表</ActionBtn>
+            <ActionBtn onClick={() => printTabularSchema(configs[sub], printSubtitle)}>🖨 打印当前表</ActionBtn>
+            {sub === "profiles" ? <ActionBtn tone="primary" onClick={openCreateEmployee}>+ 新建员工</ActionBtn> : null}
+            {sub === "attendance" ? <ActionBtn tone="primary" onClick={() => { setAttendanceDraft({ employee_id: normalizedEmployees[0]?.id || "", date: attendanceRange.start, leave_minutes: "0", overtime_minutes: "0" }); setShowAttendanceModal(true); }}>+ 手工补录</ActionBtn> : null}
+            {sub === "payroll" ? <ActionBtn tone="success" onClick={markAllVisiblePaid}>一键发放当前工资</ActionBtn> : null}
+          </>
+        }
+      />
       <StatStrip items={[{ label: "在职员工", value: String(normalizedEmployees.filter((item) => item.status === "在职").length) }, { label: "当前考勤", value: String(attendanceRows.length), accent: "text-blue-600" }, { label: "当前工资", value: formatMoney(payrollRows.reduce((sum, item) => sum + item.wage, 0)), accent: "text-orange-600" }, { label: "已发放", value: formatMoney(payrollRows.filter((item) => item.paid).reduce((sum, item) => sum + item.wage, 0)), accent: "text-green-600" }]} />
-      <SegmentedControl options={[{ key: "attendance", label: "考勤记录" }, { key: "payroll", label: "工资发放" }]} value={sub} onChange={setSub} />
+      <SegmentedControl options={[{ key: "profiles", label: "员工档案" }, { key: "attendance", label: "考勤" }, { key: "payroll", label: "工资" }, { key: "rules", label: "员工系统规则" }]} value={sub} onChange={setSub} />
 
-      {sub === "attendance" && (
+      {sub === "profiles" ? (
         <div className="space-y-4">
-          <PanelCard title="员工档案与系统规则" note="员工档案保留在考勤页管理，模块主导航只保留考勤记录 / 工资发放两页。">
+          <PanelCard title="员工档案" note="员工工号自动递增，员工档案单独管理，不再和考勤或规则混在一起。">
+            <div className="mb-3 flex flex-wrap items-center justify-between gap-3"><div className="flex items-center gap-2"><span className="text-xs text-slate-500">员工分组</span><select value={profileEthnicityFilter} onChange={(e) => setProfileEthnicityFilter(e.target.value)} className="h-8 rounded-lg border border-slate-300 bg-white px-2 text-xs text-slate-700"><option>全部</option>{EMPLOYEE_GROUP_OPTIONS.map((option) => <option key={option}>{option}</option>)}</select></div><div className="text-xs text-slate-500">共 {profileRows.length} 名员工</div></div>
+            <div className="overflow-x-auto rounded-xl border border-slate-200 bg-white"><table className="w-full text-left text-xs"><thead><tr className="border-b border-slate-200 bg-slate-50"><th className="px-4 py-2.5 font-semibold text-slate-600">工号</th><th className="px-4 py-2.5 font-semibold text-slate-600">姓名</th><th className="px-4 py-2.5 font-semibold text-slate-600">职位</th><th className="px-4 py-2.5 font-semibold text-slate-600">电话</th><th className="px-4 py-2.5 font-semibold text-slate-600">时薪</th><th className="px-4 py-2.5 font-semibold text-slate-600">工作日</th><th className="px-4 py-2.5 font-semibold text-slate-600">饭补资格</th><th className="px-4 py-2.5 font-semibold text-slate-600">分组</th><th className="px-4 py-2.5 font-semibold text-slate-600">操作</th></tr></thead><tbody>{profileRows.map((item) => <tr key={item.id} className="border-b border-slate-100 last:border-b-0"><td className="px-4 py-2.5 font-medium text-slate-700">{item.code}</td><td className="px-4 py-2.5 text-slate-700">{item.name}</td><td className="px-4 py-2.5 text-slate-600">{item.position || "-"}</td><td className="px-4 py-2.5 text-slate-600">{item.phone || "-"}</td><td className="px-4 py-2.5 text-slate-700">{formatMoney(item.hourly_rate || 0)}</td><td className="px-4 py-2.5 text-slate-600">{(item.workdays || []).map((day) => WORKDAY_OPTIONS.find((option) => option.key === day)?.label || day).join("、")}</td><td className="px-4 py-2.5 text-slate-600">{item.meal_allowance_eligible ? "可用" : "关闭"}</td><td className="px-4 py-2.5 text-slate-600">{item.ethnicity}</td><td className="px-4 py-2.5"><ActionBtn onClick={() => openEditEmployee(item)}>编辑</ActionBtn></td></tr>)}</tbody></table></div>
+          </PanelCard>
+        </div>
+      ) : null}
+
+      {sub === "attendance" ? (
+        <div className="space-y-4">
+          <div className="flex flex-wrap items-center gap-3"><SegmentedControl options={[{ key: "today", label: "今天" }, { key: "thisWeek", label: "本周" }, { key: "lastWeek", label: "上周" }]} value={attendanceFilter} onChange={setAttendanceFilter} /><div className="flex items-center gap-2"><span className="text-xs text-slate-500">分组</span><select value={attendanceEthnicityFilter} onChange={(e) => setAttendanceEthnicityFilter(e.target.value)} className="h-8 rounded-lg border border-slate-300 bg-white px-2 text-xs text-slate-700"><option>全部</option>{EMPLOYEE_GROUP_OPTIONS.map((option) => <option key={option}>{option}</option>)}</select></div><span className="text-xs text-slate-500">{attendanceRange.start} ~ {attendanceRange.end}</span></div>
+          <PanelCard title="考勤规则说明" note="当天工作时长 = 10小时 + 加班时长 - 请假时长。工时小于等于 5 小时时强制取消饭补。"><div className="text-xs text-slate-500">缺失考勤会按员工工作日和自动规则补齐，支持逐行人工修正。</div></PanelCard>
+          <div className="overflow-x-auto rounded-xl border border-slate-200 bg-white"><table className="w-full text-left text-xs"><thead><tr className="border-b border-slate-200 bg-slate-50"><th className="px-3 py-2.5 font-semibold text-slate-600">日期</th><th className="px-3 py-2.5 font-semibold text-slate-600">工号</th><th className="px-3 py-2.5 font-semibold text-slate-600">人名</th><th className="px-3 py-2.5 font-semibold text-slate-600">工作时长</th><th className="px-3 py-2.5 font-semibold text-slate-600">请假时长</th><th className="px-3 py-2.5 font-semibold text-slate-600">加班时长</th><th className="px-3 py-2.5 font-semibold text-slate-600">饭补</th><th className="px-3 py-2.5 font-semibold text-slate-600">操作</th></tr></thead><tbody>{attendanceRows.map((item) => { const employee = normalizedEmployees.find((row) => row.id === item.employee_id || row.name === item.employee_name); const editing = editingAttendanceId === item.id; return <tr key={item.id} className="border-b border-slate-100 last:border-b-0"><td className="px-3 py-2.5 text-slate-600">{item.date}</td><td className="px-3 py-2.5 text-slate-700">{item.employee_code || employee?.code || "-"}</td><td className="px-3 py-2.5 font-medium text-slate-700">{item.employee_name}</td><td className="px-3 py-2.5 text-slate-700">{formatMinutes(item.worked_minutes)}</td>{editing ? <><td className="px-3 py-2.5"><SmallInput value={String(item.leave_minutes)} onChange={(v) => setAttendanceField(item.id, "leave_minutes", Number(v) || 0)} type="number" /></td><td className="px-3 py-2.5"><SmallInput value={String(item.overtime_minutes)} onChange={(v) => setAttendanceField(item.id, "overtime_minutes", Number(v) || 0)} type="number" /></td><td className="px-3 py-2.5"><label className="flex items-center gap-2 text-slate-600"><input type="checkbox" checked={item.meal_allowance} disabled={item.worked_minutes <= 300 || !employee?.meal_allowance_eligible} onChange={(e) => setAttendanceField(item.id, "meal_allowance", e.target.checked)} /> 饭补</label></td><td className="px-3 py-2.5"><div className="flex gap-2"><ActionBtn tone="success" onClick={() => setEditingAttendanceId(null)}>完成</ActionBtn><ActionBtn onClick={() => setEditingAttendanceId(null)}>取消</ActionBtn></div></td></> : <><td className="px-3 py-2.5 text-slate-600">{formatMinutes(item.leave_minutes)}</td><td className="px-3 py-2.5 text-slate-600">{formatMinutes(item.overtime_minutes)}</td><td className="px-3 py-2.5 text-slate-600">{item.meal_allowance ? `是 · ${formatMoney(settings.meal_allowance_amount || 0)}` : "否"}</td><td className="px-3 py-2.5"><ActionBtn onClick={() => setEditingAttendanceId(item.id)}>编辑</ActionBtn></td></>}</tr>; })}</tbody></table></div>
+        </div>
+      ) : null}
+
+      {sub === "payroll" ? (
+        <div className="space-y-4">
+          <div className="flex flex-wrap items-center gap-3"><SegmentedControl options={[{ key: "lastWeek", label: "上周" }, { key: "thisWeek", label: "本周" }]} value={payrollWeekFilter} onChange={setPayrollWeekFilter} /><div className="flex items-center gap-2"><span className="text-xs text-slate-500">分组</span><select value={payrollEthnicityFilter} onChange={(e) => setPayrollEthnicityFilter(e.target.value)} className="h-8 rounded-lg border border-slate-300 bg-white px-2 text-xs text-slate-700"><option>全部</option>{EMPLOYEE_GROUP_OPTIONS.map((option) => <option key={option}>{option}</option>)}</select></div><span className="text-xs text-slate-500">{payrollRange.start} ~ {payrollRange.end}</span></div>
+          <PanelCard title="工资说明" note={`工资 = 总工时 × 时薪 + 饭补次数 × ${formatMoney(settings.meal_allowance_amount || 0)}。点击一键发放后，会自动落一笔“工资”支出。`}><div className="text-xs text-slate-500">保留周维度发放，本周 / 上周两档。</div></PanelCard>
+          <div className="overflow-x-auto rounded-xl border border-slate-200 bg-white"><table className="w-full text-left text-xs"><thead><tr className="border-b border-slate-200 bg-slate-50"><th className="px-4 py-2.5 font-semibold text-slate-600">姓名</th><th className="px-4 py-2.5 font-semibold text-slate-600">时薪</th><th className="px-4 py-2.5 font-semibold text-slate-600">总工时</th><th className="px-4 py-2.5 font-semibold text-slate-600">应发工资</th><th className="px-4 py-2.5 font-semibold text-slate-600">是否已发放工资</th></tr></thead><tbody>{payrollRows.map((item) => <tr key={item.employee.id} className="border-b border-slate-100 last:border-b-0"><td className="px-4 py-2.5 font-medium text-slate-700">{item.employee.name}</td><td className="px-4 py-2.5 text-slate-700">{formatMoney(item.hourlyRate)}</td><td className="px-4 py-2.5 text-slate-600">{formatMinutes(item.totalMinutes)}</td><td className="px-4 py-2.5 font-semibold text-slate-800">{formatMoney(item.wage)}</td><td className="px-4 py-2.5 text-slate-600">{item.paid ? "已发放" : "未发放"}</td></tr>)}</tbody></table></div>
+        </div>
+      ) : null}
+
+      {sub === "rules" ? (
+        <div className="space-y-4">
+          <PanelCard title="员工系统规则" note="员工系统规则独立成页，只保留规则配置，不再混入员工档案。">
             <div className="grid gap-3 md:grid-cols-2 xl:grid-cols-4">
               <div><p className="mb-1 text-[11px] font-semibold text-slate-500">饭补金额</p><SmallInput value={String(settings.meal_allowance_amount || 15)} onChange={(v) => setSettings((prev) => ({ ...prev, meal_allowance_amount: Number(v) || 0 }))} type="number" /></div>
               <div><p className="mb-1 text-[11px] font-semibold text-slate-500">自动考勤时区</p><SmallInput value={settings.auto_attendance_timezone || "America/New_York"} onChange={(v) => setSettings((prev) => ({ ...prev, auto_attendance_timezone: v || "America/New_York" }))} /></div>
@@ -4924,25 +5000,10 @@ function EmployeesSection({ employees, setEmployees, attendances, setAttendances
             </div>
             <div className="mt-3 rounded-lg border border-slate-200 bg-slate-50 px-3 py-2 text-xs text-slate-600">自动考勤规则：{settings.auto_attendance_timezone || "America/New_York"} 每天 {settings.auto_attendance_run_time || "01:00"} 为在职员工按工作日自动生成 10 小时考勤，再叠加请假 / 加班修正。</div>
           </PanelCard>
-          <PanelCard title="员工档案" note="员工工号自动递增，支持华人 / 墨西哥人分组筛选。">
-            <div className="mb-3 flex flex-wrap items-center justify-between gap-3"><div className="flex items-center gap-2"><span className="text-xs text-slate-500">员工分组</span><select value={attendanceEthnicityFilter} onChange={(e) => setAttendanceEthnicityFilter(e.target.value)} className="h-8 rounded-lg border border-slate-300 bg-white px-2 text-xs text-slate-700"><option>全部</option>{EMPLOYEE_GROUP_OPTIONS.map((option) => <option key={option}>{option}</option>)}</select></div><div className="text-xs text-slate-500">共 {attendanceEmployeeRows.length} 名员工</div></div>
-            <div className="overflow-x-auto rounded-xl border border-slate-200 bg-white"><table className="w-full text-left text-xs"><thead><tr className="border-b border-slate-200 bg-slate-50"><th className="px-4 py-2.5 font-semibold text-slate-600">工号</th><th className="px-4 py-2.5 font-semibold text-slate-600">姓名</th><th className="px-4 py-2.5 font-semibold text-slate-600">电话</th><th className="px-4 py-2.5 font-semibold text-slate-600">时薪</th><th className="px-4 py-2.5 font-semibold text-slate-600">工作日</th><th className="px-4 py-2.5 font-semibold text-slate-600">饭补资格</th><th className="px-4 py-2.5 font-semibold text-slate-600">分组</th><th className="px-4 py-2.5 font-semibold text-slate-600">操作</th></tr></thead><tbody>{attendanceEmployeeRows.map((item) => <tr key={item.id} className="border-b border-slate-100 last:border-b-0"><td className="px-4 py-2.5 font-medium text-slate-700">{item.code}</td><td className="px-4 py-2.5 text-slate-700">{item.name}</td><td className="px-4 py-2.5 text-slate-600">{item.phone || "-"}</td><td className="px-4 py-2.5 text-slate-700">{formatMoney(item.hourly_rate || 0)}</td><td className="px-4 py-2.5 text-slate-600">{(item.workdays || []).map((day) => WORKDAY_OPTIONS.find((option) => option.key === day)?.label || day).join("、")}</td><td className="px-4 py-2.5 text-slate-600">{item.meal_allowance_eligible ? "可用" : "关闭"}</td><td className="px-4 py-2.5 text-slate-600">{item.ethnicity}</td><td className="px-4 py-2.5"><ActionBtn onClick={() => openEditEmployee(item)}>编辑</ActionBtn></td></tr>)}</tbody></table></div>
-          </PanelCard>
-          <div className="flex flex-wrap items-center gap-2"><SegmentedControl options={[{ key: "today", label: "今天" }, { key: "thisWeek", label: "本周" }, { key: "lastWeek", label: "上周" }]} value={attendanceFilter} onChange={setAttendanceFilter} /><span className="text-xs text-slate-500">{attendanceRange.start} ~ {attendanceRange.end}</span></div>
-          <PanelCard title="考勤公式" note="当天工作时长 = 10小时 + 加班时长 - 请假时长。工时小于等于 5 小时时强制取消饭补。"><div className="text-xs text-slate-500">缺失考勤会按员工工作日和 1 AM 自动规则补齐，支持逐行人工修正。</div></PanelCard>
-          <div className="overflow-x-auto rounded-xl border border-slate-200 bg-white"><table className="w-full text-left text-xs"><thead><tr className="border-b border-slate-200 bg-slate-50"><th className="px-3 py-2.5 font-semibold text-slate-600">日期</th><th className="px-3 py-2.5 font-semibold text-slate-600">工号</th><th className="px-3 py-2.5 font-semibold text-slate-600">人名</th><th className="px-3 py-2.5 font-semibold text-slate-600">工作时长</th><th className="px-3 py-2.5 font-semibold text-slate-600">请假时长</th><th className="px-3 py-2.5 font-semibold text-slate-600">加班时长</th><th className="px-3 py-2.5 font-semibold text-slate-600">饭补</th><th className="px-3 py-2.5 font-semibold text-slate-600">操作</th></tr></thead><tbody>{attendanceRows.map((item) => { const employee = normalizedEmployees.find((row) => row.id === item.employee_id || row.name === item.employee_name); const editing = editingAttendanceId === item.id; return <tr key={item.id} className="border-b border-slate-100 last:border-b-0"><td className="px-3 py-2.5 text-slate-600">{item.date}</td><td className="px-3 py-2.5 text-slate-700">{item.employee_code || employee?.code || "-"}</td><td className="px-3 py-2.5 font-medium text-slate-700">{item.employee_name}</td><td className="px-3 py-2.5 text-slate-700">{formatMinutes(item.worked_minutes)}</td>{editing ? <><td className="px-3 py-2.5"><SmallInput value={String(item.leave_minutes)} onChange={(v) => setAttendanceField(item.id, "leave_minutes", Number(v) || 0)} type="number" /></td><td className="px-3 py-2.5"><SmallInput value={String(item.overtime_minutes)} onChange={(v) => setAttendanceField(item.id, "overtime_minutes", Number(v) || 0)} type="number" /></td><td className="px-3 py-2.5"><label className="flex items-center gap-2 text-slate-600"><input type="checkbox" checked={item.meal_allowance} disabled={item.worked_minutes <= 300 || !employee?.meal_allowance_eligible} onChange={(e) => setAttendanceField(item.id, "meal_allowance", e.target.checked)} /> 饭补</label></td><td className="px-3 py-2.5"><div className="flex gap-2"><ActionBtn tone="success" onClick={() => setEditingAttendanceId(null)}>完成</ActionBtn><ActionBtn onClick={() => setEditingAttendanceId(null)}>取消</ActionBtn></div></td></> : <><td className="px-3 py-2.5 text-slate-600">{formatMinutes(item.leave_minutes)}</td><td className="px-3 py-2.5 text-slate-600">{formatMinutes(item.overtime_minutes)}</td><td className="px-3 py-2.5 text-slate-600">{item.meal_allowance ? `是 · ${formatMoney(settings.meal_allowance_amount || 0)}` : "否"}</td><td className="px-3 py-2.5"><ActionBtn onClick={() => setEditingAttendanceId(item.id)}>编辑</ActionBtn></td></>}</tr>; })}</tbody></table></div>
         </div>
-      )}
+      ) : null}
 
-      {sub === "payroll" && (
-        <div className="space-y-4">
-          <div className="flex flex-wrap items-center gap-3"><SegmentedControl options={[{ key: "lastWeek", label: "上周" }, { key: "thisWeek", label: "本周" }]} value={payrollWeekFilter} onChange={setPayrollWeekFilter} /><div className="flex items-center gap-2"><span className="text-xs text-slate-500">分组</span><select value={payrollEthnicityFilter} onChange={(e) => setPayrollEthnicityFilter(e.target.value)} className="h-8 rounded-lg border border-slate-300 bg-white px-2 text-xs text-slate-700"><option>全部</option>{EMPLOYEE_GROUP_OPTIONS.map((option) => <option key={option}>{option}</option>)}</select></div><span className="text-xs text-slate-500">{payrollRange.start} ~ {payrollRange.end}</span></div>
-          <PanelCard title="工资说明" note={`工资 = 总工时 × 时薪 + 饭补次数 × ${formatMoney(settings.meal_allowance_amount || 0)}。点击一键发放后，会自动落一笔“工资”支出。`}><div className="text-xs text-slate-500">周维度只保留本周 / 上周两档，默认上周。</div></PanelCard>
-          <div className="overflow-x-auto rounded-xl border border-slate-200 bg-white"><table className="w-full text-left text-xs"><thead><tr className="border-b border-slate-200 bg-slate-50"><th className="px-4 py-2.5 font-semibold text-slate-600">姓名</th><th className="px-4 py-2.5 font-semibold text-slate-600">时薪</th><th className="px-4 py-2.5 font-semibold text-slate-600">总工时</th><th className="px-4 py-2.5 font-semibold text-slate-600">应发工资</th><th className="px-4 py-2.5 font-semibold text-slate-600">是否已发放工资</th></tr></thead><tbody>{payrollRows.map((item) => <tr key={item.employee.id} className="border-b border-slate-100 last:border-b-0"><td className="px-4 py-2.5 font-medium text-slate-700">{item.employee.name}</td><td className="px-4 py-2.5 text-slate-700">{formatMoney(item.hourlyRate)}</td><td className="px-4 py-2.5 text-slate-600">{formatMinutes(item.totalMinutes)}</td><td className="px-4 py-2.5 font-semibold text-slate-800">{formatMoney(item.wage)}</td><td className="px-4 py-2.5 text-slate-600">{item.paid ? "已发放" : "未发放"}</td></tr>)}</tbody></table></div>
-        </div>
-      )}
-
-      {showAttendanceModal ? <div className="fixed inset-0 z-50 flex items-center justify-center bg-slate-950/45 px-4"><div className="w-full max-w-xl rounded-2xl border border-slate-200 bg-white p-5 shadow-2xl"><div className="mb-4 flex items-start justify-between gap-3"><div><h3 className="text-base font-semibold text-slate-900">手工补录考勤</h3><p className="mt-1 text-sm text-slate-500">可直接指定员工和日期，覆盖当天已有记录。</p></div><button onClick={() => setShowAttendanceModal(false)} className="rounded-lg border border-slate-200 px-2.5 py-1 text-xs text-slate-500 hover:border-slate-300 hover:text-slate-700 transition-colors">关闭</button></div><div className="grid gap-3 sm:grid-cols-2"><div><p className="mb-1 text-[11px] font-semibold text-slate-500">员工</p><SmallSelect value={attendanceDraft.employee_id} onChange={(v) => setAttendanceDraft((draft) => ({ ...draft, employee_id: v }))} options={normalizedEmployees.map((item) => item.id)} labels={Object.fromEntries(normalizedEmployees.map((item) => [item.id, `${item.code} · ${item.name}`]))} /></div><div><p className="mb-1 text-[11px] font-semibold text-slate-500">日期</p><SmallInput value={attendanceDraft.date} onChange={(v) => setAttendanceDraft((draft) => ({ ...draft, date: v }))} type="date" /></div><div><p className="mb-1 text-[11px] font-semibold text-slate-500">请假时长（分钟）</p><SmallInput value={attendanceDraft.leave_minutes} onChange={(v) => setAttendanceDraft((draft) => ({ ...draft, leave_minutes: v }))} type="number" /></div><div><p className="mb-1 text-[11px] font-semibold text-slate-500">加班时长（分钟）</p><SmallInput value={attendanceDraft.overtime_minutes} onChange={(v) => setAttendanceDraft((draft) => ({ ...draft, overtime_minutes: v }))} type="number" /></div></div><div className="mt-3 rounded-lg border border-slate-200 bg-slate-50 px-3 py-2 text-xs text-slate-600">计算后工作时长：{formatMinutes(calcWorkedMinutes(Number(attendanceDraft.leave_minutes) || 0, Number(attendanceDraft.overtime_minutes) || 0))}</div><div className="mt-5 flex justify-end gap-2"><ActionBtn onClick={() => setShowAttendanceModal(false)}>取消</ActionBtn><ActionBtn tone="primary" onClick={saveAttendanceDraft}>保存考勤</ActionBtn></div></div></div> : null}{showEmployeeModal ? <div className="fixed inset-0 z-50 flex items-center justify-center bg-slate-950/45 px-4"><div className="w-full max-w-3xl rounded-2xl border border-slate-200 bg-white p-5 shadow-2xl"><div className="mb-4 flex items-start justify-between gap-3"><div><h3 className="text-base font-semibold text-slate-900">{editingEmployeeId ? "编辑员工" : "新建员工"}</h3><p className="mt-1 text-sm text-slate-500">工号自动递增，从 001 开始。</p></div><button onClick={() => setShowEmployeeModal(false)} className="rounded-lg border border-slate-200 px-2.5 py-1 text-xs text-slate-500 hover:border-slate-300 hover:text-slate-700 transition-colors">关闭</button></div><div className="grid gap-3 sm:grid-cols-2 xl:grid-cols-3"><div><p className="mb-1 text-[11px] font-semibold text-slate-500">姓名</p><SmallInput value={employeeDraft.name} onChange={(v) => setEmployeeDraft((draft) => ({ ...draft, name: v }))} /></div><div><p className="mb-1 text-[11px] font-semibold text-slate-500">电话</p><SmallInput value={employeeDraft.phone} onChange={(v) => setEmployeeDraft((draft) => ({ ...draft, phone: v }))} /></div><div><p className="mb-1 text-[11px] font-semibold text-slate-500">时薪</p><SmallInput value={employeeDraft.hourly_rate} onChange={(v) => setEmployeeDraft((draft) => ({ ...draft, hourly_rate: v }))} type="number" /></div><div><p className="mb-1 text-[11px] font-semibold text-slate-500">分组</p><SmallSelect value={employeeDraft.ethnicity} onChange={(v) => setEmployeeDraft((draft) => ({ ...draft, ethnicity: v }))} options={[...EMPLOYEE_GROUP_OPTIONS]} /></div><div><p className="mb-1 text-[11px] font-semibold text-slate-500">入职日期</p><SmallInput value={employeeDraft.hire_date} onChange={(v) => setEmployeeDraft((draft) => ({ ...draft, hire_date: v }))} type="date" /></div><div><p className="mb-1 text-[11px] font-semibold text-slate-500">合同到期</p><SmallInput value={employeeDraft.contract_end} onChange={(v) => setEmployeeDraft((draft) => ({ ...draft, contract_end: v }))} type="date" /></div></div><div className="mt-4"><p className="mb-2 text-[11px] font-semibold text-slate-500">工作日</p><div className="flex flex-wrap gap-2">{WORKDAY_OPTIONS.map((option) => { const checked = employeeDraft.workdays.includes(option.key); return <label key={option.key} className={`rounded-lg border px-3 py-2 text-xs ${checked ? "border-blue-300 bg-blue-50 text-blue-700" : "border-slate-200 bg-white text-slate-600"}`}><input type="checkbox" className="mr-2" checked={checked} onChange={(e) => setEmployeeDraft((draft) => ({ ...draft, workdays: e.target.checked ? [...draft.workdays, option.key] : draft.workdays.filter((day) => day !== option.key) }))} />{option.label}</label>; })}</div></div><label className="mt-4 flex items-center gap-2 text-xs text-slate-600"><input type="checkbox" checked={employeeDraft.meal_allowance_eligible} onChange={(e) => setEmployeeDraft((draft) => ({ ...draft, meal_allowance_eligible: e.target.checked }))} /> 饭补资格</label><div className="mt-5 flex justify-end gap-2"><ActionBtn onClick={() => setShowEmployeeModal(false)}>取消</ActionBtn><ActionBtn tone="primary" onClick={saveEmployee}>保存员工</ActionBtn></div></div></div> : null}
+      {showAttendanceModal ? <div className="fixed inset-0 z-50 flex items-center justify-center bg-slate-950/45 px-4"><div className="w-full max-w-xl rounded-2xl border border-slate-200 bg-white p-5 shadow-2xl"><div className="mb-4 flex items-start justify-between gap-3"><div><h3 className="text-base font-semibold text-slate-900">手工补录考勤</h3><p className="mt-1 text-sm text-slate-500">可直接指定员工和日期，覆盖当天已有记录。</p></div><button onClick={() => setShowAttendanceModal(false)} className="rounded-lg border border-slate-200 px-2.5 py-1 text-xs text-slate-500 hover:border-slate-300 hover:text-slate-700 transition-colors">关闭</button></div><div className="grid gap-3 sm:grid-cols-2"><div><p className="mb-1 text-[11px] font-semibold text-slate-500">员工</p><SmallSelect value={attendanceDraft.employee_id} onChange={(v) => setAttendanceDraft((draft) => ({ ...draft, employee_id: v }))} options={normalizedEmployees.map((item) => item.id)} labels={Object.fromEntries(normalizedEmployees.map((item) => [item.id, `${item.code} · ${item.name}`]))} /></div><div><p className="mb-1 text-[11px] font-semibold text-slate-500">日期</p><SmallInput value={attendanceDraft.date} onChange={(v) => setAttendanceDraft((draft) => ({ ...draft, date: v }))} type="date" /></div><div><p className="mb-1 text-[11px] font-semibold text-slate-500">请假时长（分钟）</p><SmallInput value={attendanceDraft.leave_minutes} onChange={(v) => setAttendanceDraft((draft) => ({ ...draft, leave_minutes: v }))} type="number" /></div><div><p className="mb-1 text-[11px] font-semibold text-slate-500">加班时长（分钟）</p><SmallInput value={attendanceDraft.overtime_minutes} onChange={(v) => setAttendanceDraft((draft) => ({ ...draft, overtime_minutes: v }))} type="number" /></div></div><div className="mt-3 rounded-lg border border-slate-200 bg-slate-50 px-3 py-2 text-xs text-slate-600">计算后工作时长：{formatMinutes(calcWorkedMinutes(Number(attendanceDraft.leave_minutes) || 0, Number(attendanceDraft.overtime_minutes) || 0))}</div><div className="mt-5 flex justify-end gap-2"><ActionBtn onClick={() => setShowAttendanceModal(false)}>取消</ActionBtn><ActionBtn tone="primary" onClick={saveAttendanceDraft}>保存考勤</ActionBtn></div></div></div> : null}{showEmployeeModal ? <div className="fixed inset-0 z-50 flex items-center justify-center bg-slate-950/45 px-4"><div className="w-full max-w-3xl rounded-2xl border border-slate-200 bg-white p-5 shadow-2xl"><div className="mb-4 flex items-start justify-between gap-3"><div><h3 className="text-base font-semibold text-slate-900">{editingEmployeeId ? "编辑员工" : "新建员工"}</h3><p className="mt-1 text-sm text-slate-500">工号自动递增，从 001 开始。</p></div><button onClick={() => setShowEmployeeModal(false)} className="rounded-lg border border-slate-200 px-2.5 py-1 text-xs text-slate-500 hover:border-slate-300 hover:text-slate-700 transition-colors">关闭</button></div><div className="grid gap-3 sm:grid-cols-2 xl:grid-cols-3"><div><p className="mb-1 text-[11px] font-semibold text-slate-500">姓名</p><SmallInput value={employeeDraft.name} onChange={(v) => setEmployeeDraft((draft) => ({ ...draft, name: v }))} /></div><div><p className="mb-1 text-[11px] font-semibold text-slate-500">职位</p><SmallInput value={employeeDraft.position} onChange={(v) => setEmployeeDraft((draft) => ({ ...draft, position: v }))} /></div><div><p className="mb-1 text-[11px] font-semibold text-slate-500">电话</p><SmallInput value={employeeDraft.phone} onChange={(v) => setEmployeeDraft((draft) => ({ ...draft, phone: v }))} /></div><div><p className="mb-1 text-[11px] font-semibold text-slate-500">时薪</p><SmallInput value={employeeDraft.hourly_rate} onChange={(v) => setEmployeeDraft((draft) => ({ ...draft, hourly_rate: v }))} type="number" /></div><div><p className="mb-1 text-[11px] font-semibold text-slate-500">分组</p><SmallSelect value={employeeDraft.ethnicity} onChange={(v) => setEmployeeDraft((draft) => ({ ...draft, ethnicity: v }))} options={[...EMPLOYEE_GROUP_OPTIONS]} /></div></div><div className="mt-4"><p className="mb-2 text-[11px] font-semibold text-slate-500">工作日</p><div className="flex flex-wrap gap-2">{WORKDAY_OPTIONS.map((option) => { const checked = employeeDraft.workdays.includes(option.key); return <label key={option.key} className={`rounded-lg border px-3 py-2 text-xs ${checked ? "border-blue-300 bg-blue-50 text-blue-700" : "border-slate-200 bg-white text-slate-600"}`}><input type="checkbox" className="mr-2" checked={checked} onChange={(e) => setEmployeeDraft((draft) => ({ ...draft, workdays: e.target.checked ? [...draft.workdays, option.key] : draft.workdays.filter((day) => day !== option.key) }))} />{option.label}</label>; })}</div></div><label className="mt-4 flex items-center gap-2 text-xs text-slate-600"><input type="checkbox" checked={employeeDraft.meal_allowance_eligible} onChange={(e) => setEmployeeDraft((draft) => ({ ...draft, meal_allowance_eligible: e.target.checked }))} /> 饭补资格</label><div className="mt-5 flex justify-end gap-2"><ActionBtn onClick={() => setShowEmployeeModal(false)}>取消</ActionBtn><ActionBtn tone="primary" onClick={saveEmployee}>保存员工</ActionBtn></div></div></div> : null}
     </div>
   );
 }

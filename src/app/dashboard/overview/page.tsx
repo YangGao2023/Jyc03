@@ -218,6 +218,11 @@ export default async function DashboardOverviewPage() {
           <div className="rounded-2xl border border-white/10 bg-white/5 p-4"><p className="text-[11px] uppercase tracking-[0.2em] text-slate-400">待消费 Wake</p><p className="mt-2 text-2xl font-semibold text-white">{pendingWakeCount}</p><p className="mt-1 text-xs text-slate-400">等待 agent 拿走</p></div>
           <div className="rounded-2xl border border-white/10 bg-white/5 p-4"><p className="text-[11px] uppercase tracking-[0.2em] text-slate-400">Watchdog 告警</p><p className="mt-2 text-2xl font-semibold text-white">{alerts.length}</p><p className="mt-1 text-xs text-slate-400">超时/阻塞 {overduePromises + blockedPromises}</p></div>
         </div>
+
+        <div className="mt-4 flex flex-wrap gap-2">
+          <a href="/dashboard/tasks" className="rounded-full border border-white/10 px-3 py-1.5 text-xs font-semibold text-sky-200 hover:bg-white/10">去任务页处理</a>
+          <a href="/dashboard/system" className="rounded-full border border-white/10 px-3 py-1.5 text-xs font-semibold text-sky-200 hover:bg-white/10">去系统页排查</a>
+        </div>
       </div>
 
       <div className="mt-4 grid gap-4 xl:grid-cols-[1.1fr_0.9fr]">

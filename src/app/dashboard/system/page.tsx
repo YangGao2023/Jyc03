@@ -355,6 +355,17 @@ function discussionStatusBadge(status: DiscussionStatus) {
   return "bg-emerald-100 text-emerald-800";
 }
 
+function discussionClosureSource(thread: DiscussionThread) {
+  const summary = String(thread.summary || "").trim();
+  if (summary.includes("自动收口")) {
+    return { label: "自动收口", tone: "bg-emerald-100 text-emerald-800" };
+  }
+  if (thread.status === "closed") {
+    return { label: "手动收口", tone: "bg-slate-200 text-slate-700" };
+  }
+  return null;
+}
+
 function identityChip(name: string) {
   const normalized = String(name || "").trim();
   if (normalized === "阿三") {
@@ -587,12 +598,14 @@ export default async function DashboardSystemPage() {
               <div className="mt-3 space-y-2">
                 {discussionThreads.length > 0 ? discussionThreads.map((thread) => {
                   const effectiveStatus = deriveDiscussionStatus(thread, inboxMessages);
+                  const closureSource = discussionClosureSource(thread);
                   return (
                   <details key={thread.id} className="rounded-2xl border border-slate-200 bg-white p-3">
                     <summary className="cursor-pointer list-none">
                       <div className="flex flex-wrap items-center gap-2">
                         <span className="text-[11px] text-slate-500">{formatEasternTime(thread.updatedAt)}</span>
                         <span className={`rounded-full px-2 py-0.5 text-[10px] font-semibold ${discussionStatusBadge(effectiveStatus)}`}>{summarizeDiscussionStatus(effectiveStatus)}</span>
+                        {closureSource ? <span className={`rounded-full px-2 py-0.5 text-[10px] font-semibold ${closureSource.tone}`}>{closureSource.label}</span> : null}
                         <span className="rounded-full bg-slate-200 px-2 py-0.5 text-[10px] font-semibold text-slate-700">{thread.participants.join(" / ")}</span>
                       </div>
                       <p className="mt-1.5 text-xs font-semibold leading-5 text-slate-800">{thread.title}</p>
@@ -625,6 +638,7 @@ export default async function DashboardSystemPage() {
                 const participantStates = buildDiscussionParticipantStates(thread, outboxMessages, inboxMessages);
                 const effectiveStatus = deriveDiscussionStatus(thread, inboxMessages);
                 const typingParticipants = buildTypingParticipants(thread, inboxMessages);
+                const closureSource = discussionClosureSource(thread);
                 return (
                   <div key={thread.id} className="rounded-2xl border border-slate-200 bg-slate-50 p-4">
                     <div className="flex items-center justify-between gap-3">
@@ -632,7 +646,10 @@ export default async function DashboardSystemPage() {
                         <p className="text-sm font-semibold text-slate-900">{thread.title}</p>
                         <p className="mt-1 text-[11px] text-slate-500">topicId: {thread.id} · {thread.participants.join(" / ")}</p>
                       </div>
-                      <span className={`rounded-full px-2.5 py-0.5 text-[10px] font-semibold ${discussionStatusBadge(effectiveStatus)}`}>{summarizeDiscussionStatus(effectiveStatus)}</span>
+                      <div className="flex flex-wrap items-center gap-2">
+                        <span className={`rounded-full px-2.5 py-0.5 text-[10px] font-semibold ${discussionStatusBadge(effectiveStatus)}`}>{summarizeDiscussionStatus(effectiveStatus)}</span>
+                        {closureSource ? <span className={`rounded-full px-2.5 py-0.5 text-[10px] font-semibold ${closureSource.tone}`}>{closureSource.label}</span> : null}
+                      </div>
                     </div>
                     <div className="mt-3 flex flex-wrap gap-2">
                       {participantStates.map((item) => {

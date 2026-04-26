@@ -2767,10 +2767,14 @@ function ClientsSection({ clients, setClients, suppliers, setSuppliers, orders, 
     : filteredClients[0]?.id ?? clients[0]?.id ?? "";
   const selectedClient = filteredClients.find((item) => item.id === resolvedSelectedClientId) ?? clients.find((item) => item.id === resolvedSelectedClientId) ?? filteredClients[0] ?? clients[0] ?? null;
   const selectedClientOrders = selectedClient
-    ? [...orders].filter((item) => item.client_name === selectedClient.name).sort((a, b) => String(b.order_date ?? "").localeCompare(String(a.order_date ?? "")))
+    ? [...orders]
+        .filter((item) => item.client_name === selectedClient.name || (!!selectedClient.phone && item.phone === selectedClient.phone))
+        .sort((a, b) => String(b.order_date ?? "").localeCompare(String(a.order_date ?? "")))
     : [];
   const selectedClientAppointments = selectedClient
-    ? [...appointments].filter((item) => item.client_id === selectedClient.id || item.client_name === selectedClient.name).sort((a, b) => String(b.appointment_date).localeCompare(String(a.appointment_date)))
+    ? [...appointments]
+        .filter((item) => item.client_id === selectedClient.id || item.client_name === selectedClient.name || (!!selectedClient.phone && item.phone === selectedClient.phone))
+        .sort((a, b) => String(b.appointment_date).localeCompare(String(a.appointment_date)))
     : [];
   const selectedClientQuotes = selectedClient
     ? [...quotes].filter((item) => item.client_name === selectedClient.name).sort((a, b) => String(b.created_at).localeCompare(String(a.created_at)))
@@ -2778,10 +2782,51 @@ function ClientsSection({ clients, setClients, suppliers, setSuppliers, orders, 
   const clientTotal = selectedClientOrders.reduce((sum, item) => sum + (item.total_after_tax ?? item.total_price ?? 0), 0);
   const clientPaid = selectedClientOrders.reduce((sum, item) => sum + (item.amount_paid ?? 0), 0);
   const clientBalance = selectedClientOrders.reduce((sum, item) => sum + (item.balance ?? 0), 0);
-  const clientCustomOrderCount = selectedClientOrders.filter((item) => item.order_type !== "\u6279\u53d1\u5355").length;
-  const clientWholesaleOrderCount = selectedClientOrders.filter((item) => item.order_type === "\u6279\u53d1\u5355").length;
+  const clientOrderCountWithBalance = selectedClientOrders.filter((item) => (item.balance ?? 0) > 0).length;
+  const clientCustomOrderCount = selectedClientOrders.filter((item) => item.order_type !== "批发单").length;
+  const clientWholesaleOrderCount = selectedClientOrders.filter((item) => item.order_type === "批发单").length;
   const clientLastOrder = selectedClientOrders[0]?.order_date ?? "-";
-  const nextAppointment = [...selectedClientAppointments].filter((item) => getAppointmentStatus(item.appointment_date) !== "\u5df2\u5b8c\u6210").sort((a, b) => String(a.appointment_date).localeCompare(String(b.appointment_date)))[0];
+  const nextAppointment = [...selectedClientAppointments].filter((item) => getAppointmentStatus(item.appointment_date) !== "已完成").sort((a, b) => String(a.appointment_date).localeCompare(String(b.appointment_date)))[0];
+  const clientRecentPayments = selectedClientOrders
+    .flatMap((order) => (order.payment_history ?? []).map((record) => ({
+      ...record,
+      order_number: order.order_number,
+      order_status: order.status ?? "-",
+    })))
+    .sort((a, b) => String(b.date).localeCompare(String(a.date)));
+  const clientLastPayment = clientRecentPayments.find((item) => item.type === "payment");
+  const clientBusinessFeed = [
+    ...selectedClientOrders.map((item) => ({
+      key: `order-${item.order_number}`,
+      date: item.order_date ?? "",
+      label: `订单 ${item.order_number}`,
+      detail: `${item.order_type} · ${item.status ?? "-"} · ${formatMoney(item.total_after_tax ?? item.total_price ?? 0)}`,
+      tone: "text-slate-700",
+    })),
+    ...selectedClientAppointments.map((item) => ({
+      key: `appointment-${item.id}`,
+      date: item.appointment_date,
+      label: "预约",
+      detail: `${formatAppointmentDate(item.appointment_date)} · ${item.address ?? "未填写地址"}`,
+      tone: "text-sky-700",
+    })),
+    ...selectedClientQuotes.map((item) => ({
+      key: `quote-${item.id}`,
+      date: item.created_at,
+      label: `报价 ${item.id}`,
+      detail: `${item.status} · ${formatMoney(item.amount)}`,
+      tone: "text-violet-700",
+    })),
+    ...clientRecentPayments.map((item, index) => ({
+      key: `payment-${item.order_number}-${index}-${item.date}`,
+      date: item.date,
+      label: item.type === "refund" ? `退款 ${item.order_number}` : `收款 ${item.order_number}`,
+      detail: `${item.method} · ${formatMoney(item.amount)}${item.note ? ` · ${item.note}` : ""}`,
+      tone: item.type === "refund" ? "text-rose-700" : "text-emerald-700",
+    })),
+  ]
+    .filter((item) => item.date)
+    .sort((a, b) => String(b.date).localeCompare(String(a.date)));
 
   function selectClient(clientId: string) {
     setSelectedClientId(clientId);
@@ -2811,11 +2856,306 @@ function ClientsSection({ clients, setClients, suppliers, setSuppliers, orders, 
       amount: 0,
       created_at: today,
       valid_until: addDaysIso(today, 7),
-      status: "\u8349\u7a3f",
+      status: "草稿",
     }, ...prev]);
   }
 
-  return <div><SectionHeader eyebrow="Contacts" title="Clients & Suppliers" actions={<><ActionBtn onClick={exportContacts}>Export current</ActionBtn><ActionBtn onClick={printContacts}>Print current</ActionBtn><ActionBtn tone="primary" onClick={sub === "clients" ? addClient : addSupplier}>+ New {sub === "clients" ? "client" : "supplier"}</ActionBtn></>} /><StatStrip items={[{ label: "Clients", value: String(clients.length) }, { label: "VIP clients", value: String(clients.filter((item) => item.is_vip).length), accent: "text-sky-600" }, { label: "Suppliers", value: String(suppliers.length) }, { label: "Clients with balance", value: String(clients.filter((item) => (item.balance ?? 0) > 0).length), accent: "text-amber-600" }]} /><SegmentedControl options={[{ key: "clients", label: "Client directory" }, { key: "suppliers", label: "Suppliers" }]} value={sub} onChange={setSub} />{sub === "clients" ? <div className="space-y-4"><PanelCard title="Quick add client"><div className="grid gap-2 sm:grid-cols-2 xl:grid-cols-3"><SmallInput value={clientDraft.name} onChange={(v) => setClientDraft((d) => ({ ...d, name: v }))} placeholder="Client name" /><SmallInput value={clientDraft.contact} onChange={(v) => setClientDraft((d) => ({ ...d, contact: v }))} placeholder="Contact" /><SmallInput value={clientDraft.phone} onChange={(v) => setClientDraft((d) => ({ ...d, phone: v }))} placeholder="Phone" /><SmallInput value={clientDraft.wechat} onChange={(v) => setClientDraft((d) => ({ ...d, wechat: v }))} placeholder="WeChat / Email" /><SmallInput value={clientDraft.address} onChange={(v) => setClientDraft((d) => ({ ...d, address: v }))} placeholder="Address" /><SmallInput value={clientDraft.note} onChange={(v) => setClientDraft((d) => ({ ...d, note: v }))} placeholder="Note" /></div></PanelCard><div className="grid gap-4 xl:grid-cols-[0.95fr_1.45fr]"><PanelCard title="Client list" note="Imported from the Base44 client row idea, but adapted to the current site as a left list plus linked detail workspace."><div className="space-y-3"><div className="relative"><span className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-400 text-sm">?</span><input value={clientSearch} onChange={(e) => setClientSearch(e.target.value)} placeholder="Search client / phone / address" className="h-9 w-full rounded-lg border border-slate-300 bg-white pl-8 pr-3 text-xs text-slate-700" /></div><div className="max-h-[560px] space-y-2 overflow-y-auto pr-1">{filteredClients.length ? filteredClients.map((item) => { const itemOrders = orders.filter((order) => order.client_name === item.name); const itemBalance = itemOrders.reduce((sum, order) => sum + (order.balance ?? 0), 0); const isActive = selectedClient?.id === item.id; return <button key={item.id} onClick={() => selectClient(item.id)} className={`w-full rounded-xl border p-3 text-left transition-colors ${isActive ? "border-sky-300 bg-sky-50" : "border-slate-200 bg-white hover:border-slate-300 hover:bg-slate-50"}`}><div className="flex items-center justify-between gap-3"><div><div className="flex items-center gap-2"><span className="text-sm font-semibold text-slate-900">{item.name}</span>{item.is_vip ? <span className="rounded-full bg-amber-50 px-2 py-0.5 text-[11px] font-semibold text-amber-700">VIP</span> : null}</div><p className="mt-1 text-[11px] text-slate-500">{item.phone ?? item.contact ?? "No contact yet"}</p></div><span className={`rounded-full px-2 py-0.5 text-[11px] font-semibold ${itemBalance > 0 ? "bg-amber-50 text-amber-700" : "bg-emerald-50 text-emerald-700"}`}>{itemBalance > 0 ? `Balance ${formatMoney(itemBalance)}` : "Clear"}</span></div><div className="mt-2 flex flex-wrap gap-3 text-[11px] text-slate-500"><span>{itemOrders.length} orders</span><span>{appointments.filter((entry) => entry.client_id === item.id || entry.client_name === item.name).length} appointments</span><span>{quotes.filter((entry) => entry.client_name === item.name).length} quotes</span></div></button>; }) : <div className="rounded-xl border border-dashed border-slate-200 py-10 text-center text-sm text-slate-400">No matching clients</div>}</div></div></PanelCard><PanelCard title={selectedClient ? `Client detail ? ${selectedClient.name}` : "Client detail"} note="This lands the missing client detail linkage and client order panel directly inside the current site architecture.">{selectedClient ? <div className="space-y-4"><div className="flex flex-wrap items-start justify-between gap-3 rounded-xl border border-slate-200 bg-slate-50 p-4"><div><div className="flex items-center gap-2"><h3 className="text-base font-semibold text-slate-900">{selectedClient.name}</h3>{selectedClient.is_vip ? <span className="rounded-full bg-sky-100 px-2 py-0.5 text-[11px] font-semibold text-sky-700">VIP client</span> : null}</div><p className="mt-1 text-xs text-slate-500">Contact {selectedClient.contact ?? "-"}, phone {selectedClient.phone ?? "-"}</p><p className="mt-1 text-xs text-slate-500">Address {selectedClient.address ?? "Not filled"}</p><p className="mt-1 text-xs text-slate-500">WeChat/email {selectedClient.wechat ?? selectedClient.email ?? "Not filled"}</p></div><div className="flex flex-wrap gap-2"><ActionBtn onClick={() => toggleVip(selectedClient.id)}>{selectedClient.is_vip ? "Remove VIP" : "Set VIP"}</ActionBtn><ActionBtn onClick={() => createClientAppointment(selectedClient)}>+ Quick appointment</ActionBtn><ActionBtn onClick={() => createClientQuote(selectedClient)}>+ Quick quote</ActionBtn></div></div><StatStrip items={[{ label: "Orders", value: String(selectedClientOrders.length) }, { label: "Custom / wholesale", value: `${clientCustomOrderCount} / ${clientWholesaleOrderCount}` }, { label: "Gross value", value: formatMoney(clientTotal), accent: "text-slate-800" }, { label: "Paid / balance", value: `${formatMoney(clientPaid)} / ${formatMoney(clientBalance)}`, accent: clientBalance > 0 ? "text-amber-600" : "text-emerald-600" }]} /><div className="grid gap-4 lg:grid-cols-3"><div className="rounded-xl border border-slate-200 bg-white p-4"><p className="text-[11px] uppercase tracking-[0.2em] text-slate-400">Account status</p><div className="mt-3 space-y-3 text-sm"><div className="flex items-center justify-between"><span className="text-slate-500">Last order</span><span className="font-medium text-slate-900">{clientLastOrder}</span></div><div className="flex items-center justify-between"><span className="text-slate-500">Next appointment</span><span className="font-medium text-slate-900">{nextAppointment ? formatAppointmentDate(nextAppointment.appointment_date) : "None"}</span></div><div className="flex items-center justify-between"><span className="text-slate-500">Latest quote</span><span className="font-medium text-slate-900">{selectedClientQuotes[0]?.status ?? "None"}</span></div><div className="flex items-center justify-between"><span className="text-slate-500">Notes</span><span className="max-w-[180px] text-right text-slate-900">{selectedClient.note ?? "-"}</span></div></div></div><div className="rounded-xl border border-slate-200 bg-white p-4 lg:col-span-2"><div className="mb-3 flex items-center justify-between"><p className="text-sm font-semibold text-slate-900">Linked orders</p><span className="text-[11px] text-slate-400">Balance and status stay in sync</span></div>{selectedClientOrders.length ? <div className="overflow-x-auto"><table className="w-full text-left text-xs"><thead><tr className="border-b border-slate-200 bg-slate-50"><th className="px-3 py-2 font-semibold text-slate-600">Order</th><th className="px-3 py-2 font-semibold text-slate-600">Type</th><th className="px-3 py-2 font-semibold text-slate-600">Date</th><th className="px-3 py-2 font-semibold text-slate-600">Gross</th><th className="px-3 py-2 font-semibold text-slate-600">Paid</th><th className="px-3 py-2 font-semibold text-slate-600">Balance</th><th className="px-3 py-2 font-semibold text-slate-600">Status</th></tr></thead><tbody>{selectedClientOrders.slice(0, 8).map((item) => <tr key={item.order_number} className="border-b border-slate-100 last:border-b-0"><td className="px-3 py-2 font-medium text-slate-700">{item.order_number}</td><td className="px-3 py-2 text-slate-600">{item.order_type}</td><td className="px-3 py-2 text-slate-500">{item.order_date ?? "-"}</td><td className="px-3 py-2 text-slate-700">{formatMoney(item.total_after_tax ?? item.total_price ?? 0)}</td><td className="px-3 py-2 text-emerald-600">{formatMoney(item.amount_paid ?? 0)}</td><td className={`px-3 py-2 font-semibold ${(item.balance ?? 0) > 0 ? "text-amber-600" : "text-slate-700"}`}>{formatMoney(item.balance ?? 0)}</td><td className="px-3 py-2 text-slate-600">{item.status ?? "-"}</td></tr>)}</tbody></table></div> : <div className="rounded-xl border border-dashed border-slate-200 py-10 text-center text-sm text-slate-400">This client has no linked orders yet</div>}</div></div><div className="grid gap-4 lg:grid-cols-2"><div className="rounded-xl border border-slate-200 bg-white p-4"><div className="mb-3 flex items-center justify-between"><p className="text-sm font-semibold text-slate-900">Appointments</p><span className="text-[11px] text-slate-400">Linked from client detail</span></div>{selectedClientAppointments.length ? <div className="space-y-2">{selectedClientAppointments.slice(0, 5).map((item) => { const status = getAppointmentStatus(item.appointment_date); return <div key={item.id} className="rounded-lg border border-slate-200 px-3 py-2"><div className="flex items-center justify-between gap-2"><span className="text-xs font-medium text-slate-800">{formatAppointmentDate(item.appointment_date)}</span><AppointmentStatusBadge status={status} /></div><p className="mt-1 text-[11px] text-slate-500">{item.address ?? "No address"}</p><p className="mt-1 text-[11px] text-slate-400">{item.description ?? "No note"}</p></div>; })}</div> : <div className="rounded-xl border border-dashed border-slate-200 py-10 text-center text-sm text-slate-400">No appointments yet</div>}</div><div className="rounded-xl border border-slate-200 bg-white p-4"><div className="mb-3 flex items-center justify-between"><p className="text-sm font-semibold text-slate-900">Quotes</p><span className="text-[11px] text-slate-400">Client quote panel</span></div>{selectedClientQuotes.length ? <div className="space-y-2">{selectedClientQuotes.slice(0, 5).map((item) => <div key={item.id} className="rounded-lg border border-slate-200 px-3 py-2"><div className="flex items-center justify-between gap-2"><span className="text-xs font-medium text-slate-800">{item.title}</span><span className="rounded-full bg-slate-100 px-2 py-0.5 text-[11px] font-semibold text-slate-600">{item.status}</span></div><div className="mt-1 flex items-center justify-between text-[11px] text-slate-500"><span>{item.created_at}</span><span className="font-semibold text-slate-800">{formatMoney(item.amount)}</span></div><p className="mt-1 text-[11px] text-slate-400">Valid until {item.valid_until}</p></div>)}</div> : <div className="rounded-xl border border-dashed border-slate-200 py-10 text-center text-sm text-slate-400">No quotes yet</div>}</div></div></div> : <div className="rounded-xl border border-dashed border-slate-200 py-16 text-center text-sm text-slate-400">Select a client on the left to view linked details</div>}</PanelCard></div></div> : <div className="space-y-4"><PanelCard title="Quick add supplier"><div className="grid gap-2 sm:grid-cols-2 xl:grid-cols-3"><SmallInput value={supplierDraft.name} onChange={(v) => setSupplierDraft((d) => ({ ...d, name: v }))} placeholder="Supplier name" /><SmallSelect value={supplierDraft.category} onChange={(v) => setSupplierDraft((d) => ({ ...d, category: v }))} options={["Fabric", "Hardware", "Glass", "Logistics", "Other"]} /><SmallInput value={supplierDraft.contact_person} onChange={(v) => setSupplierDraft((d) => ({ ...d, contact_person: v }))} placeholder="Contact" /><SmallInput value={supplierDraft.phone} onChange={(v) => setSupplierDraft((d) => ({ ...d, phone: v }))} placeholder="Phone" /><SmallInput value={supplierDraft.address} onChange={(v) => setSupplierDraft((d) => ({ ...d, address: v }))} placeholder="Address" /><SmallInput value={supplierDraft.remark} onChange={(v) => setSupplierDraft((d) => ({ ...d, remark: v }))} placeholder="Remark" /></div></PanelCard><div className="overflow-x-auto rounded-xl border border-slate-200 bg-white"><table className="w-full text-left text-xs"><thead><tr className="border-b border-slate-200 bg-slate-50"><th className="px-4 py-2.5 font-semibold text-slate-600">Supplier name</th><th className="px-4 py-2.5 font-semibold text-slate-600">Category</th><th className="px-4 py-2.5 font-semibold text-slate-600">Contact</th><th className="px-4 py-2.5 font-semibold text-slate-600">Phone</th><th className="px-4 py-2.5 font-semibold text-slate-600">Address</th><th className="px-4 py-2.5 font-semibold text-slate-600">Last purchase</th><th className="px-4 py-2.5 font-semibold text-slate-600">Remark</th></tr></thead><tbody>{suppliers.map((item) => <tr key={item.id} className="border-b border-slate-100 last:border-b-0"><td className="px-4 py-2.5 font-medium text-slate-700">{item.name}</td><td className="px-4 py-2.5 text-slate-600">{item.category ?? "-"}</td><td className="px-4 py-2.5 text-slate-600">{item.contact_person ?? "-"}</td><td className="px-4 py-2.5 text-slate-600">{item.phone ?? "-"}</td><td className="px-4 py-2.5 text-slate-500">{item.address ?? "-"}</td><td className="px-4 py-2.5 text-slate-500">{item.last_purchase_date ?? "-"}</td><td className="px-4 py-2.5 text-slate-500">{item.remark ?? "-"}</td></tr>)}</tbody></table></div></div>}</div>;
+  return (
+    <div>
+      <SectionHeader
+        eyebrow="Contacts"
+        title="Clients & Suppliers"
+        actions={
+          <>
+            <ActionBtn onClick={exportContacts}>Export current</ActionBtn>
+            <ActionBtn onClick={printContacts}>Print current</ActionBtn>
+            <ActionBtn tone="primary" onClick={sub === "clients" ? addClient : addSupplier}>
+              + New {sub === "clients" ? "client" : "supplier"}
+            </ActionBtn>
+          </>
+        }
+      />
+
+      <StatStrip
+        items={[
+          { label: "Clients", value: String(clients.length) },
+          { label: "VIP clients", value: String(clients.filter((item) => item.is_vip).length), accent: "text-sky-600" },
+          { label: "Suppliers", value: String(suppliers.length) },
+          { label: "Clients with balance", value: String(clients.filter((item) => (item.balance ?? 0) > 0).length), accent: "text-amber-600" },
+        ]}
+      />
+
+      <SegmentedControl options={[{ key: "clients", label: "Client directory" }, { key: "suppliers", label: "Suppliers" }]} value={sub} onChange={setSub} />
+
+      {sub === "clients" ? (
+        <div className="space-y-4">
+          <PanelCard title="Quick add client">
+            <div className="grid gap-2 sm:grid-cols-2 xl:grid-cols-3">
+              <SmallInput value={clientDraft.name} onChange={(v) => setClientDraft((d) => ({ ...d, name: v }))} placeholder="Client name" />
+              <SmallInput value={clientDraft.contact} onChange={(v) => setClientDraft((d) => ({ ...d, contact: v }))} placeholder="Contact" />
+              <SmallInput value={clientDraft.phone} onChange={(v) => setClientDraft((d) => ({ ...d, phone: v }))} placeholder="Phone" />
+              <SmallInput value={clientDraft.wechat} onChange={(v) => setClientDraft((d) => ({ ...d, wechat: v }))} placeholder="WeChat / Email" />
+              <SmallInput value={clientDraft.address} onChange={(v) => setClientDraft((d) => ({ ...d, address: v }))} placeholder="Address" />
+              <SmallInput value={clientDraft.note} onChange={(v) => setClientDraft((d) => ({ ...d, note: v }))} placeholder="Note" />
+            </div>
+          </PanelCard>
+
+          <div className="grid gap-4 xl:grid-cols-[0.95fr_1.45fr]">
+            <PanelCard title="Client list" note="Open a client once, then read orders, appointments, collection status, contacts, and address in one linked workspace.">
+              <div className="space-y-3">
+                <div className="relative">
+                  <span className="absolute left-3 top-1/2 -translate-y-1/2 text-sm text-slate-400">⌕</span>
+                  <input value={clientSearch} onChange={(e) => setClientSearch(e.target.value)} placeholder="Search client / phone / address" className="h-9 w-full rounded-lg border border-slate-300 bg-white pl-8 pr-3 text-xs text-slate-700" />
+                </div>
+                <div className="max-h-[560px] space-y-2 overflow-y-auto pr-1">
+                  {filteredClients.length ? filteredClients.map((item) => {
+                    const itemOrders = orders.filter((order) => order.client_name === item.name || (!!item.phone && order.phone === item.phone));
+                    const itemAppointments = appointments.filter((entry) => entry.client_id === item.id || entry.client_name === item.name || (!!item.phone && entry.phone === item.phone));
+                    const itemBalance = itemOrders.reduce((sum, order) => sum + (order.balance ?? 0), 0);
+                    const isActive = selectedClient?.id === item.id;
+                    return (
+                      <button key={item.id} onClick={() => selectClient(item.id)} className={`w-full rounded-xl border p-3 text-left transition-colors ${isActive ? "border-sky-300 bg-sky-50" : "border-slate-200 bg-white hover:border-slate-300 hover:bg-slate-50"}`}>
+                        <div className="flex items-center justify-between gap-3">
+                          <div>
+                            <div className="flex items-center gap-2">
+                              <span className="text-sm font-semibold text-slate-900">{item.name}</span>
+                              {item.is_vip ? <span className="rounded-full bg-amber-50 px-2 py-0.5 text-[11px] font-semibold text-amber-700">VIP</span> : null}
+                            </div>
+                            <p className="mt-1 text-[11px] text-slate-500">{item.phone ?? item.contact ?? "No contact yet"}</p>
+                          </div>
+                          <span className={`rounded-full px-2 py-0.5 text-[11px] font-semibold ${itemBalance > 0 ? "bg-amber-50 text-amber-700" : "bg-emerald-50 text-emerald-700"}`}>
+                            {itemBalance > 0 ? `Balance ${formatMoney(itemBalance)}` : "Clear"}
+                          </span>
+                        </div>
+                        <div className="mt-2 flex flex-wrap gap-3 text-[11px] text-slate-500">
+                          <span>{itemOrders.length} orders</span>
+                          <span>{itemAppointments.length} appointments</span>
+                          <span>{quotes.filter((entry) => entry.client_name === item.name).length} quotes</span>
+                        </div>
+                      </button>
+                    );
+                  }) : <div className="rounded-xl border border-dashed border-slate-200 py-10 text-center text-sm text-slate-400">No matching clients</div>}
+                </div>
+              </div>
+            </PanelCard>
+
+            <PanelCard title={selectedClient ? `Client detail · ${selectedClient.name}` : "Client detail"} note="The client panel now links business status, receivables, appointments, and contact records directly inside the current site.">
+              {selectedClient ? (
+                <div className="space-y-4">
+                  <div className="flex flex-wrap items-start justify-between gap-3 rounded-xl border border-slate-200 bg-slate-50 p-4">
+                    <div>
+                      <div className="flex items-center gap-2">
+                        <h3 className="text-base font-semibold text-slate-900">{selectedClient.name}</h3>
+                        {selectedClient.is_vip ? <span className="rounded-full bg-sky-100 px-2 py-0.5 text-[11px] font-semibold text-sky-700">VIP client</span> : null}
+                        {clientBalance > 0 ? <span className="rounded-full bg-amber-50 px-2 py-0.5 text-[11px] font-semibold text-amber-700">Needs follow-up</span> : null}
+                      </div>
+                      <p className="mt-1 text-xs text-slate-500">Contact {selectedClient.contact ?? "-"}, phone {selectedClient.phone ?? "-"}</p>
+                      <p className="mt-1 text-xs text-slate-500">Address {selectedClient.address ?? "Not filled"}</p>
+                      <p className="mt-1 text-xs text-slate-500">WeChat/email {selectedClient.wechat ?? selectedClient.email ?? "Not filled"}</p>
+                    </div>
+                    <div className="flex flex-wrap gap-2">
+                      <ActionBtn onClick={() => toggleVip(selectedClient.id)}>{selectedClient.is_vip ? "Remove VIP" : "Set VIP"}</ActionBtn>
+                      <ActionBtn onClick={() => createClientAppointment(selectedClient)}>+ Quick appointment</ActionBtn>
+                      <ActionBtn onClick={() => createClientQuote(selectedClient)}>+ Quick quote</ActionBtn>
+                    </div>
+                  </div>
+
+                  <StatStrip
+                    items={[
+                      { label: "Orders", value: String(selectedClientOrders.length) },
+                      { label: "Custom / wholesale", value: `${clientCustomOrderCount} / ${clientWholesaleOrderCount}` },
+                      { label: "Gross value", value: formatMoney(clientTotal), accent: "text-slate-800" },
+                      { label: "Paid / balance", value: `${formatMoney(clientPaid)} / ${formatMoney(clientBalance)}`, accent: clientBalance > 0 ? "text-amber-600" : "text-emerald-600" },
+                    ]}
+                  />
+
+                  <div className="grid gap-4 lg:grid-cols-3">
+                    <div className="rounded-xl border border-slate-200 bg-white p-4">
+                      <p className="text-[11px] uppercase tracking-[0.2em] text-slate-400">Contact snapshot</p>
+                      <div className="mt-3 space-y-3 text-sm">
+                        <div className="flex items-start justify-between gap-3"><span className="text-slate-500">Primary contact</span><span className="max-w-[190px] text-right font-medium text-slate-900">{selectedClient.contact ?? selectedClient.name}</span></div>
+                        <div className="flex items-start justify-between gap-3"><span className="text-slate-500">Phone</span><span className="max-w-[190px] text-right font-medium text-slate-900">{selectedClient.phone ?? "-"}</span></div>
+                        <div className="flex items-start justify-between gap-3"><span className="text-slate-500">WeChat / email</span><span className="max-w-[190px] text-right font-medium text-slate-900">{selectedClient.wechat ?? selectedClient.email ?? "-"}</span></div>
+                        <div className="flex items-start justify-between gap-3"><span className="text-slate-500">Address</span><span className="max-w-[190px] text-right text-slate-900">{selectedClient.address ?? "Not filled"}</span></div>
+                      </div>
+                    </div>
+
+                    <div className="rounded-xl border border-slate-200 bg-white p-4">
+                      <p className="text-[11px] uppercase tracking-[0.2em] text-slate-400">Account status</p>
+                      <div className="mt-3 space-y-3 text-sm">
+                        <div className="flex items-center justify-between"><span className="text-slate-500">Last order</span><span className="font-medium text-slate-900">{clientLastOrder}</span></div>
+                        <div className="flex items-center justify-between"><span className="text-slate-500">Next appointment</span><span className="max-w-[180px] text-right font-medium text-slate-900">{nextAppointment ? formatAppointmentDate(nextAppointment.appointment_date) : "None"}</span></div>
+                        <div className="flex items-center justify-between"><span className="text-slate-500">Latest quote</span><span className="font-medium text-slate-900">{selectedClientQuotes[0]?.status ?? "None"}</span></div>
+                        <div className="flex items-center justify-between"><span className="text-slate-500">Notes</span><span className="max-w-[180px] text-right text-slate-900">{selectedClient.note ?? "-"}</span></div>
+                      </div>
+                    </div>
+
+                    <div className="rounded-xl border border-slate-200 bg-white p-4">
+                      <p className="text-[11px] uppercase tracking-[0.2em] text-slate-400">Collection snapshot</p>
+                      <div className="mt-3 space-y-3 text-sm">
+                        <div className="flex items-center justify-between"><span className="text-slate-500">Open balance</span><span className={`font-semibold ${clientBalance > 0 ? "text-amber-600" : "text-emerald-600"}`}>{formatMoney(clientBalance)}</span></div>
+                        <div className="flex items-center justify-between"><span className="text-slate-500">Open orders</span><span className="font-medium text-slate-900">{clientOrderCountWithBalance}</span></div>
+                        <div className="flex items-center justify-between"><span className="text-slate-500">Last collection</span><span className="max-w-[180px] text-right font-medium text-slate-900">{clientLastPayment ? `${clientLastPayment.date} · ${formatMoney(clientLastPayment.amount)}` : "No payment yet"}</span></div>
+                        <div className="flex items-center justify-between"><span className="text-slate-500">Client card balance</span><span className="font-medium text-slate-900">{formatMoney(selectedClient.balance ?? clientBalance)}</span></div>
+                      </div>
+                    </div>
+                  </div>
+
+                  <div className="grid gap-4 lg:grid-cols-[1.2fr_0.8fr]">
+                    <div className="rounded-xl border border-slate-200 bg-white p-4">
+                      <div className="mb-3 flex items-center justify-between">
+                        <p className="text-sm font-semibold text-slate-900">Linked orders</p>
+                        <span className="text-[11px] text-slate-400">Status, receivable, and paid amount stay synced</span>
+                      </div>
+                      {selectedClientOrders.length ? (
+                        <div className="overflow-x-auto">
+                          <table className="w-full text-left text-xs">
+                            <thead>
+                              <tr className="border-b border-slate-200 bg-slate-50">
+                                <th className="px-3 py-2 font-semibold text-slate-600">Order</th>
+                                <th className="px-3 py-2 font-semibold text-slate-600">Type</th>
+                                <th className="px-3 py-2 font-semibold text-slate-600">Date</th>
+                                <th className="px-3 py-2 font-semibold text-slate-600">Gross</th>
+                                <th className="px-3 py-2 font-semibold text-slate-600">Paid</th>
+                                <th className="px-3 py-2 font-semibold text-slate-600">Balance</th>
+                                <th className="px-3 py-2 font-semibold text-slate-600">Status</th>
+                              </tr>
+                            </thead>
+                            <tbody>
+                              {selectedClientOrders.slice(0, 8).map((item) => (
+                                <tr key={item.order_number} className="border-b border-slate-100 last:border-b-0">
+                                  <td className="px-3 py-2 font-medium text-slate-700">{item.order_number}</td>
+                                  <td className="px-3 py-2 text-slate-600">{item.order_type}</td>
+                                  <td className="px-3 py-2 text-slate-500">{item.order_date ?? "-"}</td>
+                                  <td className="px-3 py-2 text-slate-700">{formatMoney(item.total_after_tax ?? item.total_price ?? 0)}</td>
+                                  <td className="px-3 py-2 text-emerald-600">{formatMoney(item.amount_paid ?? 0)}</td>
+                                  <td className={`px-3 py-2 font-semibold ${(item.balance ?? 0) > 0 ? "text-amber-600" : "text-slate-700"}`}>{formatMoney(item.balance ?? 0)}</td>
+                                  <td className="px-3 py-2 text-slate-600">{item.status ?? "-"}</td>
+                                </tr>
+                              ))}
+                            </tbody>
+                          </table>
+                        </div>
+                      ) : <div className="rounded-xl border border-dashed border-slate-200 py-10 text-center text-sm text-slate-400">This client has no linked orders yet</div>}
+                    </div>
+
+                    <div className="rounded-xl border border-slate-200 bg-white p-4">
+                      <div className="mb-3 flex items-center justify-between">
+                        <p className="text-sm font-semibold text-slate-900">Recent payments</p>
+                        <span className="text-[11px] text-slate-400">Pulled from linked orders</span>
+                      </div>
+                      {clientRecentPayments.length ? (
+                        <div className="space-y-2">
+                          {clientRecentPayments.slice(0, 6).map((item, index) => (
+                            <div key={`${item.order_number}-${item.date}-${index}`} className="rounded-lg border border-slate-200 px-3 py-2">
+                              <div className="flex items-center justify-between gap-2">
+                                <span className="text-xs font-medium text-slate-800">{item.order_number}</span>
+                                <span className={`text-xs font-semibold ${item.type === "refund" ? "text-rose-600" : "text-emerald-600"}`}>{item.type === "refund" ? "Refund" : "Payment"} {formatMoney(item.amount)}</span>
+                              </div>
+                              <p className="mt-1 text-[11px] text-slate-500">{item.date} · {item.method} · {item.order_status}</p>
+                              <p className="mt-1 text-[11px] text-slate-400">{item.note ?? "No note"}</p>
+                            </div>
+                          ))}
+                        </div>
+                      ) : <div className="rounded-xl border border-dashed border-slate-200 py-10 text-center text-sm text-slate-400">No payment history yet</div>}
+                    </div>
+                  </div>
+
+                  <div className="grid gap-4 lg:grid-cols-2">
+                    <div className="rounded-xl border border-slate-200 bg-white p-4">
+                      <div className="mb-3 flex items-center justify-between">
+                        <p className="text-sm font-semibold text-slate-900">Appointments</p>
+                        <span className="text-[11px] text-slate-400">Linked from client detail</span>
+                      </div>
+                      {selectedClientAppointments.length ? (
+                        <div className="space-y-2">
+                          {selectedClientAppointments.slice(0, 5).map((item) => {
+                            const status = getAppointmentStatus(item.appointment_date);
+                            return (
+                              <div key={item.id} className="rounded-lg border border-slate-200 px-3 py-2">
+                                <div className="flex items-center justify-between gap-2">
+                                  <span className="text-xs font-medium text-slate-800">{formatAppointmentDate(item.appointment_date)}</span>
+                                  <AppointmentStatusBadge status={status} />
+                                </div>
+                                <p className="mt-1 text-[11px] text-slate-500">{item.address ?? "No address"}</p>
+                                <p className="mt-1 text-[11px] text-slate-400">{item.description ?? "No note"}</p>
+                              </div>
+                            );
+                          })}
+                        </div>
+                      ) : <div className="rounded-xl border border-dashed border-slate-200 py-10 text-center text-sm text-slate-400">No appointments yet</div>}
+                    </div>
+
+                    <div className="rounded-xl border border-slate-200 bg-white p-4">
+                      <div className="mb-3 flex items-center justify-between">
+                        <p className="text-sm font-semibold text-slate-900">Business timeline</p>
+                        <span className="text-[11px] text-slate-400">Orders, payments, appointments, and quotes together</span>
+                      </div>
+                      {clientBusinessFeed.length ? (
+                        <div className="space-y-2">
+                          {clientBusinessFeed.slice(0, 8).map((item) => (
+                            <div key={item.key} className="rounded-lg border border-slate-200 px-3 py-2">
+                              <div className="flex items-center justify-between gap-2">
+                                <span className={`text-xs font-semibold ${item.tone}`}>{item.label}</span>
+                                <span className="text-[11px] text-slate-400">{item.date}</span>
+                              </div>
+                              <p className="mt-1 text-[11px] text-slate-500">{item.detail}</p>
+                            </div>
+                          ))}
+                        </div>
+                      ) : <div className="rounded-xl border border-dashed border-slate-200 py-10 text-center text-sm text-slate-400">No linked activity yet</div>}
+                    </div>
+                  </div>
+                </div>
+              ) : <div className="rounded-xl border border-dashed border-slate-200 py-16 text-center text-sm text-slate-400">Select a client on the left to view linked details</div>}
+            </PanelCard>
+          </div>
+        </div>
+      ) : (
+        <div className="space-y-4">
+          <PanelCard title="Quick add supplier">
+            <div className="grid gap-2 sm:grid-cols-2 xl:grid-cols-3">
+              <SmallInput value={supplierDraft.name} onChange={(v) => setSupplierDraft((d) => ({ ...d, name: v }))} placeholder="Supplier name" />
+              <SmallSelect value={supplierDraft.category} onChange={(v) => setSupplierDraft((d) => ({ ...d, category: v }))} options={["Fabric", "Hardware", "Glass", "Logistics", "Other"]} />
+              <SmallInput value={supplierDraft.contact_person} onChange={(v) => setSupplierDraft((d) => ({ ...d, contact_person: v }))} placeholder="Contact" />
+              <SmallInput value={supplierDraft.phone} onChange={(v) => setSupplierDraft((d) => ({ ...d, phone: v }))} placeholder="Phone" />
+              <SmallInput value={supplierDraft.address} onChange={(v) => setSupplierDraft((d) => ({ ...d, address: v }))} placeholder="Address" />
+              <SmallInput value={supplierDraft.remark} onChange={(v) => setSupplierDraft((d) => ({ ...d, remark: v }))} placeholder="Remark" />
+            </div>
+          </PanelCard>
+
+          <div className="overflow-x-auto rounded-xl border border-slate-200 bg-white">
+            <table className="w-full text-left text-xs">
+              <thead>
+                <tr className="border-b border-slate-200 bg-slate-50">
+                  <th className="px-4 py-2.5 font-semibold text-slate-600">Supplier name</th>
+                  <th className="px-4 py-2.5 font-semibold text-slate-600">Category</th>
+                  <th className="px-4 py-2.5 font-semibold text-slate-600">Contact</th>
+                  <th className="px-4 py-2.5 font-semibold text-slate-600">Phone</th>
+                  <th className="px-4 py-2.5 font-semibold text-slate-600">Address</th>
+                  <th className="px-4 py-2.5 font-semibold text-slate-600">Last purchase</th>
+                  <th className="px-4 py-2.5 font-semibold text-slate-600">Remark</th>
+                </tr>
+              </thead>
+              <tbody>
+                {suppliers.map((item) => (
+                  <tr key={item.id} className="border-b border-slate-100 last:border-b-0">
+                    <td className="px-4 py-2.5 font-medium text-slate-700">{item.name}</td>
+                    <td className="px-4 py-2.5 text-slate-600">{item.category ?? "-"}</td>
+                    <td className="px-4 py-2.5 text-slate-600">{item.contact_person ?? "-"}</td>
+                    <td className="px-4 py-2.5 text-slate-600">{item.phone ?? "-"}</td>
+                    <td className="px-4 py-2.5 text-slate-500">{item.address ?? "-"}</td>
+                    <td className="px-4 py-2.5 text-slate-500">{item.last_purchase_date ?? "-"}</td>
+                    <td className="px-4 py-2.5 text-slate-500">{item.remark ?? "-"}</td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+        </div>
+      )}
+    </div>
+  );
 }
 
 type MaterialSub = "inventory" | "purchases";

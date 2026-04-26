@@ -1679,12 +1679,6 @@ function OrdersSection({
   orders: BizOrder[];
   setOrders: React.Dispatch<React.SetStateAction<BizOrder[]>>;
 }) {
-  function exportOrders() {
-    downloadMappedCsv(`biz-orders-${todayIso()}.csv`, ["订单号", "类型", "客户", "电话", "总额", "已付", "余款", "状态", "日期"], orders, (item) => [item.order_number, item.order_type, item.client_name, item.phone ?? "", String(item.total_after_tax ?? item.total_price ?? 0), String(item.amount_paid ?? 0), String(item.balance ?? 0), item.status ?? "", item.order_date ?? ""]);
-  }
-  function printOrders() {
-    openPrintWindow(buildSimpleTablePrintHTML("订单列表", `共 ${filteredOrders.length} 条`, ["订单号", "类型", "客户", "电话", "总额", "已付", "余款", "状态", "日期"], filteredOrders.map((item) => [item.order_number, item.order_type, item.client_name, item.phone ?? "-", formatMoney(item.total_after_tax ?? item.total_price ?? 0), formatMoney(item.amount_paid ?? 0), formatMoney(item.balance ?? 0), item.status ?? "-", item.order_date ?? "-"])));
-  }
   const [selectedOrder, setSelectedOrder] = useState<BizOrder | null>(null);
   const [typeFilter, setTypeFilter] = useState("全部");
   const [statusFilter, setStatusFilter] = useState("全部");
@@ -1692,6 +1686,22 @@ function OrdersSection({
   const [search, setSearch] = useState("");
   const [createType, setCreateType] = useState<"定制单" | "批发单" | null>(null);
   const [deleteConfirm, setDeleteConfirm] = useState<string | null>(null);
+
+  const orderListConfig = {
+    title: "订单列表",
+    filePrefix: "biz-orders",
+    exportColumns: ["订单号", "类型", "客户", "电话", "总额", "已付", "余款", "状态", "日期"],
+    printColumns: ["订单号", "类型", "客户", "电话", "总额", "已付", "余款", "状态", "日期"],
+    exportRows: () => mapRows(orders, (item) => [item.order_number, item.order_type, item.client_name, item.phone ?? "", String(item.total_after_tax ?? item.total_price ?? 0), String(item.amount_paid ?? 0), String(item.balance ?? 0), item.status ?? "", item.order_date ?? ""]),
+    printRows: () => mapRows(filteredOrders, (item) => [item.order_number, item.order_type, item.client_name, item.phone ?? "-", formatMoney(item.total_after_tax ?? item.total_price ?? 0), formatMoney(item.amount_paid ?? 0), formatMoney(item.balance ?? 0), item.status ?? "-", item.order_date ?? "-"])
+  };
+
+  function exportOrders() {
+    downloadCsv(`${orderListConfig.filePrefix}-${todayIso()}.csv`, [orderListConfig.exportColumns, ...orderListConfig.exportRows()]);
+  }
+  function printOrders() {
+    openPrintWindow(buildSimpleTablePrintHTML(orderListConfig.title, `共 ${orderListConfig.printRows().length} 条`, orderListConfig.printColumns, orderListConfig.printRows()));
+  }
 
   function handleSave(updated: BizOrder) {
     setOrders((prev) =>

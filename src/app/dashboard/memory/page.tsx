@@ -2,7 +2,7 @@ import path from "node:path";
 import { DashboardCard, DashboardCardTitle, DashboardPageHeader } from "../components";
 import { safeRead } from "@/lib/fs-utils";
 import { parseTaskQueue, readTaskQueue } from "@/lib/task-board";
-import { TODO_PATH, parseTodoBoard, readTodoBoard } from "@/lib/todo-board";
+import { readActiveTodos, readCompletedTodos, TODO_PATH } from "@/lib/todo-board";
 
 function clipLines(raw: string, lines = 18) {
   const list = raw.split(/\r?\n/).slice(0, lines);
@@ -46,9 +46,8 @@ const docs = [
 export default async function DashboardMemoryPage() {
   const panels = docs.map(([label, file]) => ({ label, file, content: safeRead(file, "文件不存在") }));
   const previewLines = 18;
-  const todoItems = parseTodoBoard(readTodoBoard());
-  const activeTodos = todoItems.filter((todo) => todo.section === "active");
-  const completedTodos = todoItems.filter((todo) => todo.section === "completed");
+  const activeTodos = readActiveTodos();
+  const completedTodos = readCompletedTodos();
   const tasks = parseTaskQueue(readTaskQueue());
 
   return (

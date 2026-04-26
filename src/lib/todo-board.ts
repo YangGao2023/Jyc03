@@ -20,6 +20,18 @@ export function countTodoItems(raw = readTodoBoard()) {
   return raw.split(/\r?\n/).filter((line) => /^### \[TODO-/.test(line.trim())).length;
 }
 
+export function readTodoItems(raw = readTodoBoard()) {
+  return parseTodoBoard(raw);
+}
+
+export function readActiveTodos(raw = readTodoBoard()) {
+  return readTodoItems(raw).filter((todo) => todo.section === "active");
+}
+
+export function readCompletedTodos(raw = readTodoBoard()) {
+  return readTodoItems(raw).filter((todo) => todo.section === "completed");
+}
+
 export function parseTodoBoard(raw: string): TodoItem[] {
   const activePart = raw.split(/\n## 已完成/)[0] || raw;
   const completedPart = raw.includes("## 已完成") ? raw.split(/\n## 已完成/)[1] || "" : "";

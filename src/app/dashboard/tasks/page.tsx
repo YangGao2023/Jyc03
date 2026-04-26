@@ -1,7 +1,7 @@
 import { DashboardCard, DashboardCardTitle, DashboardPageHeader } from "../components";
 import { displayTaskEventType, getSortValue, parseEventStream, parseTaskQueue, readEventStream, readTaskQueue } from "@/lib/task-board";
 import { formatEasternTime } from "@/lib/time";
-import { parseTodoBoard, readTodoBoard } from "@/lib/todo-board";
+import { readActiveTodos } from "@/lib/todo-board";
 
 function statusTone(value: string) {
   const normalized = value.trim().toLowerCase();
@@ -42,8 +42,7 @@ export default async function DashboardTasksPage({
     return String(right).localeCompare(String(left));
   });
   const events = parseEventStream(readEventStream());
-  const todos = parseTodoBoard(readTodoBoard());
-  const activeTodos = todos.filter((todo) => todo.section === "active");
+  const activeTodos = readActiveTodos();
 
   const filterCounts = {
     in_progress: tasks.filter((task) => task.status === "in_progress").length,

@@ -80,10 +80,6 @@ function downloadCsv(filename: string, rows: Array<Array<string | number>>) {
   );
 }
 
-function downloadMappedCsv<T>(filename: string, headers: Array<string>, items: T[], mapRow: (item: T) => Array<string | number>) {
-  downloadCsv(filename, [headers, ...items.map(mapRow)]);
-}
-
 function mapRows<T>(items: T[], mapRow: (item: T) => Array<string | number>) {
   return items.map(mapRow);
 }
@@ -377,13 +373,20 @@ function OverviewSection({
   employees: EmployeeRecord[];
 }) {
   const domains = getOverviewDomains(orderSummary, { expenses, payrolls, quotes, clients, suppliers, materials, employees });
+  const overviewConfig: TabularSchemaConfig = {
+    title: "业务总览",
+    filePrefix: "biz-overview",
+    columns: ["模块", "指标", "值"],
+    exportRows: () => domains.flatMap((domain) => domain.stats.map((stat) => [domain.title, stat.label, stat.value])),
+    printRows: () => domains.flatMap((domain) => domain.stats.map((stat) => [domain.title, stat.label, stat.value])),
+  };
 
   function exportOverview() {
-    downloadMappedCsv(`biz-overview-${todayIso()}.csv`, ["模块", "指标", "值"], domains.flatMap((domain) => domain.stats.map((stat) => ({ module: domain.title, label: stat.label, value: stat.value }))), (item) => [item.module, item.label, item.value]);
+    downloadCsv(`${overviewConfig.filePrefix}-${todayIso()}.csv`, [overviewConfig.columns, ...overviewConfig.exportRows()]);
   }
 
   function printOverview() {
-    openPrintWindow(buildSimpleTablePrintHTML("业务总览", "当前业务概况", ["模块", "指标", "值"], domains.flatMap((domain) => domain.stats.map((stat) => [domain.title, stat.label, stat.value]))));
+    openPrintWindow(buildSimpleTablePrintHTML(overviewConfig.title, "当前业务概况", overviewConfig.columns, overviewConfig.printRows()));
   }
 
   return (
@@ -2533,12 +2536,20 @@ function SettingsSection({ settings, setSettings }: { settings: BizSettings; set
     { label: "Logo URL", value: settings.logo_url || "-" },
   ];
 
+  const settingsConfig: TabularSchemaConfig = {
+    title: "系统设置",
+    filePrefix: "biz-settings",
+    columns: ["字段", "值"],
+    exportRows: () => mapRows(settingRows, (item) => [item.label, item.value]),
+    printRows: () => mapRows(settingRows, (item) => [item.label, item.value]),
+  };
+
   function exportSettings() {
-    downloadMappedCsv(`biz-settings-${todayIso()}.csv`, ["字段", "值"], settingRows, (item) => [item.label, item.value]);
+    downloadCsv(`${settingsConfig.filePrefix}-${todayIso()}.csv`, [settingsConfig.columns, ...settingsConfig.exportRows()]);
   }
 
   function printSettings() {
-    openPrintWindow(buildSimpleTablePrintHTML("系统设置", "当前业务配置", ["字段", "值"], settingRows.map((item) => [item.label, item.value])));
+    openPrintWindow(buildSimpleTablePrintHTML(settingsConfig.title, "当前业务配置", settingsConfig.columns, settingsConfig.printRows()));
   }
 
   return <div><SectionHeader eyebrow="Configuration" title="系统设置" actions={<><ActionBtn onClick={exportSettings}>↓ 导出设置</ActionBtn><ActionBtn onClick={printSettings}>🖨 打印设置</ActionBtn><ActionBtn tone="success">自动保存中</ActionBtn></>} /><div className="grid gap-4 lg:grid-cols-2"><SettingsGroup title="公司信息"><SettingsField label="公司名称" value={settings.company_name} onChange={(value) => update("company_name", value)} /><SettingsField label="地址" value={settings.address} onChange={(value) => update("address", value)} /><SettingsField label="电话" value={settings.phone} onChange={(value) => update("phone", value)} /><SettingsField label="电子邮箱" value={settings.email} onChange={(value) => update("email", value)} /><SettingsField label="网站" value={settings.website} onChange={(value) => update("website", value)} /></SettingsGroup><SettingsGroup title="税务 & 财务"><SettingsField label="税号 (BN)" value={settings.tax_number} note="Business Number" onChange={(value) => update("tax_number", value)} /><SettingsField label="默认税率" value={String(settings.default_tax_rate)} onChange={(value) => update("default_tax_rate", value)} type="number" /><SettingsField label="默认货币" value={settings.default_currency} onChange={(value) => update("default_currency", value)} /><SettingsField label="财年开始月" value={String(settings.fiscal_start_month)} onChange={(value) => update("fiscal_start_month", value)} type="number" /></SettingsGroup><SettingsGroup title="支付方式"><SettingsField label="银行账户" value={settings.bank_account} onChange={(value) => update("bank_account", value)} /><SettingsField label="支付宝" value={settings.alipay} onChange={(value) => update("alipay", value)} /><SettingsField label="微信收款" value={settings.wechat_pay} onChange={(value) => update("wechat_pay", value)} /><SettingsField label="其他方式" value={settings.other_payment} onChange={(value) => update("other_payment", value)} /></SettingsGroup><SettingsGroup title="报价单模板"><SettingsField label="默认有效期" value={String(settings.quote_valid_days)} note="Days until quote expires" onChange={(value) => update("quote_valid_days", value)} type="number" /><SettingsField label="页脚备注" value={settings.quote_footer} onChange={(value) => update("quote_footer", value)} /><SettingsField label="Logo URL" value={settings.logo_url} note="Used in printed quotes" onChange={(value) => update("logo_url", value)} /></SettingsGroup></div></div>;

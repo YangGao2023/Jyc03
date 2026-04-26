@@ -1066,12 +1066,10 @@ function OrderDetailView({
   order,
   onBack,
   onSave,
-  settings,
 }: {
   order: BizOrder;
   onBack: () => void;
   onSave: (updated: BizOrder) => void;
-  settings: BizSettings;
 }) {
   const today = new Date().toISOString().slice(0, 10);
   const isCustom = order.order_type === "定制单";
@@ -1807,7 +1805,6 @@ function OrdersSection({
         order={selectedOrder}
         onBack={() => setSelectedOrder(null)}
         onSave={handleSave}
-        settings={settings}
       />
     );
   }

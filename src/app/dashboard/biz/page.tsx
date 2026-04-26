@@ -2124,21 +2124,33 @@ function ClientsSection({ clients, setClients, suppliers, setSuppliers, orders, 
   const [supplierDraft, setSupplierDraft] = useState({ name: "", category: "Fabric", contact_person: "", phone: "", address: "", remark: "" });
   const [clientSearch, setClientSearch] = useState("");
   const [selectedClientId, setSelectedClientId] = useState<string>(clients[0]?.id ?? "");
+  const contactConfigs: Record<ContactSub, { title: string; filePrefix: string; exportColumns: string[]; printColumns: string[]; exportRows: () => Array<Array<string | number>>; printRows: () => Array<Array<string | number>> }> = {
+    clients: {
+      title: "Client Directory",
+      filePrefix: "biz-clients",
+      exportColumns: ["Client Name", "Contact", "Phone", "Email/WeChat", "Address", "Created At", "Note", "VIP", "Balance"],
+      printColumns: ["Client Name", "Contact", "Phone", "Email/WeChat", "Address", "Created At", "Note"],
+      exportRows: () => mapRows(clients, (item) => [item.name, item.contact ?? "", item.phone ?? "", item.email ?? item.wechat ?? "", item.address ?? "", item.created_at ?? "", item.note ?? "", item.is_vip ? "Yes" : "No", item.balance ?? 0]),
+      printRows: () => mapRows(clients, (item) => [item.name, item.contact ?? "-", item.phone ?? "-", item.email ?? item.wechat ?? "-", item.address ?? "-", item.created_at ?? "-", item.note ?? "-"]),
+    },
+    suppliers: {
+      title: "Supplier Directory",
+      filePrefix: "biz-suppliers",
+      exportColumns: ["Supplier Name", "Category", "Contact", "Phone", "Address", "Last Purchase", "Remark"],
+      printColumns: ["Supplier Name", "Category", "Contact", "Phone", "Address", "Last Purchase", "Remark"],
+      exportRows: () => mapRows(suppliers, (item) => [item.name, item.category ?? "", item.contact_person ?? "", item.phone ?? "", item.address ?? "", item.last_purchase_date ?? "", item.remark ?? ""]),
+      printRows: () => mapRows(suppliers, (item) => [item.name, item.category ?? "-", item.contact_person ?? "-", item.phone ?? "-", item.address ?? "-", item.last_purchase_date ?? "-", item.remark ?? "-"]),
+    },
+  };
 
   function exportContacts() {
-    if (sub === "clients") {
-      downloadMappedCsv(`biz-clients-${todayIso()}.csv`, ["Client Name", "Contact", "Phone", "Email/WeChat", "Address", "Created At", "Note", "VIP", "Balance"], clients, (item) => [item.name, item.contact ?? "", item.phone ?? "", item.email ?? item.wechat ?? "", item.address ?? "", item.created_at ?? "", item.note ?? "", item.is_vip ? "Yes" : "No", item.balance ?? 0]);
-      return;
-    }
-    downloadMappedCsv(`biz-suppliers-${todayIso()}.csv`, ["Supplier Name", "Category", "Contact", "Phone", "Address", "Last Purchase", "Remark"], suppliers, (item) => [item.name, item.category ?? "", item.contact_person ?? "", item.phone ?? "", item.address ?? "", item.last_purchase_date ?? "", item.remark ?? ""]);
+    const config = contactConfigs[sub];
+    downloadCsv(`${config.filePrefix}-${todayIso()}.csv`, [config.exportColumns, ...config.exportRows()]);
   }
 
   function printContacts() {
-    if (sub === "clients") {
-      openPrintWindow(buildSimpleTablePrintHTML("Client Directory", `Total ${clients.length}`, ["Client Name", "Contact", "Phone", "Email/WeChat", "Address", "Created At", "Note"], clients.map((item) => [item.name, item.contact ?? "-", item.phone ?? "-", item.email ?? item.wechat ?? "-", item.address ?? "-", item.created_at ?? "-", item.note ?? "-"])));
-      return;
-    }
-    openPrintWindow(buildSimpleTablePrintHTML("Supplier Directory", `Total ${suppliers.length}`, ["Supplier Name", "Category", "Contact", "Phone", "Address", "Last Purchase", "Remark"], suppliers.map((item) => [item.name, item.category ?? "-", item.contact_person ?? "-", item.phone ?? "-", item.address ?? "-", item.last_purchase_date ?? "-", item.remark ?? "-"])));
+    const config = contactConfigs[sub];
+    openPrintWindow(buildSimpleTablePrintHTML(config.title, `Total ${config.printRows().length}`, config.printColumns, config.printRows()));
   }
 
   function addClient() {

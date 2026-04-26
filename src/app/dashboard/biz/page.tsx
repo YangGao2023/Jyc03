@@ -2167,88 +2167,6 @@ function OrdersSection({
         }
       />
 
-      {!!unpaidOrders.length && (
-        <div className="mb-4 flex flex-wrap items-center justify-between gap-3 rounded-xl border border-rose-200 bg-rose-50 px-4 py-3">
-          <div>
-            <p className="text-sm font-semibold text-rose-700">未付清客户提醒</p>
-            <p className="mt-1 text-xs text-rose-600">
-              当前有 {unpaidClientCount} 位客户、{unpaidOrders.length} 个订单仍有尾款，待收合计 {formatMoney(unpaidOrders.reduce((sum, order) => sum + (order.balance ?? 0), 0))}
-            </p>
-          </div>
-          <ActionBtn
-            tone="danger"
-            onClick={() => {
-              setStatusFilter("未付清");
-              setShowOnlyBalance(true);
-            }}
-          >
-            查看未付清订单
-          </ActionBtn>
-        </div>
-      )}
-
-      {!!shortageOrders.length && (
-        <div className="mb-4 rounded-xl border border-amber-200 bg-amber-50 px-4 py-3">
-          <div className="flex flex-wrap items-center justify-between gap-3">
-            <div>
-              <p className="text-sm font-semibold text-amber-800">待补料订单提醒</p>
-              <p className="mt-1 text-xs text-amber-700">现在直接能看出哪几张批发单还不能备齐，先补库存还是先建物料一眼就明白。</p>
-            </div>
-            <span className="rounded-full border border-amber-300 bg-white px-2.5 py-1 text-xs font-semibold text-amber-700">{shortageOrders.length} 张订单待处理</span>
-          </div>
-          <div className="mt-3 flex flex-wrap gap-2">
-            {shortageOrders.slice(0, 6).map((item) => (
-              <button
-                key={item.orderNumber}
-                onClick={() => {
-                  const target = orders.find((order) => order.order_number === item.orderNumber);
-                  if (target) setSelectedOrder(target);
-                }}
-                className="rounded-lg border border-amber-200 bg-white px-3 py-2 text-left text-xs text-amber-800 transition-colors hover:border-amber-400"
-              >
-                <div className="font-semibold">{item.orderNumber} · {item.clientName}</div>
-                <div className="mt-1 text-[11px] text-amber-700">{item.shortageRows > 0 ? `缺料 ${item.shortageRows} 项` : "待建物料"}{item.missingRows > 0 ? `，未建物料 ${item.missingRows} 项` : ""}</div>
-              </button>
-            ))}
-          </div>
-        </div>
-      )}
-
-      <div className="mb-4 grid gap-4 xl:grid-cols-[1.2fr_0.8fr]">
-        <PanelCard title="打印闭环" note="订单打印现在支持保存归档，后面可以直接复打或下载 HTML。">
-          <div className="grid gap-3 sm:grid-cols-3">
-            <div className="rounded-xl border border-slate-200 bg-slate-50 p-3">
-              <p className="text-[11px] uppercase tracking-[0.2em] text-slate-400">今日归档</p>
-              <p className="mt-2 text-2xl font-semibold text-slate-900">{todayPrintCount}</p>
-            </div>
-            <div className="rounded-xl border border-slate-200 bg-slate-50 p-3">
-              <p className="text-[11px] uppercase tracking-[0.2em] text-slate-400">全部打印单</p>
-              <p className="mt-2 text-2xl font-semibold text-slate-900">{printArchives.length}</p>
-            </div>
-            <div className="rounded-xl border border-slate-200 bg-slate-50 p-3">
-              <p className="text-[11px] uppercase tracking-[0.2em] text-slate-400">最近一份</p>
-              <p className="mt-2 text-sm font-semibold text-slate-900">{recentPrintArchives[0]?.order_number ?? "暂无"}</p>
-              <p className="mt-1 text-[11px] text-slate-500">{recentPrintArchives[0] ? `${formatPrintTypeLabel(recentPrintArchives[0].print_type)} · ${recentPrintArchives[0].client_name}` : "先进入订单详情保存打印单"}</p>
-            </div>
-          </div>
-        </PanelCard>
-        <PanelCard title="最近打印归档" note="最新 6 份打印单，支持直接下载。">
-          <div className="space-y-2">
-            {recentPrintArchives.length ? recentPrintArchives.map((item) => (
-              <div key={item.id} className="rounded-lg border border-slate-200 bg-slate-50 px-3 py-2">
-                <div className="flex items-center justify-between gap-2">
-                  <div>
-                    <p className="text-xs font-semibold text-slate-900">{item.order_number} · {item.client_name}</p>
-                    <p className="mt-1 text-[11px] text-slate-500">{formatPrintTypeLabel(item.print_type)} · {item.created_at.slice(0, 16).replace("T", " ")}</p>
-                  </div>
-                  <button onClick={() => downloadHtmlFile(item.file_name, item.html)} className="rounded border border-slate-200 bg-white px-2 py-1 text-[11px] font-medium text-slate-600 hover:border-slate-300 transition-colors">下载</button>
-                </div>
-              </div>
-            )) : <div className="rounded-xl border border-dashed border-slate-200 py-8 text-center text-sm text-slate-400">还没有保存的打印单</div>}
-          </div>
-        </PanelCard>
-      </div>
-
       <StatStrip
         items={[
           { label: "全部订单", value: String(summary.total) },
@@ -2487,6 +2405,90 @@ function OrdersSection({
             )}
           </tbody>
         </table>
+      </div>
+
+      <div className="mt-4 space-y-4">
+        {!!unpaidOrders.length && (
+          <div className="flex flex-wrap items-center justify-between gap-3 rounded-xl border border-rose-200 bg-rose-50 px-4 py-3">
+            <div>
+              <p className="text-sm font-semibold text-rose-700">未付清客户提醒</p>
+              <p className="mt-1 text-xs text-rose-600">
+                当前有 {unpaidClientCount} 位客户、{unpaidOrders.length} 个订单仍有尾款，待收合计 {formatMoney(unpaidOrders.reduce((sum, order) => sum + (order.balance ?? 0), 0))}
+              </p>
+            </div>
+            <ActionBtn
+              tone="danger"
+              onClick={() => {
+                setStatusFilter("未付清");
+                setShowOnlyBalance(true);
+              }}
+            >
+              查看未付清订单
+            </ActionBtn>
+          </div>
+        )}
+
+        {!!shortageOrders.length && (
+          <div className="rounded-xl border border-amber-200 bg-amber-50 px-4 py-3">
+            <div className="flex flex-wrap items-center justify-between gap-3">
+              <div>
+                <p className="text-sm font-semibold text-amber-800">待补料订单提醒</p>
+                <p className="mt-1 text-xs text-amber-700">现在直接能看出哪几张批发单还不能备齐，先补库存还是先建物料一眼就明白。</p>
+              </div>
+              <span className="rounded-full border border-amber-300 bg-white px-2.5 py-1 text-xs font-semibold text-amber-700">{shortageOrders.length} 张订单待处理</span>
+            </div>
+            <div className="mt-3 flex flex-wrap gap-2">
+              {shortageOrders.slice(0, 6).map((item) => (
+                <button
+                  key={item.orderNumber}
+                  onClick={() => {
+                    const target = orders.find((order) => order.order_number === item.orderNumber);
+                    if (target) setSelectedOrder(target);
+                  }}
+                  className="rounded-lg border border-amber-200 bg-white px-3 py-2 text-left text-xs text-amber-800 transition-colors hover:border-amber-400"
+                >
+                  <div className="font-semibold">{item.orderNumber} · {item.clientName}</div>
+                  <div className="mt-1 text-[11px] text-amber-700">{item.shortageRows > 0 ? `缺料 ${item.shortageRows} 项` : "待建物料"}{item.missingRows > 0 ? `，未建物料 ${item.missingRows} 项` : ""}</div>
+                </button>
+              ))}
+            </div>
+          </div>
+        )}
+
+        <div className="grid gap-4 xl:grid-cols-[1.2fr_0.8fr]">
+          <PanelCard title="打印闭环" note="订单打印现在支持保存归档，后面可以直接复打或下载 HTML。">
+            <div className="grid gap-3 sm:grid-cols-3">
+              <div className="rounded-xl border border-slate-200 bg-slate-50 p-3">
+                <p className="text-[11px] uppercase tracking-[0.2em] text-slate-400">今日归档</p>
+                <p className="mt-2 text-2xl font-semibold text-slate-900">{todayPrintCount}</p>
+              </div>
+              <div className="rounded-xl border border-slate-200 bg-slate-50 p-3">
+                <p className="text-[11px] uppercase tracking-[0.2em] text-slate-400">全部打印单</p>
+                <p className="mt-2 text-2xl font-semibold text-slate-900">{printArchives.length}</p>
+              </div>
+              <div className="rounded-xl border border-slate-200 bg-slate-50 p-3">
+                <p className="text-[11px] uppercase tracking-[0.2em] text-slate-400">最近一份</p>
+                <p className="mt-2 text-sm font-semibold text-slate-900">{recentPrintArchives[0]?.order_number ?? "暂无"}</p>
+                <p className="mt-1 text-[11px] text-slate-500">{recentPrintArchives[0] ? `${formatPrintTypeLabel(recentPrintArchives[0].print_type)} · ${recentPrintArchives[0].client_name}` : "先进入订单详情保存打印单"}</p>
+              </div>
+            </div>
+          </PanelCard>
+          <PanelCard title="最近打印归档" note="最新 6 份打印单，支持直接下载。">
+            <div className="space-y-2">
+              {recentPrintArchives.length ? recentPrintArchives.map((item) => (
+                <div key={item.id} className="rounded-lg border border-slate-200 bg-slate-50 px-3 py-2">
+                  <div className="flex items-center justify-between gap-2">
+                    <div>
+                      <p className="text-xs font-semibold text-slate-900">{item.order_number} · {item.client_name}</p>
+                      <p className="mt-1 text-[11px] text-slate-500">{formatPrintTypeLabel(item.print_type)} · {item.created_at.slice(0, 16).replace("T", " ")}</p>
+                    </div>
+                    <button onClick={() => downloadHtmlFile(item.file_name, item.html)} className="rounded border border-slate-200 bg-white px-2 py-1 text-[11px] font-medium text-slate-600 hover:border-slate-300 transition-colors">下载</button>
+                  </div>
+                </div>
+              )) : <div className="rounded-xl border border-dashed border-slate-200 py-8 text-center text-sm text-slate-400">还没有保存的打印单</div>}
+            </div>
+          </PanelCard>
+        </div>
       </div>
     </div>
   );

@@ -2877,13 +2877,14 @@ function FinanceSection({ orders, setOrders, expenses, setExpenses, cashEntries,
 
 type ContactSub = "clients" | "suppliers";
 
-function ClientsSection({ clients, setClients, suppliers, setSuppliers, orders, appointments, quotes, setAppointments, setQuotes }: { clients: ContactRecord[]; setClients: React.Dispatch<React.SetStateAction<ContactRecord[]>>; suppliers: SupplierRecord[]; setSuppliers: React.Dispatch<React.SetStateAction<SupplierRecord[]>>; orders: BizOrder[]; appointments: MeasurementAppointmentRecord[]; quotes: QuoteRecord[]; setAppointments: React.Dispatch<React.SetStateAction<MeasurementAppointmentRecord[]>>; setQuotes: React.Dispatch<React.SetStateAction<QuoteRecord[]>>; }) {
+function ClientsSection({ clients, setClients, suppliers, setSuppliers, orders, setOrders, appointments, quotes, setAppointments, setQuotes, setCashEntries }: { clients: ContactRecord[]; setClients: React.Dispatch<React.SetStateAction<ContactRecord[]>>; suppliers: SupplierRecord[]; setSuppliers: React.Dispatch<React.SetStateAction<SupplierRecord[]>>; orders: BizOrder[]; setOrders: React.Dispatch<React.SetStateAction<BizOrder[]>>; appointments: MeasurementAppointmentRecord[]; quotes: QuoteRecord[]; setAppointments: React.Dispatch<React.SetStateAction<MeasurementAppointmentRecord[]>>; setQuotes: React.Dispatch<React.SetStateAction<QuoteRecord[]>>; setCashEntries: React.Dispatch<React.SetStateAction<CashEntry[]>>; }) {
   const [sub, setSub] = useState<ContactSub>("clients");
   const today = new Date().toISOString().slice(0, 10);
   const [clientDraft, setClientDraft] = useState({ name: "", contact: "", phone: "", wechat: "", address: "", note: "" });
   const [supplierDraft, setSupplierDraft] = useState({ name: "", category: "Fabric", contact_person: "", phone: "", address: "", remark: "" });
   const [clientSearch, setClientSearch] = useState("");
   const [selectedClientId, setSelectedClientId] = useState<string>(clients[0]?.id ?? "");
+  const [quickCollectDraft, setQuickCollectDraft] = useState({ orderNumber: "", amount: "", date: today, method: "现金", note: "" });
   const contactConfigs: Record<ContactSub, SplitTabularSchemaConfig> = {
     clients: {
       title: "Client Directory",
@@ -2954,6 +2955,8 @@ function ClientsSection({ clients, setClients, suppliers, setSuppliers, orders, 
   const clientTotal = selectedClientOrders.reduce((sum, item) => sum + (item.total_after_tax ?? item.total_price ?? 0), 0);
   const clientPaid = selectedClientOrders.reduce((sum, item) => sum + (item.amount_paid ?? 0), 0);
   const clientBalance = selectedClientOrders.reduce((sum, item) => sum + (item.balance ?? 0), 0);
+  const receivableOrders = selectedClientOrders.filter((item) => (item.balance ?? 0) > 0 && item.status !== "已关闭");
+  const selectedCollectOrder = receivableOrders.find((item) => item.order_number === quickCollectDraft.orderNumber) ?? receivableOrders[0] ?? null;
   const clientOrderCountWithBalance = selectedClientOrders.filter((item) => (item.balance ?? 0) > 0).length;
   const clientCustomOrderCount = selectedClientOrders.filter((item) => item.order_type !== "批发单").length;
   const clientWholesaleOrderCount = selectedClientOrders.filter((item) => item.order_type === "批发单").length;
@@ -3030,6 +3033,83 @@ function ClientsSection({ clients, setClients, suppliers, setSuppliers, orders, 
       valid_until: addDaysIso(today, 7),
       status: "草稿",
     }, ...prev]);
+  }
+
+  useEffect(() => {
+    if (!selectedClient) {
+      setQuickCollectDraft((prev) => ({ ...prev, orderNumber: "", amount: "" }));
+      return;
+    }
+    const firstReceivable = receivableOrders[0];
+    setQuickCollectDraft((prev) => {
+      const hasCurrentOrder = receivableOrders.some((item) => item.order_number === prev.orderNumber);
+      const nextOrder = hasCurrentOrder ? receivableOrders.find((item) => item.order_number === prev.orderNumber) : firstReceivable;
+      return {
+        ...prev,
+        orderNumber: nextOrder?.order_number ?? "",
+        amount: nextOrder ? String(nextOrder.balance ?? "") : "",
+      };
+    });
+  }, [selectedClient?.id, orders]);
+
+  function applyQuickCollectPreset(mode: "balance" | "half", order = selectedCollectOrder) {
+    if (!order) return;
+    const balance = Math.max(0, order.balance ?? 0);
+    const nextAmount = mode === "balance" ? balance : Number((balance / 2).toFixed(2));
+    setQuickCollectDraft((prev) => ({
+      ...prev,
+      orderNumber: order.order_number,
+      amount: nextAmount > 0 ? String(nextAmount) : "",
+      note: mode === "balance" ? "客户中心快速收尾款" : "客户中心快速收部分尾款",
+    }));
+  }
+
+  function handleQuickCollect() {
+    if (!selectedClient || !selectedCollectOrder) return;
+    const amount = Number(quickCollectDraft.amount) || 0;
+    const currentBalance = Math.max(0, selectedCollectOrder.balance ?? 0);
+    if (amount <= 0 || amount > currentBalance || !quickCollectDraft.date) return;
+
+    const paymentRecord: PaymentRecord = {
+      date: quickCollectDraft.date,
+      amount: Number(amount.toFixed(2)),
+      method: quickCollectDraft.method,
+      note: quickCollectDraft.note.trim() || (amount >= currentBalance ? "客户中心收清尾款" : "客户中心录入收款"),
+      type: "payment",
+    };
+
+    const nextOrders = orders.map((order) => {
+      if (order.order_number !== selectedCollectOrder.order_number) return order;
+      const paymentHistory = [paymentRecord, ...(order.payment_history ?? [])];
+      const totalAfterTax = getOrderTotalForAudit(order);
+      const amountPaid = Math.max(0, getOrderPaymentNet({ ...order, payment_history: paymentHistory }));
+      const balance = Math.max(0, totalAfterTax - amountPaid);
+      return {
+        ...order,
+        payment_history: paymentHistory,
+        amount_paid: Number(amountPaid.toFixed(2)),
+        balance: Number(balance.toFixed(2)),
+        status: deriveStatus(totalAfterTax, amountPaid, order.status ?? "下单"),
+      };
+    });
+
+    const repaired = applyFinanceAuditRepairs(nextOrders, clients);
+    setOrders(repaired.fixedOrders);
+    setClients(repaired.fixedClients);
+    setCashEntries((prev) => [{
+      id: `CASH-${new Date().getFullYear()}-${String(prev.length + 1).padStart(3, "0")}`,
+      type: "收入",
+      amount: Number(amount.toFixed(2)),
+      date: quickCollectDraft.date,
+      note: `${selectedClient.name} ${selectedCollectOrder.order_number} 收款`,
+    }, ...prev]);
+    setQuickCollectDraft((prev) => ({
+      ...prev,
+      orderNumber: "",
+      amount: "",
+      date: today,
+      note: "",
+    }));
   }
 
   return (
@@ -3173,42 +3253,117 @@ function ClientsSection({ clients, setClients, suppliers, setSuppliers, orders, 
                     </div>
                   </div>
 
-                  <div className="grid gap-4 lg:grid-cols-[1.2fr_0.8fr]">
-                    <div className="rounded-xl border border-slate-200 bg-white p-4">
-                      <div className="mb-3 flex items-center justify-between">
-                        <p className="text-sm font-semibold text-slate-900">Linked orders</p>
-                        <span className="text-[11px] text-slate-400">Status, receivable, and paid amount stay synced</span>
-                      </div>
-                      {selectedClientOrders.length ? (
-                        <div className="overflow-x-auto">
-                          <table className="w-full text-left text-xs">
-                            <thead>
-                              <tr className="border-b border-slate-200 bg-slate-50">
-                                <th className="px-3 py-2 font-semibold text-slate-600">Order</th>
-                                <th className="px-3 py-2 font-semibold text-slate-600">Type</th>
-                                <th className="px-3 py-2 font-semibold text-slate-600">Date</th>
-                                <th className="px-3 py-2 font-semibold text-slate-600">Gross</th>
-                                <th className="px-3 py-2 font-semibold text-slate-600">Paid</th>
-                                <th className="px-3 py-2 font-semibold text-slate-600">Balance</th>
-                                <th className="px-3 py-2 font-semibold text-slate-600">Status</th>
-                              </tr>
-                            </thead>
-                            <tbody>
-                              {selectedClientOrders.slice(0, 8).map((item) => (
-                                <tr key={item.order_number} className="border-b border-slate-100 last:border-b-0">
-                                  <td className="px-3 py-2 font-medium text-slate-700">{item.order_number}</td>
-                                  <td className="px-3 py-2 text-slate-600">{item.order_type}</td>
-                                  <td className="px-3 py-2 text-slate-500">{item.order_date ?? "-"}</td>
-                                  <td className="px-3 py-2 text-slate-700">{formatMoney(item.total_after_tax ?? item.total_price ?? 0)}</td>
-                                  <td className="px-3 py-2 text-emerald-600">{formatMoney(item.amount_paid ?? 0)}</td>
-                                  <td className={`px-3 py-2 font-semibold ${(item.balance ?? 0) > 0 ? "text-amber-600" : "text-slate-700"}`}>{formatMoney(item.balance ?? 0)}</td>
-                                  <td className="px-3 py-2 text-slate-600">{item.status ?? "-"}</td>
-                                </tr>
-                              ))}
-                            </tbody>
-                          </table>
+                  <div className="grid gap-4 xl:grid-cols-[1.15fr_0.85fr]">
+                    <div className="space-y-4">
+                      <div className="rounded-xl border border-slate-200 bg-white p-4">
+                        <div className="mb-3 flex items-center justify-between">
+                          <div>
+                            <p className="text-sm font-semibold text-slate-900">Quick collection</p>
+                            <p className="text-[11px] text-slate-400">Pick an open order, enter the payment once, and sync the client balance immediately.</p>
+                          </div>
+                          <span className={`rounded-full px-2 py-0.5 text-[11px] font-semibold ${receivableOrders.length ? "bg-amber-50 text-amber-700" : "bg-emerald-50 text-emerald-700"}`}>
+                            {receivableOrders.length ? `${receivableOrders.length} open` : "All clear"}
+                          </span>
                         </div>
-                      ) : <div className="rounded-xl border border-dashed border-slate-200 py-10 text-center text-sm text-slate-400">This client has no linked orders yet</div>}
+                        {receivableOrders.length ? (
+                          <div className="space-y-3">
+                            <div className="grid gap-2 sm:grid-cols-2 xl:grid-cols-4">
+                              <div>
+                                <label className="mb-1 block text-[11px] font-semibold text-slate-500">Order</label>
+                                <select value={quickCollectDraft.orderNumber} onChange={(e) => {
+                                  const nextOrder = receivableOrders.find((item) => item.order_number === e.target.value);
+                                  setQuickCollectDraft((prev) => ({ ...prev, orderNumber: e.target.value, amount: nextOrder ? String(nextOrder.balance ?? "") : prev.amount }));
+                                }} className="h-9 w-full rounded-lg border border-slate-300 bg-white px-3 text-xs text-slate-700">
+                                  {receivableOrders.map((item) => <option key={item.order_number} value={item.order_number}>{item.order_number} · {formatMoney(item.balance ?? 0)}</option>)}
+                                </select>
+                              </div>
+                              <div>
+                                <label className="mb-1 block text-[11px] font-semibold text-slate-500">Amount</label>
+                                <input type="number" min={0} step={0.01} value={quickCollectDraft.amount} onChange={(e) => setQuickCollectDraft((prev) => ({ ...prev, amount: e.target.value }))} className="h-9 w-full rounded-lg border border-slate-300 bg-white px-3 text-xs text-slate-700" placeholder="0.00" />
+                              </div>
+                              <div>
+                                <label className="mb-1 block text-[11px] font-semibold text-slate-500">Date</label>
+                                <input type="date" value={quickCollectDraft.date} onChange={(e) => setQuickCollectDraft((prev) => ({ ...prev, date: e.target.value }))} className="h-9 w-full rounded-lg border border-slate-300 bg-white px-3 text-xs text-slate-700" />
+                              </div>
+                              <div>
+                                <label className="mb-1 block text-[11px] font-semibold text-slate-500">Method</label>
+                                <select value={quickCollectDraft.method} onChange={(e) => setQuickCollectDraft((prev) => ({ ...prev, method: e.target.value }))} className="h-9 w-full rounded-lg border border-slate-300 bg-white px-3 text-xs text-slate-700">
+                                  {PAYMENT_METHODS.map((m) => <option key={m}>{m}</option>)}
+                                </select>
+                              </div>
+                            </div>
+                            <div className="grid gap-2 lg:grid-cols-[1fr_auto]">
+                              <input type="text" value={quickCollectDraft.note} onChange={(e) => setQuickCollectDraft((prev) => ({ ...prev, note: e.target.value }))} className="h-9 w-full rounded-lg border border-slate-300 bg-white px-3 text-xs text-slate-700" placeholder="Note, for example tail payment received on delivery" />
+                              <div className="flex flex-wrap gap-2">
+                                <ActionBtn onClick={() => applyQuickCollectPreset("half")}>Fill half</ActionBtn>
+                                <ActionBtn onClick={() => applyQuickCollectPreset("balance")} tone="success">Fill full balance</ActionBtn>
+                                <ActionBtn onClick={handleQuickCollect} tone="primary">Confirm collection</ActionBtn>
+                              </div>
+                            </div>
+                            {selectedCollectOrder ? (
+                              <div className="rounded-xl border border-amber-100 bg-amber-50/70 p-3 text-xs text-amber-900">
+                                <div className="flex flex-wrap items-center justify-between gap-3">
+                                  <span className="font-semibold">{selectedCollectOrder.order_number}</span>
+                                  <span>Outstanding {formatMoney(selectedCollectOrder.balance ?? 0)} · Paid {formatMoney(selectedCollectOrder.amount_paid ?? 0)} / Total {formatMoney(selectedCollectOrder.total_after_tax ?? selectedCollectOrder.total_price ?? 0)}</span>
+                                </div>
+                              </div>
+                            ) : null}
+                            <div className="space-y-2">
+                              {receivableOrders.slice(0, 4).map((item) => (
+                                <button key={item.order_number} onClick={() => applyQuickCollectPreset("balance", item)} className={`flex w-full items-center justify-between rounded-xl border px-3 py-2 text-left text-xs transition-colors ${selectedCollectOrder?.order_number === item.order_number ? "border-sky-300 bg-sky-50" : "border-slate-200 bg-slate-50 hover:border-slate-300 hover:bg-white"}`}>
+                                  <div>
+                                    <p className="font-semibold text-slate-800">{item.order_number}</p>
+                                    <p className="mt-1 text-[11px] text-slate-500">{item.order_date ?? "-"} · {item.status ?? "-"}</p>
+                                  </div>
+                                  <div className="text-right">
+                                    <p className="font-semibold text-amber-600">{formatMoney(item.balance ?? 0)}</p>
+                                    <p className="mt-1 text-[11px] text-slate-500">Tap to fill full balance</p>
+                                  </div>
+                                </button>
+                              ))}
+                            </div>
+                          </div>
+                        ) : <div className="rounded-xl border border-dashed border-slate-200 py-10 text-center text-sm text-emerald-600">This client has no open receivables right now</div>}
+                      </div>
+
+                      <div className="rounded-xl border border-slate-200 bg-white p-4">
+                        <div className="mb-3 flex items-center justify-between">
+                          <p className="text-sm font-semibold text-slate-900">Linked orders</p>
+                          <span className="text-[11px] text-slate-400">Status, receivable, and paid amount stay synced</span>
+                        </div>
+                        {selectedClientOrders.length ? (
+                          <div className="overflow-x-auto">
+                            <table className="w-full text-left text-xs">
+                              <thead>
+                                <tr className="border-b border-slate-200 bg-slate-50">
+                                  <th className="px-3 py-2 font-semibold text-slate-600">Order</th>
+                                  <th className="px-3 py-2 font-semibold text-slate-600">Type</th>
+                                  <th className="px-3 py-2 font-semibold text-slate-600">Date</th>
+                                  <th className="px-3 py-2 font-semibold text-slate-600">Gross</th>
+                                  <th className="px-3 py-2 font-semibold text-slate-600">Paid</th>
+                                  <th className="px-3 py-2 font-semibold text-slate-600">Balance</th>
+                                  <th className="px-3 py-2 font-semibold text-slate-600">Action</th>
+                                </tr>
+                              </thead>
+                              <tbody>
+                                {selectedClientOrders.slice(0, 8).map((item) => (
+                                  <tr key={item.order_number} className="border-b border-slate-100 last:border-b-0">
+                                    <td className="px-3 py-2 font-medium text-slate-700">{item.order_number}</td>
+                                    <td className="px-3 py-2 text-slate-600">{item.order_type}</td>
+                                    <td className="px-3 py-2 text-slate-500">{item.order_date ?? "-"}</td>
+                                    <td className="px-3 py-2 text-slate-700">{formatMoney(item.total_after_tax ?? item.total_price ?? 0)}</td>
+                                    <td className="px-3 py-2 text-emerald-600">{formatMoney(item.amount_paid ?? 0)}</td>
+                                    <td className={`px-3 py-2 font-semibold ${(item.balance ?? 0) > 0 ? "text-amber-600" : "text-slate-700"}`}>{formatMoney(item.balance ?? 0)}</td>
+                                    <td className="px-3 py-2 text-slate-600">
+                                      {(item.balance ?? 0) > 0 ? <button onClick={() => applyQuickCollectPreset("balance", item)} className="rounded-md border border-amber-200 bg-amber-50 px-2 py-1 text-[11px] font-semibold text-amber-700 hover:bg-amber-100">Collect balance</button> : <span className="text-[11px] text-emerald-600">Clear</span>}
+                                    </td>
+                                  </tr>
+                                ))}
+                              </tbody>
+                            </table>
+                          </div>
+                        ) : <div className="rounded-xl border border-dashed border-slate-200 py-10 text-center text-sm text-slate-400">This client has no linked orders yet</div>}
+                      </div>
                     </div>
 
                     <div className="rounded-xl border border-slate-200 bg-white p-4">
@@ -4040,10 +4195,12 @@ export default function DashboardBizPage() {
               suppliers={suppliers}
               setSuppliers={setSuppliers}
               orders={orders}
+              setOrders={setOrders}
               appointments={appointments}
               quotes={quotes}
               setAppointments={setAppointments}
               setQuotes={setQuotes}
+              setCashEntries={setCashEntries}
             />
           )}
           {section === "appointments" && (

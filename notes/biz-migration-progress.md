@@ -11,3 +11,9 @@
 - Upgraded the order detail page with save-invoice, print-and-archive invoice, save-pickup-sheet, print-and-archive pickup-sheet, plus an order-level print archive panel.
 - Added an order-management print archive summary card so staff can quickly see today’s archived slips and recent saved print jobs.
 - Validation: `npm run build` passed.
+
+## 2026-04-26 - Client quick collection workflow
+- Filled the next payment gap in `src/app/dashboard/biz/page.tsx` by adding a client-center quick collection panel for open receivables.
+- Users can now open a client, pick any unpaid order, auto-fill half or full remaining balance, confirm collection, and immediately sync the order payment history, order status, client balance, and finance cash entry.
+- Added one-click `Collect balance` actions inside linked orders so tail-payment follow-up starts from the exact order instead of re-entering everything manually.
+- Validation: `npm run build` passed.

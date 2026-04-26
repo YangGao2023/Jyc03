@@ -453,6 +453,10 @@ export default async function DashboardSystemPage() {
   const watchdogAlerts = await computeWatchdogAlerts().catch(() => []);
   const handedOffPromises = await readPromises().then((items) => items.filter((item) => item.status === "handed_off")).catch(() => []);
   const watchdogOutboxMessages = outboxMessages.filter((item) => item.kind.startsWith("watchdog_"));
+  const discussionReplyCount = inboxMessages.filter((item) => {
+    const meta = (item.meta || null) as Record<string, unknown> | null;
+    return Boolean(extractTopicId(meta)) && isFinalDiscussionReply({ kind: item.kind, text: item.text, meta });
+  }).length;
   const sentHistory = buildSentHistory(eventChain, visibleInboxMessages);
   const visibleInboxCards = [...visibleInboxMessages].reverse();
   const recipientSummary = summarizeRecipients(sentHistory.map((item) => ({ to: item.to } as (typeof outboxMessages)[number])) as Awaited<ReturnType<typeof readQueue>>);
@@ -573,7 +577,7 @@ export default async function DashboardSystemPage() {
           <DashboardCardTitle
             title="共享讨论中心"
             desc="先把双 AI 围绕同一问题的讨论层跑稳，确保双方都能看见彼此，并且有明确收口。"
-            right={<div className="flex items-center gap-2"><span className="rounded-full bg-slate-900 px-3 py-1 text-xs font-semibold text-white">主题 {discussionThreads.length} 个 · 回帖 {visibleInboxMessages.filter((item) => item.meta?.topicId).length} 条</span></div>}
+            right={<div className="flex items-center gap-2"><span className="rounded-full bg-slate-900 px-3 py-1 text-xs font-semibold text-white">主题 {discussionThreads.length} 个 · 回帖 {discussionReplyCount} 条</span></div>}
           />
 
           <div className="mt-4 grid gap-3 xl:grid-cols-[0.9fr_1.1fr]">

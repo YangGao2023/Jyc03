@@ -1,5 +1,6 @@
 import crypto from "node:crypto";
 import { createClient } from "redis";
+import { appendWakeItem, makeWakeId } from "@/lib/wake-store";
 
 export type BridgeMessage = {
   id: string;
@@ -90,6 +91,18 @@ export async function enqueueMessage(
   const queue = await readQueue(name);
   queue.push(nextMessage);
   await writeQueue(name, queue);
+
+  if (name === "outbox") {
+    await appendWakeItem({
+      id: makeWakeId(),
+      targetAgent: nextMessage.to,
+      kind: "outbox_message",
+      relatedId: nextMessage.id,
+      createdAt: new Date().toISOString(),
+      note: `${nextMessage.kind}:${String((nextMessage.meta || {}).topicId || "").trim() || nextMessage.id}`,
+    });
+  }
+
   return nextMessage;
 }
 

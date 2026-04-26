@@ -191,6 +191,7 @@ export default async function DashboardOverviewPage() {
   const openPromises = promises.filter((item) => !["completed", "expired"].includes(item.status));
   const activePromises = openPromises.length;
   const blockedPromises = promises.filter((item) => item.status === "blocked").length;
+  // eslint-disable-next-line react-hooks/purity
   const overduePromises = promises.filter((item) => item.nextCheckAt && Date.parse(item.nextCheckAt) < Date.now() && !["completed", "expired"].includes(item.status)).length;
   const recentProofs = proofs.slice(0, 4);
   const recentWakeItems = wakeItems.slice(0, 4);

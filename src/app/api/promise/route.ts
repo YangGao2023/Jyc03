@@ -1,6 +1,6 @@
 import { NextResponse } from "next/server";
 import { parseMessageBody, verifyBridgeRequest } from "@/lib/agent-bridge";
-import { makePromiseId, readPromises, upsertPromise } from "@/lib/promise-store";
+import { makePromiseId, readPromises, upsertPromise, type PromiseStatus } from "@/lib/promise-store";
 
 export async function GET(request: Request) {
   try {
@@ -32,7 +32,7 @@ export async function POST(request: Request) {
       createdAt: body.createdAt ? String(body.createdAt) : new Date().toISOString(),
       dueAt: body.dueAt ? String(body.dueAt) : undefined,
       nextCheckAt: body.nextCheckAt ? String(body.nextCheckAt) : undefined,
-      status: String(body.status || "promised") as any,
+      status: String(body.status || "promised") as PromiseStatus,
       blockedReason: body.blockedReason ? String(body.blockedReason) : undefined,
       requiredProof: Array.isArray(body.requiredProof) ? body.requiredProof.map(String) : undefined,
       latestProofSummary: body.latestProofSummary ? String(body.latestProofSummary) : undefined,

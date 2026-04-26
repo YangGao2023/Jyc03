@@ -16,7 +16,8 @@ export type EventChainItem = {
     | "alert_triggered"
     | "alert_resolved"
     | "proof_generated"
-    | "stale_detected";
+    | "stale_detected"
+    | "decision";
   result: EventResult;
   needsOwnerAttention?: boolean;
   summary?: string;
@@ -106,4 +107,9 @@ export async function appendEvent(input: Omit<EventChainItem, "id" | "timestamp"
 
   await client.hSet(EVENT_KEY, item.id, JSON.stringify(item));
   return item;
+}
+
+export async function clearEventChain() {
+  const client = await redis();
+  await client.del(EVENT_KEY);
 }

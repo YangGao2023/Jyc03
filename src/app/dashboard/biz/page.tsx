@@ -80,6 +80,10 @@ function downloadCsv(filename: string, rows: Array<Array<string | number>>) {
   );
 }
 
+function downloadMappedCsv<T>(filename: string, headers: Array<string>, items: T[], mapRow: (item: T) => Array<string | number>) {
+  downloadCsv(filename, [headers, ...items.map(mapRow)]);
+}
+
 // ─── primitives ──────────────────────────────────────────────────────────────
 
 function PageSection({ children }: { children: React.ReactNode }) {
@@ -2152,10 +2156,10 @@ function ClientsSection({ clients, setClients, suppliers, setSuppliers, orders, 
 
   function exportContacts() {
     if (sub === "clients") {
-      downloadCsv(`biz-clients-${todayIso()}.csv`, [["Client Name", "Contact", "Phone", "Email/WeChat", "Address", "Created At", "Note", "VIP", "Balance"], ...clients.map((item) => [item.name, item.contact ?? "", item.phone ?? "", item.email ?? item.wechat ?? "", item.address ?? "", item.created_at ?? "", item.note ?? "", item.is_vip ? "Yes" : "No", item.balance ?? 0])]);
+      downloadMappedCsv(`biz-clients-${todayIso()}.csv`, ["Client Name", "Contact", "Phone", "Email/WeChat", "Address", "Created At", "Note", "VIP", "Balance"], clients, (item) => [item.name, item.contact ?? "", item.phone ?? "", item.email ?? item.wechat ?? "", item.address ?? "", item.created_at ?? "", item.note ?? "", item.is_vip ? "Yes" : "No", item.balance ?? 0]);
       return;
     }
-    downloadCsv(`biz-suppliers-${todayIso()}.csv`, [["Supplier Name", "Category", "Contact", "Phone", "Address", "Last Purchase", "Remark"], ...suppliers.map((item) => [item.name, item.category ?? "", item.contact_person ?? "", item.phone ?? "", item.address ?? "", item.last_purchase_date ?? "", item.remark ?? ""])]);
+    downloadMappedCsv(`biz-suppliers-${todayIso()}.csv`, ["Supplier Name", "Category", "Contact", "Phone", "Address", "Last Purchase", "Remark"], suppliers, (item) => [item.name, item.category ?? "", item.contact_person ?? "", item.phone ?? "", item.address ?? "", item.last_purchase_date ?? "", item.remark ?? ""]);
   }
 
   function printContacts() {
@@ -2399,16 +2403,10 @@ function QuotesSection({ quotes, setQuotes, showcases, setShowcases, settings }:
   function addShowcase() { if (!showcaseDraft.name.trim()) return; setShowcases((prev) => [{ id: `GAL-${String(prev.length + 1).padStart(3, "0")}`, name: showcaseDraft.name.trim(), category: showcaseDraft.category, image_count: Number(showcaseDraft.image_count) || 0, description: showcaseDraft.description || undefined, created_at: today, status: showcaseDraft.status }, ...prev]); setShowcaseDraft({ name: "", category: "窗帘", image_count: "", description: "", status: "待整理" }); }
   function exportQuotes() {
     if (sub === "quotes") {
-      downloadCsv(`biz-quotes-${todayIso()}.csv`, [
-        ["报价单号", "客户", "标题", "金额", "创建日期", "有效期至", "状态"],
-        ...quotes.map((item) => [item.id, item.client_name, item.title, item.amount, item.created_at, item.valid_until, item.status]),
-      ]);
+      downloadMappedCsv(`biz-quotes-${todayIso()}.csv`, ["报价单号", "客户", "标题", "金额", "创建日期", "有效期至", "状态"], quotes, (item) => [item.id, item.client_name, item.title, item.amount, item.created_at, item.valid_until, item.status]);
       return;
     }
-    downloadCsv(`biz-showcase-${todayIso()}.csv`, [
-      ["作品名称", "类别", "图片数", "描述", "创建日期", "状态"],
-      ...showcases.map((item) => [item.name, item.category, item.image_count, item.description ?? "", item.created_at, item.status]),
-    ]);
+    downloadMappedCsv(`biz-showcase-${todayIso()}.csv`, ["作品名称", "类别", "图片数", "描述", "创建日期", "状态"], showcases, (item) => [item.name, item.category, item.image_count, item.description ?? "", item.created_at, item.status]);
   }
   function printQuote(quote: QuoteRecord) {
     openPrintWindow(buildQuotePrintHTML(quote, settings));

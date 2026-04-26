@@ -164,5 +164,9 @@ export function parseMessageBody(bodyText: string) {
     return {} as Record<string, unknown>;
   }
 
-  return JSON.parse(bodyText) as Record<string, unknown>;
+  try {
+    return JSON.parse(bodyText) as Record<string, unknown>;
+  } catch {
+    return {} as Record<string, unknown>;
+  }
 }

@@ -1732,9 +1732,15 @@ function OrdersSection({
   const [typeFilter, setTypeFilter] = useState("全部");
   const [statusFilter, setStatusFilter] = useState("全部");
   const [dateFilter, setDateFilter] = useState("全部");
+  const [dateFrom, setDateFrom] = useState("");
+  const [dateTo, setDateTo] = useState("");
   const [search, setSearch] = useState("");
+  const [showOnlyBalance, setShowOnlyBalance] = useState(false);
   const [createType, setCreateType] = useState<"定制单" | "批发单" | null>(null);
   const [deleteConfirm, setDeleteConfirm] = useState<string | null>(null);
+  const [selectedOrderNumbers, setSelectedOrderNumbers] = useState<string[]>([]);
+  const [bulkAction, setBulkAction] = useState<null | "pay" | "delete">(null);
+  const [bulkBusy, setBulkBusy] = useState(false);
 
   const orderListColumns = ["订单号", "类型", "客户", "描述", "总金额", "下单日期", "状态", "余款", "操作"];
   const orderListConfig: SplitTabularSchemaConfig = {
@@ -1766,17 +1772,36 @@ function OrdersSection({
 
   function handleDelete(orderNumber: string) {
     setOrders((prev) => prev.filter((o) => o.order_number !== orderNumber));
+    setSelectedOrderNumbers((prev) => prev.filter((item) => item !== orderNumber));
     setDeleteConfirm(null);
   }
 
+  function toggleSelection(orderNumber: string) {
+    setSelectedOrderNumbers((prev) =>
+      prev.includes(orderNumber)
+        ? prev.filter((item) => item !== orderNumber)
+        : [...prev, orderNumber]
+    );
+  }
+
   const now = new Date();
+  now.setHours(0, 0, 0, 0);
   const todayStr = now.toISOString().slice(0, 10);
-  // Monday of current week
-  const dayOfWeek = now.getDay() === 0 ? 6 : now.getDay() - 1;
+  const yesterday = new Date(now);
+  yesterday.setDate(yesterday.getDate() - 1);
+  const yesterdayStr = yesterday.toISOString().slice(0, 10);
   const weekStart = new Date(now);
-  weekStart.setDate(now.getDate() - dayOfWeek);
+  weekStart.setDate(now.getDate() - (now.getDay() === 0 ? 6 : now.getDay() - 1));
   const weekStartStr = weekStart.toISOString().slice(0, 10);
-  const monthStr = todayStr.slice(0, 7); // "YYYY-MM"
+  const lastWeekStart = new Date(weekStart);
+  lastWeekStart.setDate(weekStart.getDate() - 7);
+  const lastWeekStartStr = lastWeekStart.toISOString().slice(0, 10);
+  const lastWeekEnd = new Date(weekStart);
+  lastWeekEnd.setDate(weekStart.getDate() - 1);
+  const lastWeekEndStr = lastWeekEnd.toISOString().slice(0, 10);
+  const monthStartStr = todayStr.slice(0, 7);
+  const lastMonthDate = new Date(now.getFullYear(), now.getMonth() - 1, 1);
+  const lastMonthStr = lastMonthDate.toISOString().slice(0, 7);
 
   const filteredOrders = orders.filter((order) => {
     const matchesSearch =
@@ -1786,16 +1811,86 @@ function OrdersSection({
       (order.description ?? "").toLowerCase().includes(search.trim().toLowerCase());
     const matchesType = typeFilter === "全部" || order.order_type === typeFilter;
     const matchesStatus = statusFilter === "全部" || order.status === statusFilter;
+    const matchesBalance = !showOnlyBalance || (order.balance ?? 0) > 0;
     const d = order.order_date ?? "";
     const matchesDate =
       dateFilter === "全部" ||
       (dateFilter === "今天" && d === todayStr) ||
+      (dateFilter === "昨天" && d === yesterdayStr) ||
       (dateFilter === "本周" && d >= weekStartStr && d <= todayStr) ||
-      (dateFilter === "本月" && d.startsWith(monthStr));
-    return matchesSearch && matchesType && matchesStatus && matchesDate;
+      (dateFilter === "上周" && d >= lastWeekStartStr && d <= lastWeekEndStr) ||
+      (dateFilter === "本月" && d.startsWith(monthStartStr)) ||
+      (dateFilter === "上月" && d.startsWith(lastMonthStr)) ||
+      (dateFilter === "自定义" && (!dateFrom || d >= dateFrom) && (!dateTo || d <= dateTo));
+    return matchesSearch && matchesType && matchesStatus && matchesBalance && matchesDate;
   });
 
   const summary = summarizeOrders(filteredOrders);
+  const unpaidOrders = useMemo(
+    () => orders.filter((order) => (order.balance ?? 0) > 0 && order.status !== "结清" && order.status !== "已关闭"),
+    [orders],
+  );
+  const unpaidClientCount = useMemo(() => new Set(unpaidOrders.map((order) => order.client_name)).size, [unpaidOrders]);
+  const selectedOrders = useMemo(
+    () => orders.filter((order) => selectedOrderNumbers.includes(order.order_number)),
+    [orders, selectedOrderNumbers],
+  );
+  const selectedOutstanding = useMemo(
+    () => selectedOrders.reduce((sum, order) => sum + Math.max(0, order.balance ?? 0), 0),
+    [selectedOrders],
+  );
+  const allFilteredSelected = filteredOrders.length > 0 && filteredOrders.every((order) => selectedOrderNumbers.includes(order.order_number));
+
+  async function handleBulkSettle() {
+    if (!selectedOrders.length) {
+      setBulkAction(null);
+      return;
+    }
+    setBulkBusy(true);
+    const settledAt = todayIso();
+    setOrders((prev) =>
+      prev.map((order) => {
+        if (!selectedOrderNumbers.includes(order.order_number)) return order;
+        const remaining = Math.max(0, order.balance ?? 0);
+        if (remaining <= 0) return order;
+        const total = order.total_after_tax ?? order.total_price ?? 0;
+        const nextPaid = Number(((order.amount_paid ?? 0) + remaining).toFixed(2));
+        const nextHistory: PaymentRecord[] = [
+          {
+            date: settledAt,
+            amount: remaining,
+            method: "现金",
+            note: "订单列表批量一键付清尾款",
+            type: "payment",
+          },
+          ...(order.payment_history ?? []),
+        ];
+        return {
+          ...order,
+          amount_paid: nextPaid,
+          balance: 0,
+          total_after_tax: total || order.total_after_tax,
+          status: total > 0 && nextPaid >= total ? "结清" : order.status ?? "结清",
+          payment_history: nextHistory,
+        };
+      }),
+    );
+    setSelectedOrderNumbers([]);
+    setBulkBusy(false);
+    setBulkAction(null);
+  }
+
+  async function handleBulkDelete() {
+    if (!selectedOrderNumbers.length) {
+      setBulkAction(null);
+      return;
+    }
+    setBulkBusy(true);
+    setOrders((prev) => prev.filter((order) => !selectedOrderNumbers.includes(order.order_number)));
+    setSelectedOrderNumbers([]);
+    setBulkBusy(false);
+    setBulkAction(null);
+  }
 
   if (selectedOrder) {
     return (
@@ -1817,6 +1912,27 @@ function OrdersSection({
           onCreate={handleCreate}
         />
       )}
+
+      <InlineConfirmDialog
+        open={bulkAction === "pay"}
+        title="批量一键付清"
+        description={`将为选中的 ${selectedOrders.length} 个订单自动补齐尾款收款记录，并同步更新余款与状态。当前待收合计 ${formatMoney(selectedOutstanding)}。`}
+        confirmLabel="确认付清"
+        confirmTone="success"
+        loading={bulkBusy}
+        onCancel={() => !bulkBusy && setBulkAction(null)}
+        onConfirm={handleBulkSettle}
+      />
+      <InlineConfirmDialog
+        open={bulkAction === "delete"}
+        title="批量删除订单"
+        description={`确认删除选中的 ${selectedOrders.length} 个订单？此操作会直接从当前业务台账中移除这些订单。`}
+        confirmLabel="确认删除"
+        confirmTone="danger"
+        loading={bulkBusy}
+        onCancel={() => !bulkBusy && setBulkAction(null)}
+        onConfirm={handleBulkDelete}
+      />
 
       <SectionHeader
         eyebrow="Order Management"
@@ -1841,6 +1957,26 @@ function OrdersSection({
         }
       />
 
+      {!!unpaidOrders.length && (
+        <div className="mb-4 flex flex-wrap items-center justify-between gap-3 rounded-xl border border-rose-200 bg-rose-50 px-4 py-3">
+          <div>
+            <p className="text-sm font-semibold text-rose-700">未付清客户提醒</p>
+            <p className="mt-1 text-xs text-rose-600">
+              当前有 {unpaidClientCount} 位客户、{unpaidOrders.length} 个订单仍有尾款，待收合计 {formatMoney(unpaidOrders.reduce((sum, order) => sum + (order.balance ?? 0), 0))}
+            </p>
+          </div>
+          <ActionBtn
+            tone="danger"
+            onClick={() => {
+              setStatusFilter("未付清");
+              setShowOnlyBalance(true);
+            }}
+          >
+            查看未付清订单
+          </ActionBtn>
+        </div>
+      )}
+
       <StatStrip
         items={[
           { label: "全部订单", value: String(summary.total) },
@@ -1851,66 +1987,110 @@ function OrdersSection({
         ]}
       />
 
-      {/* Filter bar */}
-      <div className="mb-4 flex flex-wrap items-center gap-2 rounded-xl border border-slate-200 bg-white px-3 py-2.5">
-        <div className="relative min-w-[180px] flex-1 max-w-xs">
-          <span className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-400 text-sm">⌕</span>
-          <input
-            value={search}
-            onChange={(e) => setSearch(e.target.value)}
-            placeholder="搜索订单号 / 客户名称…"
-            className="h-8 w-full rounded-lg border border-slate-300 bg-white pl-8 pr-3 text-xs text-slate-700"
-          />
-        </div>
-        <div className="flex items-center gap-1.5">
-          <span className="text-xs text-slate-500">类别</span>
-          <select
-            value={typeFilter}
-            onChange={(e) => setTypeFilter(e.target.value)}
-            className="h-8 rounded-lg border border-slate-300 bg-white px-2 text-xs text-slate-700"
+      <div className="mb-4 flex flex-col gap-3 rounded-xl border border-slate-200 bg-white px-3 py-3">
+        <div className="flex flex-wrap items-center gap-2">
+          <div className="relative min-w-[180px] flex-1 max-w-xs">
+            <span className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-400 text-sm">⌕</span>
+            <input
+              value={search}
+              onChange={(e) => setSearch(e.target.value)}
+              placeholder="搜索订单号 / 客户名称…"
+              className="h-8 w-full rounded-lg border border-slate-300 bg-white pl-8 pr-3 text-xs text-slate-700"
+            />
+          </div>
+          <div className="flex items-center gap-1.5">
+            <span className="text-xs text-slate-500">类别</span>
+            <select
+              value={typeFilter}
+              onChange={(e) => setTypeFilter(e.target.value)}
+              className="h-8 rounded-lg border border-slate-300 bg-white px-2 text-xs text-slate-700"
+            >
+              <option>全部</option>
+              <option>定制单</option>
+              <option>批发单</option>
+            </select>
+          </div>
+          <div className="flex items-center gap-1.5">
+            <span className="text-xs text-slate-500">状态</span>
+            <select
+              value={statusFilter}
+              onChange={(e) => setStatusFilter(e.target.value)}
+              className="h-8 rounded-lg border border-slate-300 bg-white px-2 text-xs text-slate-700"
+            >
+              <option>全部</option>
+              <option>下单</option>
+              <option>未付清</option>
+              <option>结清</option>
+              <option>已关闭</option>
+            </select>
+          </div>
+          <div className="flex items-center gap-1.5">
+            <span className="text-xs text-slate-500">日期</span>
+            <select
+              value={dateFilter}
+              onChange={(e) => {
+                const value = e.target.value;
+                setDateFilter(value);
+                if (value !== "自定义") {
+                  setDateFrom("");
+                  setDateTo("");
+                }
+              }}
+              className="h-8 rounded-lg border border-slate-300 bg-white px-2 text-xs text-slate-700"
+            >
+              <option>全部</option>
+              <option>今天</option>
+              <option>昨天</option>
+              <option>本周</option>
+              <option>上周</option>
+              <option>本月</option>
+              <option>上月</option>
+              <option>自定义</option>
+            </select>
+          </div>
+          <label className="flex items-center gap-2 rounded-lg border border-slate-200 px-2.5 py-1.5 text-xs text-slate-600">
+            <input
+              type="checkbox"
+              checked={showOnlyBalance}
+              onChange={(e) => setShowOnlyBalance(e.target.checked)}
+            />
+            仅看未收款
+          </label>
+          <button
+            onClick={() => {
+              setSearch("");
+              setTypeFilter("全部");
+              setStatusFilter("全部");
+              setDateFilter("全部");
+              setDateFrom("");
+              setDateTo("");
+              setShowOnlyBalance(false);
+            }}
+            className="rounded border border-slate-200 px-2 py-1 text-xs text-slate-400 hover:border-red-300 hover:text-red-500 transition-colors"
           >
-            <option>全部</option>
-            <option>定制单</option>
-            <option>批发单</option>
-          </select>
+            ✕ 重置
+          </button>
         </div>
-        <div className="flex items-center gap-1.5">
-          <span className="text-xs text-slate-500">状态</span>
-          <select
-            value={statusFilter}
-            onChange={(e) => setStatusFilter(e.target.value)}
-            className="h-8 rounded-lg border border-slate-300 bg-white px-2 text-xs text-slate-700"
-          >
-            <option>全部</option>
-            <option>下单</option>
-            <option>未付清</option>
-            <option>结清</option>
-            <option>已关闭</option>
-          </select>
-        </div>
-        <div className="flex items-center gap-1.5">
-          <span className="text-xs text-slate-500">日期</span>
-          <select
-            value={dateFilter}
-            onChange={(e) => setDateFilter(e.target.value)}
-            className="h-8 rounded-lg border border-slate-300 bg-white px-2 text-xs text-slate-700"
-          >
-            <option>全部</option>
-            <option>今天</option>
-            <option>本周</option>
-            <option>本月</option>
-          </select>
-        </div>
-        <button
-          onClick={() => {
-            setTypeFilter("全部");
-            setStatusFilter("全部");
-            setDateFilter("全部");
-          }}
-          className="rounded border border-slate-200 px-2 py-1 text-xs text-slate-400 hover:border-red-300 hover:text-red-500 transition-colors"
-        >
-          ✕ 重置
-        </button>
+        {dateFilter === "自定义" && (
+          <div className="flex flex-wrap items-center gap-2 text-xs text-slate-500">
+            <span>日期范围</span>
+            <input type="date" value={dateFrom} onChange={(e) => setDateFrom(e.target.value)} className="h-8 rounded-lg border border-slate-300 bg-white px-2 text-xs text-slate-700" />
+            <span>至</span>
+            <input type="date" value={dateTo} onChange={(e) => setDateTo(e.target.value)} className="h-8 rounded-lg border border-slate-300 bg-white px-2 text-xs text-slate-700" />
+          </div>
+        )}
+        {selectedOrders.length > 0 && (
+          <div className="flex flex-wrap items-center justify-between gap-3 rounded-xl border border-sky-200 bg-sky-50 px-3 py-2">
+            <div className="text-xs text-sky-700">
+              已选 <span className="font-semibold">{selectedOrders.length}</span> 个订单，待收尾款 <span className="font-semibold">{formatMoney(selectedOutstanding)}</span>
+            </div>
+            <div className="flex flex-wrap gap-2">
+              <ActionBtn tone="success" onClick={() => setBulkAction("pay")}>一键付清尾款</ActionBtn>
+              <ActionBtn tone="danger" onClick={() => setBulkAction("delete")}>批量删除</ActionBtn>
+              <ActionBtn onClick={() => setSelectedOrderNumbers([])}>清空选择</ActionBtn>
+            </div>
+          </div>
+        )}
       </div>
 
       <div className="overflow-x-auto rounded-xl border border-slate-200 bg-white">
@@ -1918,7 +2098,12 @@ function OrdersSection({
           <thead>
             <tr className="border-b border-slate-200 bg-slate-50">
               <th className="w-9 px-3 py-2.5">
-                <input type="checkbox" disabled className="cursor-not-allowed opacity-40" />
+                <input
+                  type="checkbox"
+                  checked={allFilteredSelected}
+                  onChange={() => setSelectedOrderNumbers(allFilteredSelected ? [] : filteredOrders.map((order) => order.order_number))}
+                  className="cursor-pointer"
+                />
               </th>
               {orderListColumns.map((col) => (
                 <th key={col} className="whitespace-nowrap px-3 py-2.5 font-semibold text-slate-600">
@@ -1935,7 +2120,12 @@ function OrdersSection({
                   className="border-b border-slate-100 last:border-b-0 hover:bg-slate-50/60 transition-colors"
                 >
                   <td className="px-3 py-2.5 align-top">
-                    <input type="checkbox" disabled className="cursor-not-allowed opacity-40" />
+                    <input
+                      type="checkbox"
+                      checked={selectedOrderNumbers.includes(order.order_number)}
+                      onChange={() => toggleSelection(order.order_number)}
+                      className="cursor-pointer"
+                    />
                   </td>
                   <td className="px-3 py-2.5 font-medium text-slate-700">
                     {order.order_number}
@@ -1955,7 +2145,7 @@ function OrdersSection({
                   <td className="max-w-[220px] truncate px-3 py-2.5 text-slate-500">
                     {order.description || "-"}
                   </td>
-                  <td className="px-3 py-2.5 text-slate-700">{formatMoney(order.total_price || 0)}</td>
+                  <td className="px-3 py-2.5 text-slate-700">{formatMoney(order.total_after_tax ?? order.total_price ?? 0)}</td>
                   <td className="px-3 py-2.5 text-slate-500">{order.order_date || "-"}</td>
                   <td className="px-3 py-2.5">
                     <StatusBadge status={order.status ?? "下单"} />
@@ -2001,7 +2191,7 @@ function OrdersSection({
             ) : (
               <tr>
                 <td
-                  colSpan={orderListColumns.length + 1}
+                  colSpan={orderListColumns.length + 2}
                   className="py-10 text-center text-sm text-slate-400"
                 >
                   当前没有可显示的订单数据
@@ -2038,6 +2228,26 @@ const FINANCE_SUBS: Array<{ key: FinanceSub; label: string }> = [
   { key: "audit", label: "财务体检" },
 ];
 
+const RECEIVABLE_AGING_BUCKETS = [
+  { key: "current", label: "0-30天", min: 0, max: 30, tone: "bg-emerald-50 text-emerald-700 border-emerald-200" },
+  { key: "days31", label: "31-60天", min: 31, max: 60, tone: "bg-amber-50 text-amber-700 border-amber-200" },
+  { key: "days61", label: "61-90天", min: 61, max: 90, tone: "bg-orange-50 text-orange-700 border-orange-200" },
+  { key: "over90", label: "90+天", min: 91, max: Number.POSITIVE_INFINITY, tone: "bg-rose-50 text-rose-700 border-rose-200" },
+] as const;
+
+function diffReceivableDays(dateStr?: string) {
+  if (!dateStr) return 0;
+  const target = new Date(`${dateStr.slice(0, 10)}T00:00:00`);
+  if (Number.isNaN(target.getTime())) return 0;
+  const now = new Date();
+  now.setHours(0, 0, 0, 0);
+  return Math.max(0, Math.floor((now.getTime() - target.getTime()) / 86400000));
+}
+
+function getReceivableBucket(days: number) {
+  return RECEIVABLE_AGING_BUCKETS.find((bucket) => days >= bucket.min && days <= bucket.max) ?? RECEIVABLE_AGING_BUCKETS[0];
+}
+
 function SmallInput({ value, onChange, placeholder, type = "text" }: { value: string | number; onChange: (v: string) => void; placeholder?: string; type?: string; }) {
   return <input type={type} value={value} onChange={(e) => onChange(e.target.value)} placeholder={placeholder} className="h-8 w-full rounded-lg border border-slate-300 bg-white px-3 text-xs text-slate-700 focus:border-blue-400 focus:outline-none" />;
 }
@@ -2058,6 +2268,43 @@ function PanelCard({ title, note, children }: { title: string; note?: string; ch
         {note && <p className="mt-1 text-[11px] text-slate-500">{note}</p>}
       </div>
       {children}
+    </div>
+  );
+}
+
+function InlineConfirmDialog({
+  open,
+  title,
+  description,
+  confirmLabel,
+  confirmTone = "primary",
+  loading = false,
+  onCancel,
+  onConfirm,
+}: {
+  open: boolean;
+  title: string;
+  description: string;
+  confirmLabel: string;
+  confirmTone?: "primary" | "danger" | "success";
+  loading?: boolean;
+  onCancel: () => void;
+  onConfirm: () => void;
+}) {
+  if (!open) return null;
+
+  return (
+    <div className="fixed inset-0 z-50 flex items-center justify-center bg-slate-950/45 px-4">
+      <div className="w-full max-w-md rounded-2xl border border-slate-200 bg-white p-5 shadow-2xl">
+        <h3 className="text-base font-semibold text-slate-900">{title}</h3>
+        <p className="mt-2 text-sm leading-6 text-slate-500">{description}</p>
+        <div className="mt-5 flex justify-end gap-2">
+          <ActionBtn onClick={onCancel}>取消</ActionBtn>
+          <ActionBtn tone={confirmTone} onClick={onConfirm}>
+            {loading ? "处理中..." : confirmLabel}
+          </ActionBtn>
+        </div>
+      </div>
     </div>
   );
 }

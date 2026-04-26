@@ -19,6 +19,24 @@ let redisPromise: Promise<ReturnType<typeof createClient>> | null = null;
 
 type DiscussionMap = Record<string, DiscussionThread>;
 
+function parseDiscussionThread(raw: string): DiscussionThread | null {
+  try {
+    return JSON.parse(raw) as DiscussionThread;
+  } catch {
+    return null;
+  }
+}
+
+function parseDiscussionMap(raw: string | null): DiscussionMap {
+  if (!raw) return {} as DiscussionMap;
+
+  try {
+    return JSON.parse(raw) as DiscussionMap;
+  } catch {
+    return {} as DiscussionMap;
+  }
+}
+
 function requiredEnv(name: string) {
   const value = process.env[name];
   if (!value) throw new Error(`Missing required env: ${name}`);
@@ -38,11 +56,15 @@ async function readMap(client: Awaited<ReturnType<typeof redis>>) {
   if (keyType === "none") return {} as DiscussionMap;
   if (keyType === "hash") {
     const raw = await client.hGetAll(DISCUSSION_KEY);
-    return Object.fromEntries(Object.entries(raw).map(([key, value]) => [key, JSON.parse(value) as DiscussionThread]));
+    return Object.fromEntries(
+      Object.entries(raw)
+        .map(([key, value]) => [key, parseDiscussionThread(value)] as const)
+        .filter((entry): entry is readonly [string, DiscussionThread] => Boolean(entry[1])),
+    );
   }
   if (keyType === "string") {
     const raw = await client.get(DISCUSSION_KEY);
-    return raw ? (JSON.parse(raw) as DiscussionMap) : ({} as DiscussionMap);
+    return parseDiscussionMap(raw);
   }
   throw new Error(`Unsupported Redis type for ${DISCUSSION_KEY}: ${keyType}`);
 }
@@ -66,14 +88,14 @@ export async function readDiscussionThread(id: string) {
     return map[threadId] || null;
   }
   const raw = await client.hGet(DISCUSSION_KEY, threadId);
-  return raw ? (JSON.parse(raw) as DiscussionThread) : null;
+  return raw ? parseDiscussionThread(raw) : null;
 }
 
 export async function upsertDiscussionThread(input: Omit<DiscussionThread, "createdAt" | "updatedAt"> & Partial<Pick<DiscussionThread, "createdAt" | "updatedAt">>) {
   const client = await redis();
   const keyType = await client.type(DISCUSSION_KEY);
   const existingMap = keyType === "string" ? await readMap(client) : null;
-  const existing = existingMap?.[input.id] ?? (await client.hGet(DISCUSSION_KEY, input.id).then((v) => (v ? (JSON.parse(v) as DiscussionThread) : null)).catch(() => null));
+  const existing = existingMap?.[input.id] ?? (await client.hGet(DISCUSSION_KEY, input.id).then((v) => (v ? parseDiscussionThread(v) : null)).catch(() => null));
 
   const nextThread: DiscussionThread = {
     id: input.id,

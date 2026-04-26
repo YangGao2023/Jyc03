@@ -3,6 +3,9 @@ import { DashboardCard, DashboardCardTitle, DashboardPageHeader } from "../compo
 import { safeRead } from "@/lib/fs-utils";
 import { parseTaskQueue, readTaskQueue } from "@/lib/task-board";
 import { readActiveTodos, readCompletedTodos, TODO_PATH } from "@/lib/todo-board";
+import { readPromises } from "@/lib/promise-store";
+import { readWakeQueue } from "@/lib/wake-store";
+import { computeWatchdogAlerts } from "@/lib/watchdog";
 
 function clipLines(raw: string, lines = 18) {
   const list = raw.split(/\r?\n/).slice(0, lines);
@@ -49,6 +52,11 @@ export default async function DashboardMemoryPage() {
   const activeTodos = readActiveTodos();
   const completedTodos = readCompletedTodos();
   const tasks = parseTaskQueue(readTaskQueue());
+  const promises = await readPromises().catch(() => []);
+  const wakeItems = await readWakeQueue().catch(() => []);
+  const watchdogAlerts = await computeWatchdogAlerts().catch(() => []);
+  const handedOffPromises = promises.filter((item) => item.status === "handed_off").length;
+  const pendingWakeCount = wakeItems.filter((item) => !item.consumedAt).length;
 
   return (
     <div className="rounded-[30px] border border-white/10 bg-[linear-gradient(180deg,_rgba(15,23,42,0.98),_rgba(3,7,18,0.98))] p-4 shadow-2xl">
@@ -72,6 +80,15 @@ export default async function DashboardMemoryPage() {
                   {panel.label === "TODO" ? <p className="mt-1 text-xs text-slate-400">进行中 {activeTodos.length} · 已完成 {completedTodos.length}</p> : null}
                 </div>
               ))}
+            </div>
+          </div>
+
+          <div className="mt-4 rounded-2xl border border-white/10 bg-white/5 p-3 text-xs text-slate-200">
+            <div className="flex flex-wrap items-center gap-2">
+              <span className="rounded-full bg-white/10 px-3 py-1 font-semibold text-white">待接手 Promise {handedOffPromises}</span>
+              <span className="rounded-full bg-white/10 px-3 py-1 font-semibold text-white">待消费 Wake {pendingWakeCount}</span>
+              <span className="rounded-full bg-white/10 px-3 py-1 font-semibold text-white">Watchdog 告警 {watchdogAlerts.length}</span>
+              <a href="/dashboard/system" className="rounded-full border border-white/10 px-3 py-1 font-semibold text-sky-200 hover:bg-white/10">去系统页核对</a>
             </div>
           </div>
 

@@ -127,6 +127,25 @@ export function countEventItems(raw = readEventStream()) {
   return raw.split(/\r?\n/).filter((line) => line.trim().startsWith("- [")).length;
 }
 
+export function formatRecentTaskEvents(raw = readEventStream(), limit = 5) {
+  return raw
+    .split(/\r?\n/)
+    .filter((line) => line.trim().startsWith("- ["))
+    .map((line) =>
+      line
+        .trim()
+        .replace(/^\-\s+/, "")
+        .replace(/^\[(.+?)\]/, "时间：$1")
+        .replace(/\sactor=/g, " · 执行人：")
+        .replace(/\stype=(\S+)/g, (_, type) => ` · 类型：${type}`)
+        .replace(/\stask=/g, " · 任务编号：")
+        .replace(/\sresult=/g, " · 结果：")
+        .replace(/`/g, ""),
+    )
+    .slice(-limit)
+    .reverse();
+}
+
 export function nextTaskId(raw: string) {
   const ids = [...raw.matchAll(/### \[TASK-(\d+)\]/g)].map((match) => Number(match[1]));
   const max = ids.length > 0 ? Math.max(...ids) : 0;

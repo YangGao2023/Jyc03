@@ -7,31 +7,12 @@ import { appendProof, makeProofId, readProofs } from "@/lib/proof-store";
 import { safeRead } from "@/lib/fs-utils";
 import { formatEasternTime } from "@/lib/time";
 import { countTodoItems, readTodoBoard } from "@/lib/todo-board";
-import { countEventItems, countTaskItems, readEventStream, readTaskQueue } from "@/lib/task-board";
+import { countEventItems, countTaskItems, formatRecentTaskEvents, readEventStream, readTaskQueue } from "@/lib/task-board";
 import { readWakeQueue, upsertWakeItem } from "@/lib/wake-store";
 import { computeWatchdogAlerts } from "@/lib/watchdog";
 
 function countMatches(raw: string, pattern: RegExp) {
   return raw.split(/\r?\n/).filter((line) => pattern.test(line.trim())).length;
-}
-
-function parseRecentEvents(raw: string) {
-  return raw
-    .split(/\r?\n/)
-    .filter((line) => line.trim().startsWith("- ["))
-    .map((line) =>
-      line
-        .trim()
-        .replace(/^\-\s+/, "")
-        .replace(/^\[(.+?)\]/, "时间：$1")
-        .replace(/\sactor=/g, " · 执行人：")
-        .replace(/\stype=(\S+)/g, (_, type) => ` · 类型：${type}`)
-        .replace(/\stask=/g, " · 任务编号：")
-        .replace(/\sresult=/g, " · 结果：")
-        .replace(/`/g, ""),
-    )
-    .slice(-5)
-    .reverse();
 }
 
 function promiseTone(value: string) {
@@ -205,7 +186,7 @@ export default async function DashboardOverviewPage() {
   const todoCount = countTodoItems(todoRaw);
   const taskCount = countTaskItems(taskRaw);
   const handoffCount = countMatches(handoffRaw, /^### /);
-  const recentEvents = parseRecentEvents(eventRaw);
+  const recentEvents = formatRecentTaskEvents(eventRaw);
   const totalEventCount = countEventItems(eventRaw);
   const openPromises = promises.filter((item) => !["completed", "expired"].includes(item.status));
   const activePromises = openPromises.length;

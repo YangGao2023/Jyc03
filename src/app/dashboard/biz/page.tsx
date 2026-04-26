@@ -2289,21 +2289,78 @@ function ClientsSection({ clients, setClients, suppliers, setSuppliers, orders, 
 
 type MaterialSub = "inventory" | "purchases";
 
-function MaterialsSection({ materials, setMaterials, purchases, setPurchases, suppliers }: { materials: MaterialRecord[]; setMaterials: React.Dispatch<React.SetStateAction<MaterialRecord[]>>; purchases: PurchaseRecord[]; setPurchases: React.Dispatch<React.SetStateAction<PurchaseRecord[]>>; suppliers: SupplierRecord[]; }) {
+function normalizeInventoryToken(value: string) {
+  return value
+    .toLowerCase()
+    .replace(/\([^)]*\)/g, " ")
+    .replace(/[（【].*?[）】]/g, " ")
+    .replace(/[^\p{L}\p{N}]+/gu, "")
+    .trim();
+}
+
+function inventoryNameMatches(material: MaterialRecord, candidateName: string) {
+  const materialToken = normalizeInventoryToken(material.name);
+  const candidateToken = normalizeInventoryToken(candidateName);
+  if (!materialToken || !candidateToken) return false;
+  return candidateToken.includes(materialToken) || materialToken.includes(candidateToken);
+}
+
+function findMaterialMatch(materials: MaterialRecord[], candidateName: string, unit?: string) {
+  return materials.find((item) => {
+    if (!inventoryNameMatches(item, candidateName)) return false;
+    if (unit && item.unit && item.unit !== unit) return false;
+    return true;
+  });
+}
+
+function getCommittedMaterialMap(materials: MaterialRecord[], orders: BizOrder[]) {
+  const committed = new Map<string, number>();
+
+  orders
+    .filter((order) => order.order_type === "批发单" && order.status !== "已关闭")
+    .forEach((order) => {
+      (order.material_rows ?? []).forEach((row) => {
+        const matched = findMaterialMatch(materials, row.name, row.unit);
+        if (!matched) return;
+        committed.set(matched.id, (committed.get(matched.id) ?? 0) + row.qty);
+      });
+    });
+
+  return committed;
+}
+
+function MaterialsSection({ materials, setMaterials, purchases, setPurchases, suppliers, orders }: { materials: MaterialRecord[]; setMaterials: React.Dispatch<React.SetStateAction<MaterialRecord[]>>; purchases: PurchaseRecord[]; setPurchases: React.Dispatch<React.SetStateAction<PurchaseRecord[]>>; suppliers: SupplierRecord[]; orders: BizOrder[]; }) {
   const [sub, setSub] = useState<MaterialSub>("inventory");
   const today = new Date().toISOString().slice(0, 10);
   const [materialDraft, setMaterialDraft] = useState({ code: "", name: "", specification: "", unit: "个", stock_quantity: "", min_stock: "", purchase_price: "", supplier: suppliers[0]?.name ?? "", remark: "" });
   const [purchaseDraft, setPurchaseDraft] = useState({ supplier: suppliers[0]?.name ?? "", item_name: "", quantity: "", unit: "个", unit_price: "", purchase_date: today, status: "未付款" });
+  const [inventoryHint, setInventoryHint] = useState("");
   const lowStockCount = materials.filter((item) => item.stock_quantity <= item.min_stock).length;
   const monthlyPurchase = purchases.filter((item) => item.purchase_date.startsWith(today.slice(0, 7))).reduce((sum, item) => sum + item.total_amount, 0);
+  const committedMap = useMemo(() => getCommittedMaterialMap(materials, orders), [materials, orders]);
+  const inventoryRows = useMemo(
+    () => materials.map((item) => {
+      const committed = committedMap.get(item.id) ?? 0;
+      const available = item.stock_quantity - committed;
+      return {
+        ...item,
+        committed,
+        available,
+        shortage: Math.max(0, committed - item.stock_quantity),
+      };
+    }),
+    [committedMap, materials],
+  );
+  const committedTotal = inventoryRows.reduce((sum, item) => sum + item.committed, 0);
+  const shortageCount = inventoryRows.filter((item) => item.shortage > 0).length;
   const materialConfigs: Record<MaterialSub, SplitTabularSchemaConfig> = {
     inventory: {
       title: "库存清单",
       filePrefix: "biz-materials",
-      exportColumns: ["编码", "名称", "规格", "单位", "库存", "预警库存", "成本单价", "供应商", "最近入库日期", "备注"],
-      printColumns: ["编码", "名称", "规格", "单位", "库存", "预警库存", "成本单价", "供应商"],
-      exportRows: () => mapRows(materials, (item) => [item.code, item.name, item.specification ?? "", item.unit, item.stock_quantity, item.min_stock, item.purchase_price, item.supplier ?? "", item.last_stock_date ?? "", item.remark ?? ""]),
-      printRows: () => mapRows(materials, (item) => [item.code, item.name, item.specification ?? "-", item.unit, item.stock_quantity, item.min_stock, formatMoney(item.purchase_price), item.supplier ?? "-"]),
+      exportColumns: ["编码", "名称", "规格", "单位", "库存", "占用", "可用", "预警库存", "成本单价", "供应商", "最近入库日期", "备注"],
+      printColumns: ["编码", "名称", "规格", "单位", "库存", "占用", "可用", "预警库存", "成本单价", "供应商"],
+      exportRows: () => mapRows(inventoryRows, (item) => [item.code, item.name, item.specification ?? "", item.unit, item.stock_quantity, item.committed, item.available, item.min_stock, item.purchase_price, item.supplier ?? "", item.last_stock_date ?? "", item.remark ?? ""]),
+      printRows: () => mapRows(inventoryRows, (item) => [item.code, item.name, item.specification ?? "-", item.unit, item.stock_quantity, item.committed, item.available, item.min_stock, formatMoney(item.purchase_price), item.supplier ?? "-"]),
     },
     purchases: {
       title: "采购记录",
@@ -2314,14 +2371,147 @@ function MaterialsSection({ materials, setMaterials, purchases, setPurchases, su
       printRows: () => mapRows(purchases, (item) => [item.id, item.supplier, item.item_name, `${item.quantity} ${item.unit}`, formatMoney(item.unit_price), formatMoney(item.total_amount), item.purchase_date, item.status]),
     },
   };
+
   function exportMaterials() { exportTabularSchema(materialConfigs[sub]); }
   function printMaterials() { const config = materialConfigs[sub]; printTabularSchema(config, `共 ${config.printRows().length} 条`); }
-  function addMaterial() { if (!materialDraft.name.trim() || !materialDraft.code.trim()) return; setMaterials((prev) => [{ id: `MAT-${String(prev.length + 1).padStart(3, "0")}`, code: materialDraft.code.trim(), name: materialDraft.name.trim(), specification: materialDraft.specification || undefined, unit: materialDraft.unit, stock_quantity: Number(materialDraft.stock_quantity) || 0, min_stock: Number(materialDraft.min_stock) || 0, purchase_price: Number(materialDraft.purchase_price) || 0, supplier: materialDraft.supplier || undefined, last_stock_date: today, remark: materialDraft.remark || undefined }, ...prev]); setMaterialDraft({ code: "", name: "", specification: "", unit: "个", stock_quantity: "", min_stock: "", purchase_price: "", supplier: suppliers[0]?.name ?? "", remark: "" }); }
-  function addPurchase() { const quantity = Number(purchaseDraft.quantity) || 0; const unitPrice = Number(purchaseDraft.unit_price) || 0; if (!purchaseDraft.item_name.trim() || quantity <= 0) return; setPurchases((prev) => [{ id: `PO-${new Date().getFullYear()}-${String(prev.length + 1).padStart(3, "0")}`, supplier: purchaseDraft.supplier || "未指定", item_name: purchaseDraft.item_name.trim(), quantity, unit: purchaseDraft.unit, unit_price: unitPrice, total_amount: quantity * unitPrice, purchase_date: purchaseDraft.purchase_date, status: purchaseDraft.status }, ...prev]); setPurchaseDraft({ supplier: suppliers[0]?.name ?? "", item_name: "", quantity: "", unit: "个", unit_price: "", purchase_date: today, status: "未付款" }); }
-  return <div><SectionHeader eyebrow="Materials & Inventory" title="物料库存" actions={<><ActionBtn onClick={exportMaterials}>↓ 导出当前表</ActionBtn><ActionBtn onClick={printMaterials}>🖨 打印当前表</ActionBtn><ActionBtn tone="primary" onClick={sub === "inventory" ? addMaterial : addPurchase}>+ {sub === "inventory" ? "新建物料" : "新建采购单"}</ActionBtn></>} /><StatStrip items={[{ label: "物料品类", value: String(materials.length) }, { label: "低库存预警", value: String(lowStockCount), accent: "text-orange-600" }, { label: "本月采购额", value: formatMoney(monthlyPurchase), accent: "text-red-600" }]} /><SegmentedControl options={[{ key: "inventory", label: "库存清单" }, { key: "purchases", label: "采购记录" }]} value={sub} onChange={setSub} />{sub === "inventory" ? <div className="space-y-4"><PanelCard title="快速录入物料"><div className="grid gap-2 sm:grid-cols-2 xl:grid-cols-4"><SmallInput value={materialDraft.code} onChange={(v) => setMaterialDraft((d) => ({ ...d, code: v }))} placeholder="编码" /><SmallInput value={materialDraft.name} onChange={(v) => setMaterialDraft((d) => ({ ...d, name: v }))} placeholder="名称" /><SmallInput value={materialDraft.specification} onChange={(v) => setMaterialDraft((d) => ({ ...d, specification: v }))} placeholder="规格" /><SmallSelect value={materialDraft.unit} onChange={(v) => setMaterialDraft((d) => ({ ...d, unit: v }))} options={["个", "米", "根", "套", "张"]} /><SmallInput value={materialDraft.stock_quantity} onChange={(v) => setMaterialDraft((d) => ({ ...d, stock_quantity: v }))} type="number" placeholder="库存" /><SmallInput value={materialDraft.min_stock} onChange={(v) => setMaterialDraft((d) => ({ ...d, min_stock: v }))} type="number" placeholder="预警库存" /><SmallInput value={materialDraft.purchase_price} onChange={(v) => setMaterialDraft((d) => ({ ...d, purchase_price: v }))} type="number" placeholder="成本单价" /><SmallSelect value={materialDraft.supplier} onChange={(v) => setMaterialDraft((d) => ({ ...d, supplier: v }))} options={suppliers.length ? suppliers.map((item) => item.name) : ["未指定"]} /></div></PanelCard><div className="overflow-x-auto rounded-xl border border-slate-200 bg-white"><table className="w-full text-left text-xs"><thead><tr className="border-b border-slate-200 bg-slate-50"><th className="px-4 py-2.5 font-semibold text-slate-600">品名</th><th className="px-4 py-2.5 font-semibold text-slate-600">规格 / 型号</th><th className="px-4 py-2.5 font-semibold text-slate-600">单位</th><th className="px-4 py-2.5 font-semibold text-slate-600">当前库存</th><th className="px-4 py-2.5 font-semibold text-slate-600">预警库存</th><th className="px-4 py-2.5 font-semibold text-slate-600">成本单价</th><th className="px-4 py-2.5 font-semibold text-slate-600">最近入库日期</th><th className="px-4 py-2.5 font-semibold text-slate-600">备注</th></tr></thead><tbody>{materials.map((item) => <tr key={item.id} className="border-b border-slate-100 last:border-b-0"><td className="px-4 py-2.5 font-medium text-slate-700">{item.name}<div className="text-[11px] text-slate-400">{item.code}</div></td><td className="px-4 py-2.5 text-slate-600">{item.specification ?? "-"}</td><td className="px-4 py-2.5 text-slate-600">{item.unit}</td><td className={`px-4 py-2.5 font-semibold ${item.stock_quantity <= item.min_stock ? "text-orange-600" : "text-slate-700"}`}>{item.stock_quantity}</td><td className="px-4 py-2.5 text-slate-600">{item.min_stock}</td><td className="px-4 py-2.5 text-slate-700">{formatMoney(item.purchase_price)}</td><td className="px-4 py-2.5 text-slate-500">{item.last_stock_date ?? "-"}</td><td className="px-4 py-2.5 text-slate-500">{item.remark ?? item.supplier ?? "-"}</td></tr>)}</tbody></table></div></div> : <div className="space-y-4"><PanelCard title="新增采购记录"><div className="grid gap-2 sm:grid-cols-2 xl:grid-cols-4"><SmallSelect value={purchaseDraft.supplier} onChange={(v) => setPurchaseDraft((d) => ({ ...d, supplier: v }))} options={suppliers.length ? suppliers.map((item) => item.name) : ["未指定"]} /><SmallInput value={purchaseDraft.item_name} onChange={(v) => setPurchaseDraft((d) => ({ ...d, item_name: v }))} placeholder="品名" /><SmallInput value={purchaseDraft.quantity} onChange={(v) => setPurchaseDraft((d) => ({ ...d, quantity: v }))} type="number" placeholder="数量" /><SmallSelect value={purchaseDraft.unit} onChange={(v) => setPurchaseDraft((d) => ({ ...d, unit: v }))} options={["个", "米", "根", "套", "张"]} /><SmallInput value={purchaseDraft.unit_price} onChange={(v) => setPurchaseDraft((d) => ({ ...d, unit_price: v }))} type="number" placeholder="单价" /><SmallInput value={purchaseDraft.purchase_date} onChange={(v) => setPurchaseDraft((d) => ({ ...d, purchase_date: v }))} type="date" /><SmallSelect value={purchaseDraft.status} onChange={(v) => setPurchaseDraft((d) => ({ ...d, status: v }))} options={["未付款", "部分付款", "已付款"]} /></div></PanelCard><div className="overflow-x-auto rounded-xl border border-slate-200 bg-white"><table className="w-full text-left text-xs"><thead><tr className="border-b border-slate-200 bg-slate-50"><th className="px-4 py-2.5 font-semibold text-slate-600">采购单号</th><th className="px-4 py-2.5 font-semibold text-slate-600">供应商</th><th className="px-4 py-2.5 font-semibold text-slate-600">品名</th><th className="px-4 py-2.5 font-semibold text-slate-600">数量</th><th className="px-4 py-2.5 font-semibold text-slate-600">单价</th><th className="px-4 py-2.5 font-semibold text-slate-600">总价</th><th className="px-4 py-2.5 font-semibold text-slate-600">采购日期</th><th className="px-4 py-2.5 font-semibold text-slate-600">状态</th></tr></thead><tbody>{purchases.map((item) => <tr key={item.id} className="border-b border-slate-100 last:border-b-0"><td className="px-4 py-2.5 font-medium text-slate-700">{item.id}</td><td className="px-4 py-2.5 text-slate-700">{item.supplier}</td><td className="px-4 py-2.5 text-slate-600">{item.item_name}</td><td className="px-4 py-2.5 text-slate-600">{item.quantity} {item.unit}</td><td className="px-4 py-2.5 text-slate-700">{formatMoney(item.unit_price)}</td><td className="px-4 py-2.5 font-semibold text-red-600">{formatMoney(item.total_amount)}</td><td className="px-4 py-2.5 text-slate-500">{item.purchase_date}</td><td className="px-4 py-2.5 text-slate-600">{item.status}</td></tr>)}</tbody></table></div></div>}</div>;
-}
 
-// ─── Employees ───────────────────────────────────────────────────────────────
+  function addMaterial() {
+    if (!materialDraft.name.trim() || !materialDraft.code.trim()) return;
+    setMaterials((prev) => [{ id: `MAT-${String(prev.length + 1).padStart(3, "0")}`, code: materialDraft.code.trim(), name: materialDraft.name.trim(), specification: materialDraft.specification || undefined, unit: materialDraft.unit, stock_quantity: Number(materialDraft.stock_quantity) || 0, min_stock: Number(materialDraft.min_stock) || 0, purchase_price: Number(materialDraft.purchase_price) || 0, supplier: materialDraft.supplier || undefined, last_stock_date: today, remark: materialDraft.remark || undefined }, ...prev]);
+    setInventoryHint(`已新增物料 ${materialDraft.name.trim()}。`);
+    setMaterialDraft({ code: "", name: "", specification: "", unit: "个", stock_quantity: "", min_stock: "", purchase_price: "", supplier: suppliers[0]?.name ?? "", remark: "" });
+  }
+
+  function addPurchase() {
+    const quantity = Number(purchaseDraft.quantity) || 0;
+    const unitPrice = Number(purchaseDraft.unit_price) || 0;
+    const itemName = purchaseDraft.item_name.trim();
+    if (!itemName || quantity <= 0) return;
+
+    setPurchases((prev) => [{ id: `PO-${new Date().getFullYear()}-${String(prev.length + 1).padStart(3, "0")}`, supplier: purchaseDraft.supplier || "未指定", item_name: itemName, quantity, unit: purchaseDraft.unit, unit_price: unitPrice, total_amount: quantity * unitPrice, purchase_date: purchaseDraft.purchase_date, status: purchaseDraft.status }, ...prev]);
+
+    const matched = findMaterialMatch(materials, itemName, purchaseDraft.unit);
+    if (matched) {
+      setMaterials((prev) => prev.map((item) => item.id === matched.id ? { ...item, stock_quantity: item.stock_quantity + quantity, purchase_price: unitPrice || item.purchase_price, supplier: purchaseDraft.supplier || item.supplier, last_stock_date: purchaseDraft.purchase_date } : item));
+      setInventoryHint(`采购单已入库，${matched.name} 库存 +${quantity}${purchaseDraft.unit}。`);
+    } else {
+      setInventoryHint("采购单已记录，但未匹配到现有物料，库存未自动增加。可先建物料编码后再录采购。");
+    }
+
+    setPurchaseDraft({ supplier: suppliers[0]?.name ?? "", item_name: "", quantity: "", unit: "个", unit_price: "", purchase_date: today, status: "未付款" });
+  }
+
+  return (
+    <div>
+      <SectionHeader eyebrow="Materials & Inventory" title="物料库存" actions={<><ActionBtn onClick={exportMaterials}>↓ 导出当前表</ActionBtn><ActionBtn onClick={printMaterials}>🖨 打印当前表</ActionBtn><ActionBtn tone="primary" onClick={sub === "inventory" ? addMaterial : addPurchase}>+ {sub === "inventory" ? "新建物料" : "新建采购单"}</ActionBtn></>} />
+      <StatStrip items={[{ label: "物料品类", value: String(materials.length) }, { label: "订单占用", value: String(committedTotal), accent: "text-sky-600" }, { label: "低库存预警", value: String(lowStockCount), accent: "text-orange-600" }, { label: "缺货项目", value: String(shortageCount), accent: shortageCount > 0 ? "text-red-600" : "text-emerald-600" }, { label: "本月采购额", value: formatMoney(monthlyPurchase), accent: "text-red-600" }]} />
+      <SegmentedControl options={[{ key: "inventory", label: "库存清单" }, { key: "purchases", label: "采购记录" }]} value={sub} onChange={setSub} />
+
+      {inventoryHint ? (
+        <div className="mb-4 rounded-xl border border-sky-100 bg-sky-50 px-4 py-3 text-xs text-sky-700">
+          {inventoryHint}
+        </div>
+      ) : null}
+
+      {sub === "inventory" ? (
+        <div className="space-y-4">
+          <PanelCard title="快速录入物料" note="现在会结合未关闭批发单计算占用量，直接看到可用库存。">
+            <div className="grid gap-2 sm:grid-cols-2 xl:grid-cols-4">
+              <SmallInput value={materialDraft.code} onChange={(v) => setMaterialDraft((d) => ({ ...d, code: v }))} placeholder="编码" />
+              <SmallInput value={materialDraft.name} onChange={(v) => setMaterialDraft((d) => ({ ...d, name: v }))} placeholder="名称" />
+              <SmallInput value={materialDraft.specification} onChange={(v) => setMaterialDraft((d) => ({ ...d, specification: v }))} placeholder="规格" />
+              <SmallSelect value={materialDraft.unit} onChange={(v) => setMaterialDraft((d) => ({ ...d, unit: v }))} options={["个", "米", "根", "套", "张"]} />
+              <SmallInput value={materialDraft.stock_quantity} onChange={(v) => setMaterialDraft((d) => ({ ...d, stock_quantity: v }))} type="number" placeholder="库存" />
+              <SmallInput value={materialDraft.min_stock} onChange={(v) => setMaterialDraft((d) => ({ ...d, min_stock: v }))} type="number" placeholder="预警库存" />
+              <SmallInput value={materialDraft.purchase_price} onChange={(v) => setMaterialDraft((d) => ({ ...d, purchase_price: v }))} type="number" placeholder="成本单价" />
+              <SmallSelect value={materialDraft.supplier} onChange={(v) => setMaterialDraft((d) => ({ ...d, supplier: v }))} options={suppliers.length ? suppliers.map((item) => item.name) : ["未指定"]} />
+            </div>
+          </PanelCard>
+
+          <div className="overflow-x-auto rounded-xl border border-slate-200 bg-white">
+            <table className="w-full text-left text-xs">
+              <thead>
+                <tr className="border-b border-slate-200 bg-slate-50">
+                  <th className="px-4 py-2.5 font-semibold text-slate-600">品名</th>
+                  <th className="px-4 py-2.5 font-semibold text-slate-600">规格 / 型号</th>
+                  <th className="px-4 py-2.5 font-semibold text-slate-600">单位</th>
+                  <th className="px-4 py-2.5 font-semibold text-slate-600">当前库存</th>
+                  <th className="px-4 py-2.5 font-semibold text-slate-600">订单占用</th>
+                  <th className="px-4 py-2.5 font-semibold text-slate-600">可用库存</th>
+                  <th className="px-4 py-2.5 font-semibold text-slate-600">预警库存</th>
+                  <th className="px-4 py-2.5 font-semibold text-slate-600">成本单价</th>
+                  <th className="px-4 py-2.5 font-semibold text-slate-600">最近入库日期</th>
+                  <th className="px-4 py-2.5 font-semibold text-slate-600">备注</th>
+                </tr>
+              </thead>
+              <tbody>
+                {inventoryRows.map((item) => (
+                  <tr key={item.id} className="border-b border-slate-100 last:border-b-0">
+                    <td className="px-4 py-2.5 font-medium text-slate-700">{item.name}<div className="text-[11px] text-slate-400">{item.code}</div></td>
+                    <td className="px-4 py-2.5 text-slate-600">{item.specification ?? "-"}</td>
+                    <td className="px-4 py-2.5 text-slate-600">{item.unit}</td>
+                    <td className={`px-4 py-2.5 font-semibold ${item.stock_quantity <= item.min_stock ? "text-orange-600" : "text-slate-700"}`}>{item.stock_quantity}</td>
+                    <td className={`px-4 py-2.5 font-semibold ${item.committed > 0 ? "text-sky-700" : "text-slate-400"}`}>{item.committed || "-"}</td>
+                    <td className={`px-4 py-2.5 font-semibold ${item.shortage > 0 ? "text-red-600" : item.available <= item.min_stock ? "text-orange-600" : "text-emerald-600"}`}>{item.available}</td>
+                    <td className="px-4 py-2.5 text-slate-600">{item.min_stock}</td>
+                    <td className="px-4 py-2.5 text-slate-700">{formatMoney(item.purchase_price)}</td>
+                    <td className="px-4 py-2.5 text-slate-500">{item.last_stock_date ?? "-"}</td>
+                    <td className="px-4 py-2.5 text-slate-500"><div>{item.remark ?? item.supplier ?? "-"}</div>{item.shortage > 0 ? <div className="mt-1 text-[11px] font-semibold text-red-500">缺口 {item.shortage} {item.unit}</div> : null}</td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+        </div>
+      ) : (
+        <div className="space-y-4">
+          <PanelCard title="新增采购记录" note="若品名和单位能匹配已有物料，保存采购单时会自动回补库存。">
+            <div className="grid gap-2 sm:grid-cols-2 xl:grid-cols-4">
+              <SmallSelect value={purchaseDraft.supplier} onChange={(v) => setPurchaseDraft((d) => ({ ...d, supplier: v }))} options={suppliers.length ? suppliers.map((item) => item.name) : ["未指定"]} />
+              <SmallInput value={purchaseDraft.item_name} onChange={(v) => setPurchaseDraft((d) => ({ ...d, item_name: v }))} placeholder="品名" />
+              <SmallInput value={purchaseDraft.quantity} onChange={(v) => setPurchaseDraft((d) => ({ ...d, quantity: v }))} type="number" placeholder="数量" />
+              <SmallSelect value={purchaseDraft.unit} onChange={(v) => setPurchaseDraft((d) => ({ ...d, unit: v }))} options={["个", "米", "根", "套", "张"]} />
+              <SmallInput value={purchaseDraft.unit_price} onChange={(v) => setPurchaseDraft((d) => ({ ...d, unit_price: v }))} type="number" placeholder="单价" />
+              <SmallInput value={purchaseDraft.purchase_date} onChange={(v) => setPurchaseDraft((d) => ({ ...d, purchase_date: v }))} type="date" />
+              <SmallSelect value={purchaseDraft.status} onChange={(v) => setPurchaseDraft((d) => ({ ...d, status: v }))} options={["未付款", "部分付款", "已付款"]} />
+            </div>
+          </PanelCard>
+
+          <div className="overflow-x-auto rounded-xl border border-slate-200 bg-white">
+            <table className="w-full text-left text-xs">
+              <thead>
+                <tr className="border-b border-slate-200 bg-slate-50">
+                  <th className="px-4 py-2.5 font-semibold text-slate-600">采购单号</th>
+                  <th className="px-4 py-2.5 font-semibold text-slate-600">供应商</th>
+                  <th className="px-4 py-2.5 font-semibold text-slate-600">品名</th>
+                  <th className="px-4 py-2.5 font-semibold text-slate-600">数量</th>
+                  <th className="px-4 py-2.5 font-semibold text-slate-600">单价</th>
+                  <th className="px-4 py-2.5 font-semibold text-slate-600">总价</th>
+                  <th className="px-4 py-2.5 font-semibold text-slate-600">采购日期</th>
+                  <th className="px-4 py-2.5 font-semibold text-slate-600">状态</th>
+                </tr>
+              </thead>
+              <tbody>
+                {purchases.map((item) => (
+                  <tr key={item.id} className="border-b border-slate-100 last:border-b-0">
+                    <td className="px-4 py-2.5 font-medium text-slate-700">{item.id}</td>
+                    <td className="px-4 py-2.5 text-slate-700">{item.supplier}</td>
+                    <td className="px-4 py-2.5 text-slate-600">{item.item_name}</td>
+                    <td className="px-4 py-2.5 text-slate-600">{item.quantity} {item.unit}</td>
+                    <td className="px-4 py-2.5 text-slate-700">{formatMoney(item.unit_price)}</td>
+                    <td className="px-4 py-2.5 font-semibold text-red-600">{formatMoney(item.total_amount)}</td>
+                    <td className="px-4 py-2.5 text-slate-500">{item.purchase_date}</td>
+                    <td className="px-4 py-2.5 text-slate-600">{item.status}</td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+        </div>
+      )}
+    </div>
+  );
+}
 
 function formatAppointmentDate(value: string) {
   if (!value) return "-";
@@ -2814,6 +3004,7 @@ export default function DashboardBizPage() {
               purchases={purchases}
               setPurchases={setPurchases}
               suppliers={suppliers}
+              orders={orders}
             />
           )}
           {section === "employees" && (

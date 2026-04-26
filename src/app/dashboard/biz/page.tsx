@@ -2017,7 +2017,7 @@ function OrdersSection({
 
 // ─── Finance ─────────────────────────────────────────────────────────────────
 
-type FinanceSub = "income" | "expense" | "cash" | "ledger" | "receivables";
+type FinanceSub = "income" | "expense" | "cash" | "ledger" | "receivables" | "audit";
 
 type FinanceDraft = {
   target: string;
@@ -2061,24 +2061,202 @@ function PanelCard({ title, note, children }: { title: string; note?: string; ch
   );
 }
 
-function FinanceSection({ orders, expenses, setExpenses, cashEntries, setCashEntries, payrolls }: {
+type FinanceAuditOrderIssue = {
+  kind: "order";
+  orderNumber: string;
+  clientName: string;
+  issue: string;
+  severity: "high" | "medium";
+  currentValue: string;
+  suggestedValue: string;
+};
+
+type FinanceAuditClientIssue = {
+  kind: "client_balance";
+  clientId: string;
+  clientName: string;
+  issue: string;
+  severity: "medium";
+  currentValue: string;
+  suggestedValue: string;
+};
+
+type FinanceDuplicateClientIssue = {
+  kind: "duplicate_client";
+  key: string;
+  clientNames: string[];
+  issue: string;
+  severity: "warning";
+};
+
+type FinanceAuditIssue = FinanceAuditOrderIssue | FinanceAuditClientIssue | FinanceDuplicateClientIssue;
+
+type FinanceAuditReport = {
+  scannedAt: string;
+  orderIssueCount: number;
+  clientIssueCount: number;
+  duplicateClientCount: number;
+  autoFixableCount: number;
+  issues: FinanceAuditIssue[];
+};
+
+function getOrderTotalForAudit(order: BizOrder) {
+  return order.total_after_tax ?? calcTotalAfterTax(order.total_price ?? 0, order.tax_rate ?? 0, order.discount ?? 0);
+}
+
+function getOrderPaymentNet(order: BizOrder) {
+  const history = order.payment_history ?? [];
+  if (!history.length) return order.amount_paid ?? 0;
+  return history.reduce((sum, item) => sum + (item.type === "refund" ? -item.amount : item.amount), 0);
+}
+
+function normalizePhone(value?: string) {
+  return (value ?? "").replace(/\D+/g, "");
+}
+
+function buildFinanceAuditReport(orders: BizOrder[], clients: ContactRecord[]): FinanceAuditReport {
+  const issues: FinanceAuditIssue[] = [];
+  const clientBalanceMap = new Map<string, number>();
+
+  orders.forEach((order) => {
+    const totalAfterTax = getOrderTotalForAudit(order);
+    const paymentNet = getOrderPaymentNet(order);
+    const expectedAmountPaid = Math.max(0, paymentNet);
+    const expectedBalance = Math.max(0, totalAfterTax - expectedAmountPaid);
+    const expectedStatus = deriveStatus(totalAfterTax, expectedAmountPaid, order.status ?? "下单");
+    const currentAmountPaid = order.amount_paid ?? 0;
+    const currentBalance = order.balance ?? Math.max(0, totalAfterTax - currentAmountPaid);
+
+    if (Math.abs(currentAmountPaid - expectedAmountPaid) > 0.01) {
+      issues.push({
+        kind: "order",
+        orderNumber: order.order_number,
+        clientName: order.client_name,
+        issue: "已付金额与收款记录不一致",
+        severity: "high",
+        currentValue: formatMoney(currentAmountPaid),
+        suggestedValue: formatMoney(expectedAmountPaid),
+      });
+    }
+
+    if (Math.abs(currentBalance - expectedBalance) > 0.01) {
+      issues.push({
+        kind: "order",
+        orderNumber: order.order_number,
+        clientName: order.client_name,
+        issue: currentBalance < 0 ? "余款为负数" : "余款计算异常",
+        severity: "high",
+        currentValue: formatMoney(currentBalance),
+        suggestedValue: formatMoney(expectedBalance),
+      });
+    }
+
+    if ((order.status ?? "下单") !== expectedStatus) {
+      issues.push({
+        kind: "order",
+        orderNumber: order.order_number,
+        clientName: order.client_name,
+        issue: "订单状态与收款进度不一致",
+        severity: "medium",
+        currentValue: order.status ?? "下单",
+        suggestedValue: expectedStatus,
+      });
+    }
+
+    if (order.status !== "已关闭") {
+      clientBalanceMap.set(order.client_name, (clientBalanceMap.get(order.client_name) ?? 0) + expectedBalance);
+    }
+  });
+
+  clients.forEach((client) => {
+    const expectedBalance = Number((clientBalanceMap.get(client.name) ?? 0).toFixed(2));
+    const currentBalance = Number((client.balance ?? 0).toFixed(2));
+    if (Math.abs(currentBalance - expectedBalance) > 0.01) {
+      issues.push({
+        kind: "client_balance",
+        clientId: client.id,
+        clientName: client.name,
+        issue: "客户档案余额未同步订单应收",
+        severity: "medium",
+        currentValue: formatMoney(currentBalance),
+        suggestedValue: formatMoney(expectedBalance),
+      });
+    }
+  });
+
+  const duplicatePhoneGroups = new Map<string, ContactRecord[]>();
+  clients.forEach((client) => {
+    const key = normalizePhone(client.phone);
+    if (!key) return;
+    duplicatePhoneGroups.set(key, [...(duplicatePhoneGroups.get(key) ?? []), client]);
+  });
+
+  duplicatePhoneGroups.forEach((group, key) => {
+    if (group.length < 2) return;
+    issues.push({
+      kind: "duplicate_client",
+      key,
+      clientNames: group.map((item) => item.name),
+      issue: `发现 ${group.length} 个客户共用同一手机号`,
+      severity: "warning",
+    });
+  });
+
+  return {
+    scannedAt: new Date().toISOString(),
+    orderIssueCount: issues.filter((item) => item.kind === "order").length,
+    clientIssueCount: issues.filter((item) => item.kind === "client_balance").length,
+    duplicateClientCount: issues.filter((item) => item.kind === "duplicate_client").length,
+    autoFixableCount: issues.filter((item) => item.kind !== "duplicate_client").length,
+    issues,
+  };
+}
+
+function applyFinanceAuditRepairs(orders: BizOrder[], clients: ContactRecord[]) {
+  const clientBalanceMap = new Map<string, number>();
+
+  const fixedOrders = orders.map((order) => {
+    const totalAfterTax = getOrderTotalForAudit(order);
+    const amountPaid = Math.max(0, getOrderPaymentNet(order));
+    const balance = Math.max(0, totalAfterTax - amountPaid);
+    const status = deriveStatus(totalAfterTax, amountPaid, order.status ?? "下单");
+
+    if (order.status !== "已关闭") {
+      clientBalanceMap.set(order.client_name, (clientBalanceMap.get(order.client_name) ?? 0) + balance);
+    }
+
+    return {
+      ...order,
+      total_after_tax: totalAfterTax,
+      amount_paid: Number(amountPaid.toFixed(2)),
+      balance: Number(balance.toFixed(2)),
+      status,
+    };
+  });
+
+  const fixedClients = clients.map((client) => ({
+    ...client,
+    balance: Number((clientBalanceMap.get(client.name) ?? 0).toFixed(2)),
+  }));
+
+  return { fixedOrders, fixedClients };
+}
+
+function FinanceSection({ orders, setOrders, expenses, setExpenses, cashEntries, setCashEntries, payrolls, clients, setClients }: {
   orders: BizOrder[];
+  setOrders: React.Dispatch<React.SetStateAction<BizOrder[]>>;
   expenses: ExpenseRecord[];
   setExpenses: React.Dispatch<React.SetStateAction<ExpenseRecord[]>>;
   cashEntries: CashEntry[];
   setCashEntries: React.Dispatch<React.SetStateAction<CashEntry[]>>;
   payrolls: PayrollRecord[];
+  clients: ContactRecord[];
+  setClients: React.Dispatch<React.SetStateAction<ContactRecord[]>>;
 }) {
-  function exportFinance() {
-    exportTabularSchema(financeConfigs[sub]);
-  }
-  function printFinance() {
-    const config = financeConfigs[sub];
-    printTabularSchema(config, `共 ${config.printRows().length} 条`);
-  }
   const [sub, setSub] = useState<FinanceSub>("income");
   const today = new Date().toISOString().slice(0, 10);
   const [draft, setDraft] = useState<FinanceDraft>({ target: "", detail: "", amount: "", expense_type: "采购", payment_method: "转账", expense_date: today, remark: "" });
+  const [auditReport, setAuditReport] = useState<FinanceAuditReport | null>(null);
   const paymentRows = orders.flatMap((order) => (order.payment_history ?? []).map((record, index) => ({ order, record, key: `${order.order_number}-${index}` })));
   const totalIncome = orders.reduce((s, o) => s + (o.amount_paid ?? 0), 0);
   const totalExpense = expenses.reduce((s, item) => s + item.amount, 0);
@@ -2086,6 +2264,8 @@ function FinanceSection({ orders, expenses, setExpenses, cashEntries, setCashEnt
   const payrollAmount = payrolls.reduce((s, item) => s + item.net_salary, 0);
   const cashBalance = cashEntries.reduce((s, item) => s + (item.type === "收入" ? item.amount : -item.amount), 0);
   const receivableOrders = orders.filter((o) => (o.balance ?? 0) > 0 && o.status !== "已关闭");
+  const financeAuditPreview = useMemo(() => buildFinanceAuditReport(orders, clients), [orders, clients]);
+  const activeAudit = auditReport ?? financeAuditPreview;
   const ledgerRows = Array.from(new Set([...orders.map((o) => (o.order_date ?? "").slice(0, 7)), ...expenses.map((e) => e.expense_date.slice(0, 7)), ...payrolls.map((p) => p.month)])).filter(Boolean).sort().reverse().map((month) => {
     const income = orders.filter((o) => (o.order_date ?? "").startsWith(month)).reduce((sum, item) => sum + (item.amount_paid ?? 0), 0);
     const expense = expenses.filter((item) => item.expense_date.startsWith(month)).reduce((sum, item) => sum + item.amount, 0);
@@ -2128,7 +2308,38 @@ function FinanceSection({ orders, expenses, setExpenses, cashEntries, setCashEnt
       exportRows: () => mapRows(receivableOrders, (o) => [o.client_name, o.order_number, o.total_after_tax ?? o.total_price ?? 0, o.amount_paid ?? 0, o.balance ?? 0, o.order_date ?? "", o.status ?? ""]),
       printRows: () => mapRows(receivableOrders, (o) => [o.client_name, o.order_number, formatMoney(o.total_after_tax ?? o.total_price ?? 0), formatMoney(o.amount_paid ?? 0), formatMoney(o.balance ?? 0), o.order_date ?? "-", o.status ?? "-"]),
     },
+    audit: {
+      title: "财务体检",
+      filePrefix: "biz-finance-audit",
+      columns: ["类型", "对象", "问题", "当前值", "建议值"],
+      exportRows: () => activeAudit.issues.map((item) => item.kind === "duplicate_client"
+        ? ["重复客户", item.clientNames.join(" / "), item.issue, item.key, "请人工合并"]
+        : [item.kind === "order" ? "订单" : "客户", item.kind === "order" ? item.orderNumber : item.clientName, item.issue, item.currentValue, item.suggestedValue]),
+      printRows: () => activeAudit.issues.map((item) => item.kind === "duplicate_client"
+        ? ["重复客户", item.clientNames.join(" / "), item.issue, item.key, "请人工合并"]
+        : [item.kind === "order" ? "订单" : "客户", item.kind === "order" ? `${item.orderNumber} / ${item.clientName}` : item.clientName, item.issue, item.currentValue, item.suggestedValue]),
+    },
   };
+
+  function exportFinance() {
+    exportTabularSchema(financeConfigs[sub]);
+  }
+
+  function printFinance() {
+    const config = financeConfigs[sub];
+    printTabularSchema(config, `共 ${config.printRows().length} 条`);
+  }
+
+  function runFinanceAudit() {
+    setAuditReport(buildFinanceAuditReport(orders, clients));
+  }
+
+  function applyFinanceRepair() {
+    const repaired = applyFinanceAuditRepairs(orders, clients);
+    setOrders(repaired.fixedOrders);
+    setClients(repaired.fixedClients);
+    setAuditReport(buildFinanceAuditReport(repaired.fixedOrders, repaired.fixedClients));
+  }
 
   function addExpense() {
     const amount = Number(draft.amount) || 0;
@@ -2143,20 +2354,47 @@ function FinanceSection({ orders, expenses, setExpenses, cashEntries, setCashEnt
 
   return (
     <div>
-      <SectionHeader eyebrow="Finance Management" title="收支管理" actions={<><ActionBtn onClick={exportFinance}>↓ 导出当前表</ActionBtn><ActionBtn onClick={printFinance}>🖨 打印当前表</ActionBtn><ActionBtn tone="primary" onClick={addExpense}>+ 录入支出</ActionBtn></>} />
+      <SectionHeader eyebrow="Finance Management" title="收支管理" actions={<><ActionBtn onClick={exportFinance}>↓ 导出当前表</ActionBtn><ActionBtn onClick={printFinance}>🖨 打印当前表</ActionBtn>{sub === "audit" ? <ActionBtn onClick={runFinanceAudit}>↻ 重新扫描</ActionBtn> : null}{sub === "audit" ? <ActionBtn tone="success" onClick={applyFinanceRepair}>🔧 应用自动修复</ActionBtn> : <ActionBtn tone="primary" onClick={addExpense}>+ 录入支出</ActionBtn>}</>} />
       <StatStrip items={[{ label: "订单收入", value: formatMoney(totalIncome), accent: "text-green-600" }, { label: "支出合计", value: formatMoney(totalExpense), accent: "text-red-600" }, { label: "现金余额", value: formatMoney(cashBalance), accent: "text-sky-600" }, { label: "应收余款", value: formatMoney(totalBalance), accent: "text-amber-600" }, { label: "账面利润", value: formatMoney(totalIncome - totalExpense - payrollAmount), accent: "text-emerald-600" }]} />
       <div className="mb-4 grid gap-4 xl:grid-cols-[1.1fr_2fr]">
-        <PanelCard title="新增支出" note="现金付款会自动补一条现金流水。">
-          <div className="grid gap-2 sm:grid-cols-2">
-            <SmallInput value={draft.target} onChange={(v) => setDraft((d) => ({ ...d, target: v }))} placeholder="对象 / 供应商" />
-            <SmallInput value={draft.detail} onChange={(v) => setDraft((d) => ({ ...d, detail: v }))} placeholder="支出明细" />
-            <SmallInput value={draft.amount} onChange={(v) => setDraft((d) => ({ ...d, amount: v }))} type="number" placeholder="金额" />
-            <SmallSelect value={draft.expense_type} onChange={(v) => setDraft((d) => ({ ...d, expense_type: v }))} options={["采购", "工资", "物流", "办公", "其他"]} />
-            <SmallSelect value={draft.payment_method} onChange={(v) => setDraft((d) => ({ ...d, payment_method: v }))} options={["现金", "转账", "刷卡", "支票"]} />
-            <SmallInput value={draft.expense_date} onChange={(v) => setDraft((d) => ({ ...d, expense_date: v }))} type="date" />
-          </div>
-          <div className="mt-2"><SmallInput value={draft.remark} onChange={(v) => setDraft((d) => ({ ...d, remark: v }))} placeholder="备注（可选）" /></div>
-        </PanelCard>
+        {sub === "audit" ? (
+          <PanelCard title="财务体检中心" note="参考源里的数据完整性检查与余款修复能力，这里落地为本地订单/客户账务扫描与自动修复。">
+            <div className="grid gap-3 sm:grid-cols-2">
+              <div className="rounded-xl border border-rose-100 bg-rose-50 p-3">
+                <p className="text-[11px] uppercase tracking-[0.2em] text-rose-500">订单异常</p>
+                <p className="mt-2 text-2xl font-semibold text-rose-700">{activeAudit.orderIssueCount}</p>
+                <p className="mt-1 text-xs text-rose-600">检查已付金额、余款和状态是否与收款记录一致</p>
+              </div>
+              <div className="rounded-xl border border-amber-100 bg-amber-50 p-3">
+                <p className="text-[11px] uppercase tracking-[0.2em] text-amber-500">客户账龄</p>
+                <p className="mt-2 text-2xl font-semibold text-amber-700">{activeAudit.clientIssueCount}</p>
+                <p className="mt-1 text-xs text-amber-600">同步客户档案余额，避免客户中心与应收款看板脱节</p>
+              </div>
+              <div className="rounded-xl border border-sky-100 bg-sky-50 p-3">
+                <p className="text-[11px] uppercase tracking-[0.2em] text-sky-500">重复客户线索</p>
+                <p className="mt-2 text-2xl font-semibold text-sky-700">{activeAudit.duplicateClientCount}</p>
+                <p className="mt-1 text-xs text-sky-600">按手机号提示疑似重复客户，保留人工判断</p>
+              </div>
+              <div className="rounded-xl border border-emerald-100 bg-emerald-50 p-3">
+                <p className="text-[11px] uppercase tracking-[0.2em] text-emerald-500">可自动修复</p>
+                <p className="mt-2 text-2xl font-semibold text-emerald-700">{activeAudit.autoFixableCount}</p>
+                <p className="mt-1 text-xs text-emerald-600">一键重算订单应收并回填客户余额，扫描时间 {activeAudit.scannedAt.slice(0, 16).replace("T", " ")}</p>
+              </div>
+            </div>
+          </PanelCard>
+        ) : (
+          <PanelCard title="新增支出" note="现金付款会自动补一条现金流水。">
+            <div className="grid gap-2 sm:grid-cols-2">
+              <SmallInput value={draft.target} onChange={(v) => setDraft((d) => ({ ...d, target: v }))} placeholder="对象 / 供应商" />
+              <SmallInput value={draft.detail} onChange={(v) => setDraft((d) => ({ ...d, detail: v }))} placeholder="支出明细" />
+              <SmallInput value={draft.amount} onChange={(v) => setDraft((d) => ({ ...d, amount: v }))} type="number" placeholder="金额" />
+              <SmallSelect value={draft.expense_type} onChange={(v) => setDraft((d) => ({ ...d, expense_type: v }))} options={["采购", "工资", "物流", "办公", "其他"]} />
+              <SmallSelect value={draft.payment_method} onChange={(v) => setDraft((d) => ({ ...d, payment_method: v }))} options={["现金", "转账", "刷卡", "支票"]} />
+              <SmallInput value={draft.expense_date} onChange={(v) => setDraft((d) => ({ ...d, expense_date: v }))} type="date" />
+            </div>
+            <div className="mt-2"><SmallInput value={draft.remark} onChange={(v) => setDraft((d) => ({ ...d, remark: v }))} placeholder="备注（可选）" /></div>
+          </PanelCard>
+        )}
         <div className="mb-4 flex flex-wrap border-b-2 border-slate-200 bg-white self-start">
           {FINANCE_SUBS.map((t) => <button key={t.key} onClick={() => setSub(t.key)} className={`border-b-2 px-4 py-2 text-xs font-semibold transition-colors ${sub === t.key ? "border-blue-600 text-blue-700" : "border-transparent text-slate-500 hover:text-slate-700"}`}>{t.label}</button>)}
         </div>
@@ -2166,6 +2404,51 @@ function FinanceSection({ orders, expenses, setExpenses, cashEntries, setCashEnt
       {sub === "cash" && <div className="overflow-x-auto rounded-xl border border-slate-200 bg-white"><table className="w-full text-left text-xs"><thead><tr className="border-b border-slate-200 bg-slate-50"><th className="px-4 py-2.5 font-semibold text-slate-600">类型</th><th className="px-4 py-2.5 font-semibold text-slate-600">金额</th><th className="px-4 py-2.5 font-semibold text-slate-600">日期</th><th className="px-4 py-2.5 font-semibold text-slate-600">备注</th></tr></thead><tbody>{cashEntries.map((item) => <tr key={item.id} className="border-b border-slate-100 last:border-b-0"><td className="px-4 py-2.5"><span className={`rounded-full px-2 py-0.5 text-[11px] font-semibold ${item.type === "收入" ? "bg-green-50 text-green-700" : "bg-rose-50 text-rose-700"}`}>{item.type}</span></td><td className={`px-4 py-2.5 font-semibold ${item.type === "收入" ? "text-green-600" : "text-rose-600"}`}>{formatMoney(item.amount)}</td><td className="px-4 py-2.5 text-slate-500">{item.date}</td><td className="px-4 py-2.5 text-slate-500">{item.note ?? "-"}</td></tr>)}</tbody></table></div>}
       {sub === "ledger" && <div className="overflow-x-auto rounded-xl border border-slate-200 bg-white"><table className="w-full text-left text-xs"><thead><tr className="border-b border-slate-200 bg-slate-50"><th className="px-4 py-2.5 font-semibold text-slate-600">月份</th><th className="px-4 py-2.5 font-semibold text-slate-600">收入</th><th className="px-4 py-2.5 font-semibold text-slate-600">支出</th><th className="px-4 py-2.5 font-semibold text-slate-600">净额</th><th className="px-4 py-2.5 font-semibold text-slate-600">工资</th><th className="px-4 py-2.5 font-semibold text-slate-600">净利润</th></tr></thead><tbody>{ledgerRows.map((item) => <tr key={item.month} className="border-b border-slate-100 last:border-b-0"><td className="px-4 py-2.5 font-medium text-slate-700">{item.month}</td><td className="px-4 py-2.5 text-green-600">{formatMoney(item.income)}</td><td className="px-4 py-2.5 text-rose-600">{formatMoney(item.expense)}</td><td className="px-4 py-2.5 text-slate-700">{formatMoney(item.net)}</td><td className="px-4 py-2.5 text-amber-600">{formatMoney(item.wage)}</td><td className={`px-4 py-2.5 font-semibold ${item.profit >= 0 ? "text-emerald-600" : "text-rose-600"}`}>{formatMoney(item.profit)}</td></tr>)}</tbody></table></div>}
       {sub === "receivables" && <div className="overflow-x-auto rounded-xl border border-slate-200 bg-white"><table className="w-full text-left text-xs"><thead><tr className="border-b border-slate-200 bg-slate-50"><th className="px-4 py-2.5 font-semibold text-slate-600">客户</th><th className="px-4 py-2.5 font-semibold text-slate-600">订单号</th><th className="px-4 py-2.5 font-semibold text-slate-600">总额</th><th className="px-4 py-2.5 font-semibold text-slate-600">已付</th><th className="px-4 py-2.5 font-semibold text-slate-600">余款</th><th className="px-4 py-2.5 font-semibold text-slate-600">下单日期</th></tr></thead><tbody>{receivableOrders.map((o) => <tr key={o.order_number} className="border-b border-slate-100 last:border-b-0"><td className="px-4 py-2.5 text-slate-700">{o.client_name}</td><td className="px-4 py-2.5 font-medium text-slate-700">{o.order_number}</td><td className="px-4 py-2.5 text-slate-700">{formatMoney(o.total_after_tax ?? o.total_price ?? 0)}</td><td className="px-4 py-2.5 font-medium text-green-600">{formatMoney(o.amount_paid ?? 0)}</td><td className="px-4 py-2.5 font-semibold text-red-600">{formatMoney(o.balance ?? 0)}</td><td className="px-4 py-2.5 text-slate-500">{o.order_date || "-"}</td></tr>)}</tbody></table></div>}
+      {sub === "audit" && (
+        <div className="space-y-4">
+          <div className="overflow-x-auto rounded-xl border border-slate-200 bg-white">
+            <table className="w-full text-left text-xs">
+              <thead>
+                <tr className="border-b border-slate-200 bg-slate-50">
+                  <th className="px-4 py-2.5 font-semibold text-slate-600">类型</th>
+                  <th className="px-4 py-2.5 font-semibold text-slate-600">对象</th>
+                  <th className="px-4 py-2.5 font-semibold text-slate-600">问题</th>
+                  <th className="px-4 py-2.5 font-semibold text-slate-600">当前值</th>
+                  <th className="px-4 py-2.5 font-semibold text-slate-600">建议值</th>
+                </tr>
+              </thead>
+              <tbody>
+                {activeAudit.issues.length ? activeAudit.issues.map((item) => (
+                  item.kind === "duplicate_client" ? (
+                    <tr key={`dup-${item.key}`} className="border-b border-slate-100 last:border-b-0">
+                      <td className="px-4 py-2.5"><span className="rounded-full bg-sky-50 px-2 py-0.5 text-[11px] font-semibold text-sky-700">重复客户</span></td>
+                      <td className="px-4 py-2.5 font-medium text-slate-700">{item.clientNames.join(" / ")}</td>
+                      <td className="px-4 py-2.5 text-slate-600">{item.issue}</td>
+                      <td className="px-4 py-2.5 text-slate-500">手机号 {item.key}</td>
+                      <td className="px-4 py-2.5 text-slate-500">请人工合并或保留</td>
+                    </tr>
+                  ) : (
+                    <tr key={`${item.kind}-${item.kind === "order" ? item.orderNumber : item.clientId}-${item.issue}`} className="border-b border-slate-100 last:border-b-0">
+                      <td className="px-4 py-2.5"><span className={`rounded-full px-2 py-0.5 text-[11px] font-semibold ${item.kind === "order" ? "bg-rose-50 text-rose-700" : "bg-amber-50 text-amber-700"}`}>{item.kind === "order" ? "订单" : "客户"}</span></td>
+                      <td className="px-4 py-2.5 font-medium text-slate-700">{item.kind === "order" ? `${item.orderNumber} / ${item.clientName}` : item.clientName}</td>
+                      <td className="px-4 py-2.5 text-slate-600">{item.issue}</td>
+                      <td className="px-4 py-2.5 text-slate-500">{item.currentValue}</td>
+                      <td className="px-4 py-2.5 font-medium text-emerald-700">{item.suggestedValue}</td>
+                    </tr>
+                  )
+                )) : (
+                  <tr>
+                    <td colSpan={5} className="py-10 text-center text-sm text-emerald-600">当前没有发现财务异常，可以放心继续收款与对账。</td>
+                  </tr>
+                )}
+              </tbody>
+            </table>
+          </div>
+          <div className="rounded-xl border border-slate-200 bg-slate-50 p-4 text-xs text-slate-500">
+            <p>自动修复范围：重算订单已付金额、余款、状态，并同步客户档案余额。重复客户仅做提示，不自动删除，避免误伤真实共享电话的家庭或公司客户。</p>
+          </div>
+        </div>
+      )}
     </div>
   );
 }
@@ -2961,11 +3244,14 @@ export default function DashboardBizPage() {
           {section === "finance" && (
             <FinanceSection
               orders={orders}
+              setOrders={setOrders}
               expenses={expenses}
               setExpenses={setExpenses}
               cashEntries={cashEntries}
               setCashEntries={setCashEntries}
               payrolls={payrolls}
+              clients={clients}
+              setClients={setClients}
             />
           )}
           {section === "quotes" && (

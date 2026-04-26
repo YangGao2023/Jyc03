@@ -940,7 +940,7 @@ export default async function DashboardSystemPage() {
 
               <div className="rounded-2xl border border-slate-200 bg-slate-50 p-3 text-[11px] leading-5 text-slate-600">
                 <div className="grid gap-2 sm:grid-cols-2">
-                  <div className="rounded-xl bg-white px-3 py-2"><span className="font-semibold text-sky-700">Bridge</span> 发件 {sentHistory.length}，待消费 {outboxMessages.length}，回执 {visibleInboxMessages.length}</div>
+                  <div className="rounded-xl bg-white px-3 py-2"><span className="font-semibold text-sky-700">Bridge</span> 发件 {sentHistory.length}，待消费 {outboxMessages.length}，已收到 {receiptInboxCards.length}，已完成 {resultInboxCards.length}</div>
                   <div className="rounded-xl bg-white px-3 py-2"><span className="font-semibold text-rose-700">守望</span> 心跳 {agentStatuses.length}，超时 {staleAgentCount}</div>
                   <div className="rounded-xl bg-white px-3 py-2"><span className="font-semibold text-amber-700">Wake</span> 待消费 {wakeItems.length}，已消费 {consumedWakeItems.length}</div>
                   <div className="rounded-xl bg-white px-3 py-2"><span className="font-semibold text-violet-700">Watchdog</span> 告警 {watchdogAlerts.length}，交接 {handedOffPromises.length}，提醒 {watchdogOutboxMessages.length}</div>

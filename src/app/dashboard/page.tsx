@@ -4,6 +4,8 @@ import net from "node:net";
 import { safeRead } from "@/lib/fs-utils";
 import { countTodoItems, readTodoBoard } from "@/lib/todo-board";
 import { countBlockedTaskItems, countEventItems, countTaskItems, readEventStream, readTaskQueue } from "@/lib/task-board";
+import { readWakeQueue } from "@/lib/wake-store";
+import { computeWatchdogAlerts } from "@/lib/watchdog";
 
 type AgentSpec = {
   key: string;
@@ -86,6 +88,9 @@ export default async function DashboardPage() {
   const blockedCount = countBlockedTaskItems(taskRaw);
   const eventCount = countEventItems(eventRaw);
   const recentEventCount = Math.min(eventCount, 10);
+  const wakeItems = await readWakeQueue().catch(() => []);
+  const watchdogAlerts = await computeWatchdogAlerts().catch(() => []);
+  const pendingWakeCount = wakeItems.filter((item) => !item.consumedAt).length;
 
   const liveAgents = await Promise.all(
     agents.map(async (agent) => {
@@ -111,7 +116,7 @@ export default async function DashboardPage() {
               </form>
             </div>
 
-            <div className="mt-4 grid gap-3 md:grid-cols-2 xl:grid-cols-4">
+            <div className="mt-4 grid gap-3 md:grid-cols-2 xl:grid-cols-6">
               <div className="rounded-2xl border border-white/10 bg-white/5 p-4">
                 <p className="text-[11px] uppercase tracking-[0.2em] text-slate-400">TODO</p>
                 <p className="mt-2 text-2xl font-semibold text-white">{todoCount}</p>
@@ -127,6 +132,14 @@ export default async function DashboardPage() {
               <div className="rounded-2xl border border-white/10 bg-white/5 p-4">
                 <p className="text-[11px] uppercase tracking-[0.2em] text-slate-400">最近事件</p>
                 <p className="mt-2 text-2xl font-semibold text-white">{recentEventCount} / {eventCount}</p>
+              </div>
+              <div className="rounded-2xl border border-white/10 bg-white/5 p-4">
+                <p className="text-[11px] uppercase tracking-[0.2em] text-slate-400">待消费 Wake</p>
+                <p className="mt-2 text-2xl font-semibold text-white">{pendingWakeCount}</p>
+              </div>
+              <div className="rounded-2xl border border-white/10 bg-white/5 p-4">
+                <p className="text-[11px] uppercase tracking-[0.2em] text-slate-400">Watchdog 告警</p>
+                <p className="mt-2 text-2xl font-semibold text-white">{watchdogAlerts.length}</p>
               </div>
             </div>
           </div>

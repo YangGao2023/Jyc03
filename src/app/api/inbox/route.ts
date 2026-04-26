@@ -1,5 +1,6 @@
 import { NextResponse } from "next/server";
 import { consumeQueue, enqueueMessage, parseMessageBody, verifyBridgeRequest } from "@/lib/agent-bridge";
+import { maybeAutoCloseDiscussion } from "@/lib/discussion-auto-close";
 
 export async function GET(request: Request) {
   try {
@@ -31,6 +32,8 @@ export async function POST(request: Request) {
       kind: String(body.kind || "text"),
       meta: typeof body.meta === "object" && body.meta ? (body.meta as Record<string, unknown>) : undefined,
     });
+
+    await maybeAutoCloseDiscussion(message);
 
     return NextResponse.json({ ok: true, message });
   } catch (error) {

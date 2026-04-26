@@ -17,6 +17,14 @@ let redisPromise: Promise<ReturnType<typeof createClient>> | null = null;
 
 type WakeStoreMap = Record<string, WakeItem>;
 
+function parseWakeItem(raw: string): WakeItem | null {
+  try {
+    return JSON.parse(raw) as WakeItem;
+  } catch {
+    return null;
+  }
+}
+
 function requiredEnv(name: string) {
   const value = process.env[name];
   if (!value) throw new Error(`Missing required env: ${name}`);
@@ -40,12 +48,16 @@ function parseLegacyWakeString(raw: string | null): WakeStoreMap {
     return {};
   }
 
-  const parsed = JSON.parse(raw) as WakeItem[] | WakeStoreMap;
-  if (Array.isArray(parsed)) {
-    return Object.fromEntries(parsed.map((item) => [item.id, item]));
-  }
+  try {
+    const parsed = JSON.parse(raw) as WakeItem[] | WakeStoreMap;
+    if (Array.isArray(parsed)) {
+      return Object.fromEntries(parsed.map((item) => [item.id, item]));
+    }
 
-  return parsed;
+    return parsed;
+  } catch {
+    return {} as WakeStoreMap;
+  }
 }
 
 async function readWakeMap(client: Awaited<ReturnType<typeof redis>>) {
@@ -56,7 +68,11 @@ async function readWakeMap(client: Awaited<ReturnType<typeof redis>>) {
 
   if (keyType === "hash") {
     const raw = await client.hGetAll(WAKE_KEY);
-    return Object.fromEntries(Object.entries(raw).map(([key, value]) => [key, JSON.parse(value) as WakeItem]));
+    return Object.fromEntries(
+      Object.entries(raw)
+        .map(([key, value]) => [key, parseWakeItem(value)] as const)
+        .filter((entry): entry is readonly [string, WakeItem] => Boolean(entry[1])),
+    );
   }
 
   if (keyType === "string") {

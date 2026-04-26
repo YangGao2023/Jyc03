@@ -193,6 +193,8 @@ export default async function DashboardOverviewPage() {
   const blockedPromises = promises.filter((item) => item.status === "blocked").length;
   // eslint-disable-next-line react-hooks/purity
   const overduePromises = promises.filter((item) => item.nextCheckAt && Date.parse(item.nextCheckAt) < Date.now() && !["completed", "expired"].includes(item.status)).length;
+  const handedOffPromises = promises.filter((item) => item.status === "handed_off").length;
+  const pendingWakeCount = wakeItems.filter((item) => !item.consumedAt).length;
   const recentProofs = proofs.slice(0, 4);
   const recentWakeItems = wakeItems.slice(0, 4);
   const recentAlerts = alerts.slice(0, 5);
@@ -208,10 +210,12 @@ export default async function DashboardOverviewPage() {
           right={<a href="/dashboard" className="rounded-2xl border border-white/10 bg-white px-4 py-2 text-sm font-semibold text-slate-950">返回后台</a>}
         />
 
-        <div className="mt-4 grid gap-3 md:grid-cols-2 xl:grid-cols-4">
+        <div className="mt-4 grid gap-3 md:grid-cols-2 xl:grid-cols-6">
           <div className="rounded-2xl border border-white/10 bg-white/5 p-4"><p className="text-[11px] uppercase tracking-[0.2em] text-slate-400">TODO</p><p className="mt-2 text-2xl font-semibold text-white">{todoCount}</p></div>
           <div className="rounded-2xl border border-white/10 bg-white/5 p-4"><p className="text-[11px] uppercase tracking-[0.2em] text-slate-400">正式任务</p><p className="mt-2 text-2xl font-semibold text-white">{taskCount}</p></div>
           <div className="rounded-2xl border border-white/10 bg-white/5 p-4"><p className="text-[11px] uppercase tracking-[0.2em] text-slate-400">进行中 Promise</p><p className="mt-2 text-2xl font-semibold text-white">{activePromises}</p></div>
+          <div className="rounded-2xl border border-white/10 bg-white/5 p-4"><p className="text-[11px] uppercase tracking-[0.2em] text-slate-400">已移交 Promise</p><p className="mt-2 text-2xl font-semibold text-white">{handedOffPromises}</p><p className="mt-1 text-xs text-slate-400">watchdog / owner handoff</p></div>
+          <div className="rounded-2xl border border-white/10 bg-white/5 p-4"><p className="text-[11px] uppercase tracking-[0.2em] text-slate-400">待消费 Wake</p><p className="mt-2 text-2xl font-semibold text-white">{pendingWakeCount}</p><p className="mt-1 text-xs text-slate-400">等待 agent 拿走</p></div>
           <div className="rounded-2xl border border-white/10 bg-white/5 p-4"><p className="text-[11px] uppercase tracking-[0.2em] text-slate-400">Watchdog 告警</p><p className="mt-2 text-2xl font-semibold text-white">{alerts.length}</p><p className="mt-1 text-xs text-slate-400">超时/阻塞 {overduePromises + blockedPromises}</p></div>
         </div>
       </div>

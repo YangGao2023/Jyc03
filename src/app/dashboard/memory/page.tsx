@@ -114,7 +114,7 @@ export default async function DashboardMemoryPage() {
                     {todo.goal !== "-" ? <p className="mt-3 text-sm leading-6 text-slate-600">目标：{todo.goal}</p> : null}
                     {todo.nextStep !== "-" ? <p className="mt-1 text-sm leading-6 text-slate-600">下一步：{todo.nextStep}</p> : null}
                     <div className="mt-3 flex flex-wrap gap-2">
-                      <a href="/dashboard/tasks" className="rounded-full border border-slate-200 bg-white px-3 py-1.5 text-xs font-medium text-slate-700 transition hover:bg-slate-100">去任务台</a>
+                      <a href="/dashboard/tasks" className="rounded-full border border-slate-200 bg-white px-3 py-1.5 text-xs font-medium text-slate-700 transition hover:bg-slate-100">去任务页处理</a>
                       {linkedTasks.slice(0, 2).map((task) => (
                         <span key={task.id} className="rounded-full bg-slate-900 px-3 py-1 text-xs font-semibold text-white">{task.id}</span>
                       ))}

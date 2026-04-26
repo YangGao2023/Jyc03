@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useMemo, useRef, useState } from "react";
+import { Fragment, useEffect, useMemo, useRef, useState } from "react";
 import { DashboardPageHeader } from "../components";
 import {
   bizOrders,
@@ -1121,6 +1121,7 @@ function openPrintWindow(html: string) {
 function OrderDetailView({
   order,
   settings,
+  materials,
   printArchives,
   onBack,
   onSave,
@@ -1128,6 +1129,7 @@ function OrderDetailView({
 }: {
   order: BizOrder;
   settings: BizSettings;
+  materials: MaterialRecord[];
   printArchives: PrintArchiveRecord[];
   onBack: () => void;
   onSave: (updated: BizOrder) => void;
@@ -1150,6 +1152,10 @@ function OrderDetailView({
   });
 
   const [materialRows, setMaterialRows] = useState<MaterialRow[]>(order.material_rows ?? []);
+  const materialInsight = useMemo(
+    () => buildOrderMaterialInsights(materials, [{ ...order, material_rows: materialRows }]).byOrder.get(order.order_number),
+    [materialRows, materials, order],
+  );
 
   function handleMaterialRowsChange(rows: MaterialRow[]) {
     setMaterialRows(rows);
@@ -1440,12 +1446,71 @@ function OrderDetailView({
 
         {/* Wholesale: editable material rows */}
         {!isCustom && (
-          <div className="rounded-xl border border-slate-200 bg-white p-4">
-            <div className="mb-3 flex items-center justify-between border-b border-slate-100 pb-2">
-              <h3 className="text-xs font-semibold uppercase tracking-wider text-slate-400">物料清单</h3>
-              <span className="text-[11px] text-slate-400">编辑行时自动同步总价</span>
+          <div className="space-y-4">
+            <div className="rounded-xl border border-slate-200 bg-white p-4">
+              <div className="mb-3 flex items-center justify-between border-b border-slate-100 pb-2">
+                <h3 className="text-xs font-semibold uppercase tracking-wider text-slate-400">物料清单</h3>
+                <span className="text-[11px] text-slate-400">编辑行时自动同步总价</span>
+              </div>
+              <EditableMaterialRows rows={materialRows} onChange={handleMaterialRowsChange} />
             </div>
-            <EditableMaterialRows rows={materialRows} onChange={handleMaterialRowsChange} />
+
+            <div className="rounded-xl border border-slate-200 bg-white p-4">
+              <div className="mb-3 flex items-center justify-between border-b border-slate-100 pb-2">
+                <h3 className="text-xs font-semibold uppercase tracking-wider text-slate-400">备料检查</h3>
+                <span className="text-[11px] text-slate-400">按当前库存顺序直接判断这张单能不能备齐</span>
+              </div>
+              {materialInsight?.allocations.length ? (
+                <div className="space-y-2">
+                  <div className="flex flex-wrap gap-2 text-[11px]">
+                    <span className={`rounded-full border px-2 py-1 font-semibold ${materialInsight.shortageRows > 0 ? "border-rose-200 bg-rose-50 text-rose-700" : materialInsight.missingRows > 0 ? "border-amber-200 bg-amber-50 text-amber-700" : "border-emerald-200 bg-emerald-50 text-emerald-700"}`}>
+                      {materialInsight.shortageRows > 0 ? `缺料 ${materialInsight.shortageRows} 项` : materialInsight.missingRows > 0 ? `待建物料 ${materialInsight.missingRows} 项` : "当前可直接备料"}
+                    </span>
+                    <span className="rounded-full border border-slate-200 bg-slate-50 px-2 py-1 text-slate-600">已匹配 {materialInsight.matchedRows}/{materialInsight.totalRows}</span>
+                    <span className="rounded-full border border-slate-200 bg-slate-50 px-2 py-1 text-slate-600">缺口 {materialInsight.totalShortageQty}</span>
+                  </div>
+                  <div className="overflow-x-auto">
+                    <table className="w-full text-left text-xs">
+                      <thead>
+                        <tr className="border-b border-slate-200 bg-slate-50">
+                          <th className="px-3 py-2 font-semibold text-slate-600">物料</th>
+                          <th className="px-3 py-2 font-semibold text-slate-600">需求</th>
+                          <th className="px-3 py-2 font-semibold text-slate-600">匹配库存</th>
+                          <th className="px-3 py-2 font-semibold text-slate-600">占用前</th>
+                          <th className="px-3 py-2 font-semibold text-slate-600">占用后</th>
+                          <th className="px-3 py-2 font-semibold text-slate-600">结果</th>
+                        </tr>
+                      </thead>
+                      <tbody>
+                        {materialInsight.allocations.map((item, index) => (
+                          <tr key={`${item.rowName}-${index}`} className="border-b border-slate-100 last:border-b-0">
+                            <td className="px-3 py-2 text-slate-700">
+                              <div className="font-medium">{item.rowName}</div>
+                              <div className="text-[11px] text-slate-400">{item.spec ?? "-"}</div>
+                            </td>
+                            <td className="px-3 py-2 text-slate-700">{item.requiredQty} {item.unit}</td>
+                            <td className="px-3 py-2 text-slate-600">{item.matched ? `${item.materialName} · ${item.materialCode}` : "未匹配库存编码"}</td>
+                            <td className="px-3 py-2 text-slate-600">{item.matched ? `${Math.max(0, item.availableBefore)} ${item.unit}` : "-"}</td>
+                            <td className="px-3 py-2 text-slate-600">{item.matched ? `${Math.max(0, item.availableAfter)} ${item.unit}` : "-"}</td>
+                            <td className="px-3 py-2">
+                              {!item.matched ? (
+                                <span className="rounded-full border border-amber-200 bg-amber-50 px-2 py-0.5 text-[11px] font-semibold text-amber-700">先建物料</span>
+                              ) : item.shortageQty > 0 ? (
+                                <span className="rounded-full border border-rose-200 bg-rose-50 px-2 py-0.5 text-[11px] font-semibold text-rose-700">缺 {item.shortageQty} {item.unit}</span>
+                              ) : (
+                                <span className="rounded-full border border-emerald-200 bg-emerald-50 px-2 py-0.5 text-[11px] font-semibold text-emerald-700">可备齐</span>
+                              )}
+                            </td>
+                          </tr>
+                        ))}
+                      </tbody>
+                    </table>
+                  </div>
+                </div>
+              ) : (
+                <div className="rounded-lg border border-dashed border-slate-200 py-8 text-center text-xs text-slate-400">先录入物料清单，再看这张单的备料结果</div>
+              )}
+            </div>
           </div>
         )}
 
@@ -1843,12 +1908,14 @@ function NewOrderModal({
 
 function OrdersSection({
   orders,
+  materials,
   setOrders,
   settings,
   printArchives,
   setPrintArchives,
 }: {
   orders: BizOrder[];
+  materials: MaterialRecord[];
   setOrders: React.Dispatch<React.SetStateAction<BizOrder[]>>;
   settings: BizSettings;
   printArchives: PrintArchiveRecord[];
@@ -1868,7 +1935,7 @@ function OrdersSection({
   const [bulkAction, setBulkAction] = useState<null | "pay" | "delete">(null);
   const [bulkBusy, setBulkBusy] = useState(false);
 
-  const orderListColumns = ["订单号", "类型", "客户", "描述", "总金额", "下单日期", "状态", "余款", "操作"];
+  const orderListColumns = ["订单号", "类型", "客户", "描述", "总金额", "下单日期", "状态", "备料", "余款", "操作"];
   const orderListConfig: SplitTabularSchemaConfig = {
     title: "订单列表",
     filePrefix: "biz-orders",
@@ -1974,6 +2041,11 @@ function OrdersSection({
     [selectedOrders],
   );
   const allFilteredSelected = filteredOrders.length > 0 && filteredOrders.every((order) => selectedOrderNumbers.includes(order.order_number));
+  const materialInsights = useMemo(() => buildOrderMaterialInsights(materials, orders).byOrder, [materials, orders]);
+  const shortageOrders = useMemo(
+    () => [...materialInsights.values()].filter((item) => item.shortageRows > 0 || item.missingRows > 0),
+    [materialInsights],
+  );
 
   async function handleBulkSettle() {
     if (!selectedOrders.length) {
@@ -2031,6 +2103,7 @@ function OrdersSection({
       <OrderDetailView
         order={selectedOrder}
         settings={settings}
+        materials={materials}
         printArchives={printArchives}
         onBack={() => setSelectedOrder(null)}
         onSave={handleSave}
@@ -2111,6 +2184,33 @@ function OrdersSection({
           >
             查看未付清订单
           </ActionBtn>
+        </div>
+      )}
+
+      {!!shortageOrders.length && (
+        <div className="mb-4 rounded-xl border border-amber-200 bg-amber-50 px-4 py-3">
+          <div className="flex flex-wrap items-center justify-between gap-3">
+            <div>
+              <p className="text-sm font-semibold text-amber-800">待补料订单提醒</p>
+              <p className="mt-1 text-xs text-amber-700">现在直接能看出哪几张批发单还不能备齐，先补库存还是先建物料一眼就明白。</p>
+            </div>
+            <span className="rounded-full border border-amber-300 bg-white px-2.5 py-1 text-xs font-semibold text-amber-700">{shortageOrders.length} 张订单待处理</span>
+          </div>
+          <div className="mt-3 flex flex-wrap gap-2">
+            {shortageOrders.slice(0, 6).map((item) => (
+              <button
+                key={item.orderNumber}
+                onClick={() => {
+                  const target = orders.find((order) => order.order_number === item.orderNumber);
+                  if (target) setSelectedOrder(target);
+                }}
+                className="rounded-lg border border-amber-200 bg-white px-3 py-2 text-left text-xs text-amber-800 transition-colors hover:border-amber-400"
+              >
+                <div className="font-semibold">{item.orderNumber} · {item.clientName}</div>
+                <div className="mt-1 text-[11px] text-amber-700">{item.shortageRows > 0 ? `缺料 ${item.shortageRows} 项` : "待建物料"}{item.missingRows > 0 ? `，未建物料 ${item.missingRows} 项` : ""}</div>
+              </button>
+            ))}
+          </div>
         </div>
       )}
 
@@ -2286,7 +2386,9 @@ function OrdersSection({
           </thead>
           <tbody>
             {filteredOrders.length > 0 ? (
-              filteredOrders.map((order: BizOrder) => (
+              filteredOrders.map((order: BizOrder) => {
+                const materialInsight = materialInsights.get(order.order_number);
+                return (
                 <tr
                   key={order.order_number}
                   className="border-b border-slate-100 last:border-b-0 hover:bg-slate-50/60 transition-colors"
@@ -2321,6 +2423,19 @@ function OrdersSection({
                   <td className="px-3 py-2.5 text-slate-500">{order.order_date || "-"}</td>
                   <td className="px-3 py-2.5">
                     <StatusBadge status={order.status ?? "下单"} />
+                  </td>
+                  <td className="px-3 py-2.5">
+                    {order.order_type !== "批发单" ? (
+                      <span className="rounded-full border border-slate-200 bg-slate-50 px-2 py-0.5 text-[11px] text-slate-500">无需备料</span>
+                    ) : !materialInsight || !materialInsight.totalRows ? (
+                      <span className="rounded-full border border-slate-200 bg-slate-50 px-2 py-0.5 text-[11px] text-slate-500">未录物料</span>
+                    ) : materialInsight.shortageRows > 0 ? (
+                      <span className="rounded-full border border-rose-200 bg-rose-50 px-2 py-0.5 text-[11px] font-semibold text-rose-700">缺料 {materialInsight.shortageRows} 项</span>
+                    ) : materialInsight.missingRows > 0 ? (
+                      <span className="rounded-full border border-amber-200 bg-amber-50 px-2 py-0.5 text-[11px] font-semibold text-amber-700">待建物料 {materialInsight.missingRows} 项</span>
+                    ) : (
+                      <span className="rounded-full border border-emerald-200 bg-emerald-50 px-2 py-0.5 text-[11px] font-semibold text-emerald-700">可直接备料</span>
+                    )}
                   </td>
                   <td className="px-3 py-2.5 font-medium text-red-600">
                     {formatMoney(order.balance || 0)}
@@ -2359,7 +2474,7 @@ function OrdersSection({
                     </div>
                   </td>
                 </tr>
-              ))
+              )})
             ) : (
               <tr>
                 <td
@@ -3664,6 +3779,120 @@ function findMaterialMatch(materials: MaterialRecord[], candidateName: string, u
   });
 }
 
+type OrderMaterialAllocation = {
+  orderNumber: string;
+  clientName: string;
+  orderDate?: string;
+  orderStatus?: string;
+  rowName: string;
+  spec?: string;
+  unit: string;
+  requiredQty: number;
+  materialId?: string;
+  materialCode?: string;
+  materialName?: string;
+  stockQty: number;
+  availableBefore: number;
+  availableAfter: number;
+  shortageQty: number;
+  matched: boolean;
+};
+
+type OrderMaterialInsight = {
+  orderNumber: string;
+  clientName: string;
+  orderDate?: string;
+  totalRows: number;
+  matchedRows: number;
+  shortageRows: number;
+  missingRows: number;
+  readyRows: number;
+  totalShortageQty: number;
+  allocations: OrderMaterialAllocation[];
+};
+
+function buildOrderMaterialInsights(materials: MaterialRecord[], orders: BizOrder[]) {
+  const activeWholesaleOrders = [...orders]
+    .filter((order) => order.order_type === "批发单" && order.status !== "已关闭")
+    .sort((a, b) => {
+      const left = `${a.order_date ?? "9999-99-99"}-${a.order_number}`;
+      const right = `${b.order_date ?? "9999-99-99"}-${b.order_number}`;
+      return left.localeCompare(right);
+    });
+
+  const remainingStock = new Map(materials.map((item) => [item.id, item.stock_quantity]));
+  const byOrder = new Map<string, OrderMaterialInsight>();
+  const byMaterial = new Map<string, OrderMaterialAllocation[]>();
+
+  activeWholesaleOrders.forEach((order) => {
+    const rows = order.material_rows ?? [];
+    const allocations = rows.map((row) => {
+      const matched = findMaterialMatch(materials, row.name, row.unit);
+      if (!matched) {
+        return {
+          orderNumber: order.order_number,
+          clientName: order.client_name,
+          orderDate: order.order_date,
+          orderStatus: order.status,
+          rowName: row.name,
+          spec: row.spec,
+          unit: row.unit,
+          requiredQty: row.qty,
+          stockQty: 0,
+          availableBefore: 0,
+          availableAfter: 0,
+          shortageQty: row.qty,
+          matched: false,
+        } satisfies OrderMaterialAllocation;
+      }
+
+      const availableBefore = remainingStock.get(matched.id) ?? matched.stock_quantity;
+      const availableAfter = availableBefore - row.qty;
+      const shortageQty = Math.max(0, row.qty - Math.max(0, availableBefore));
+      remainingStock.set(matched.id, availableAfter);
+
+      const allocation = {
+        orderNumber: order.order_number,
+        clientName: order.client_name,
+        orderDate: order.order_date,
+        orderStatus: order.status,
+        rowName: row.name,
+        spec: row.spec,
+        unit: row.unit,
+        requiredQty: row.qty,
+        materialId: matched.id,
+        materialCode: matched.code,
+        materialName: matched.name,
+        stockQty: matched.stock_quantity,
+        availableBefore,
+        availableAfter,
+        shortageQty,
+        matched: true,
+      } satisfies OrderMaterialAllocation;
+
+      const existing = byMaterial.get(matched.id) ?? [];
+      existing.push(allocation);
+      byMaterial.set(matched.id, existing);
+      return allocation;
+    });
+
+    byOrder.set(order.order_number, {
+      orderNumber: order.order_number,
+      clientName: order.client_name,
+      orderDate: order.order_date,
+      totalRows: allocations.length,
+      matchedRows: allocations.filter((item) => item.matched).length,
+      shortageRows: allocations.filter((item) => item.shortageQty > 0).length,
+      missingRows: allocations.filter((item) => !item.matched).length,
+      readyRows: allocations.filter((item) => item.matched && item.shortageQty <= 0).length,
+      totalShortageQty: allocations.reduce((sum, item) => sum + item.shortageQty, 0),
+      allocations,
+    });
+  });
+
+  return { byOrder, byMaterial };
+}
+
 function getCommittedMaterialMap(materials: MaterialRecord[], orders: BizOrder[]) {
   const committed = new Map<string, number>();
 
@@ -3686,8 +3915,10 @@ function MaterialsSection({ materials, setMaterials, purchases, setPurchases, su
   const [materialDraft, setMaterialDraft] = useState({ code: "", name: "", specification: "", unit: "个", stock_quantity: "", min_stock: "", purchase_price: "", supplier: suppliers[0]?.name ?? "", remark: "" });
   const [purchaseDraft, setPurchaseDraft] = useState({ supplier: suppliers[0]?.name ?? "", item_name: "", quantity: "", unit: "个", unit_price: "", purchase_date: today, status: "未付款" });
   const [inventoryHint, setInventoryHint] = useState("");
+  const [expandedMaterialId, setExpandedMaterialId] = useState<string | null>(null);
   const lowStockCount = materials.filter((item) => item.stock_quantity <= item.min_stock).length;
   const monthlyPurchase = purchases.filter((item) => item.purchase_date.startsWith(today.slice(0, 7))).reduce((sum, item) => sum + item.total_amount, 0);
+  const planning = useMemo(() => buildOrderMaterialInsights(materials, orders), [materials, orders]);
   const committedMap = useMemo(() => getCommittedMaterialMap(materials, orders), [materials, orders]);
   const inventoryRows = useMemo(
     () => materials.map((item) => {
@@ -3704,6 +3935,10 @@ function MaterialsSection({ materials, setMaterials, purchases, setPurchases, su
   );
   const committedTotal = inventoryRows.reduce((sum, item) => sum + item.committed, 0);
   const shortageCount = inventoryRows.filter((item) => item.shortage > 0).length;
+  const shortageOrders = useMemo(
+    () => [...planning.byOrder.values()].filter((item) => item.shortageRows > 0 || item.missingRows > 0),
+    [planning],
+  );
   const materialConfigs: Record<MaterialSub, SplitTabularSchemaConfig> = {
     inventory: {
       title: "库存清单",
@@ -3758,6 +3993,34 @@ function MaterialsSection({ materials, setMaterials, purchases, setPurchases, su
       <StatStrip items={[{ label: "物料品类", value: String(materials.length) }, { label: "订单占用", value: String(committedTotal), accent: "text-sky-600" }, { label: "低库存预警", value: String(lowStockCount), accent: "text-orange-600" }, { label: "缺货项目", value: String(shortageCount), accent: shortageCount > 0 ? "text-red-600" : "text-emerald-600" }, { label: "本月采购额", value: formatMoney(monthlyPurchase), accent: "text-red-600" }]} />
       <SegmentedControl options={[{ key: "inventory", label: "库存清单" }, { key: "purchases", label: "采购记录" }]} value={sub} onChange={setSub} />
 
+      {sub === "inventory" && shortageOrders.length > 0 ? (
+        <div className="my-4 rounded-xl border border-rose-200 bg-rose-50 px-4 py-3">
+          <div className="flex flex-wrap items-center justify-between gap-2">
+            <div>
+              <p className="text-sm font-semibold text-rose-700">缺料订单看板</p>
+              <p className="mt-1 text-xs text-rose-600">先看哪张订单会把库存吃空，仓库和下单的人不用来回翻表。</p>
+            </div>
+            <span className="rounded-full border border-rose-200 bg-white px-2 py-1 text-xs font-semibold text-rose-700">{shortageOrders.length} 张订单待补料</span>
+          </div>
+          <div className="mt-3 grid gap-2 lg:grid-cols-2">
+            {shortageOrders.map((item) => (
+              <div key={item.orderNumber} className="rounded-lg border border-rose-100 bg-white px-3 py-2 text-xs">
+                <div className="flex items-center justify-between gap-2">
+                  <div>
+                    <p className="font-semibold text-slate-800">{item.orderNumber} · {item.clientName}</p>
+                    <p className="mt-1 text-[11px] text-slate-500">{item.orderDate || "未填日期"}</p>
+                  </div>
+                  <div className="text-right">
+                    {item.shortageRows > 0 ? <p className="font-semibold text-rose-600">缺料 {item.shortageRows} 项</p> : null}
+                    {item.missingRows > 0 ? <p className="text-[11px] text-amber-600">待建物料 {item.missingRows} 项</p> : null}
+                  </div>
+                </div>
+              </div>
+            ))}
+          </div>
+        </div>
+      ) : null}
+
       {inventoryHint ? (
         <div className="mb-4 rounded-xl border border-sky-100 bg-sky-50 px-4 py-3 text-xs text-sky-700">
           {inventoryHint}
@@ -3796,20 +4059,67 @@ function MaterialsSection({ materials, setMaterials, purchases, setPurchases, su
                 </tr>
               </thead>
               <tbody>
-                {inventoryRows.map((item) => (
-                  <tr key={item.id} className="border-b border-slate-100 last:border-b-0">
-                    <td className="px-4 py-2.5 font-medium text-slate-700">{item.name}<div className="text-[11px] text-slate-400">{item.code}</div></td>
-                    <td className="px-4 py-2.5 text-slate-600">{item.specification ?? "-"}</td>
-                    <td className="px-4 py-2.5 text-slate-600">{item.unit}</td>
-                    <td className={`px-4 py-2.5 font-semibold ${item.stock_quantity <= item.min_stock ? "text-orange-600" : "text-slate-700"}`}>{item.stock_quantity}</td>
-                    <td className={`px-4 py-2.5 font-semibold ${item.committed > 0 ? "text-sky-700" : "text-slate-400"}`}>{item.committed || "-"}</td>
-                    <td className={`px-4 py-2.5 font-semibold ${item.shortage > 0 ? "text-red-600" : item.available <= item.min_stock ? "text-orange-600" : "text-emerald-600"}`}>{item.available}</td>
-                    <td className="px-4 py-2.5 text-slate-600">{item.min_stock}</td>
-                    <td className="px-4 py-2.5 text-slate-700">{formatMoney(item.purchase_price)}</td>
-                    <td className="px-4 py-2.5 text-slate-500">{item.last_stock_date ?? "-"}</td>
-                    <td className="px-4 py-2.5 text-slate-500"><div>{item.remark ?? item.supplier ?? "-"}</div>{item.shortage > 0 ? <div className="mt-1 text-[11px] font-semibold text-red-500">缺口 {item.shortage} {item.unit}</div> : null}</td>
-                  </tr>
-                ))}
+                {inventoryRows.map((item) => {
+                  const consumers = planning.byMaterial.get(item.id) ?? [];
+                  const isExpanded = expandedMaterialId === item.id;
+                  return (
+                    <Fragment key={item.id}>
+                      <tr className="border-b border-slate-100 last:border-b-0">
+                        <td className="px-4 py-2.5 font-medium text-slate-700">{item.name}<div className="text-[11px] text-slate-400">{item.code}</div></td>
+                        <td className="px-4 py-2.5 text-slate-600">{item.specification ?? "-"}</td>
+                        <td className="px-4 py-2.5 text-slate-600">{item.unit}</td>
+                        <td className={`px-4 py-2.5 font-semibold ${item.stock_quantity <= item.min_stock ? "text-orange-600" : "text-slate-700"}`}>{item.stock_quantity}</td>
+                        <td className={`px-4 py-2.5 font-semibold ${item.committed > 0 ? "text-sky-700" : "text-slate-400"}`}>{item.committed || "-"}</td>
+                        <td className={`px-4 py-2.5 font-semibold ${item.shortage > 0 ? "text-red-600" : item.available <= item.min_stock ? "text-orange-600" : "text-emerald-600"}`}>{item.available}</td>
+                        <td className="px-4 py-2.5 text-slate-600">{item.min_stock}</td>
+                        <td className="px-4 py-2.5 text-slate-700">{formatMoney(item.purchase_price)}</td>
+                        <td className="px-4 py-2.5 text-slate-500">{item.last_stock_date ?? "-"}</td>
+                        <td className="px-4 py-2.5 text-slate-500">
+                          <div className="flex items-center justify-between gap-2">
+                            <div>
+                              <div>{item.remark ?? item.supplier ?? "-"}</div>
+                              {item.shortage > 0 ? <div className="mt-1 text-[11px] font-semibold text-red-500">缺口 {item.shortage} {item.unit}</div> : null}
+                              {consumers.length ? <div className="mt-1 text-[11px] text-sky-600">被 {consumers.length} 张订单占用</div> : null}
+                            </div>
+                            {consumers.length ? (
+                              <button
+                                onClick={() => setExpandedMaterialId(isExpanded ? null : item.id)}
+                                className="shrink-0 rounded border border-slate-200 bg-white px-2 py-1 text-[11px] text-slate-600 hover:border-sky-300 hover:text-sky-700"
+                              >
+                                {isExpanded ? "收起订单" : "看占用订单"}
+                              </button>
+                            ) : null}
+                          </div>
+                        </td>
+                      </tr>
+                      {isExpanded ? (
+                        <tr key={`${item.id}-consumers`} className="border-b border-sky-100 bg-sky-50/50">
+                          <td colSpan={10} className="px-4 py-3">
+                            <div className="space-y-2">
+                              <p className="text-xs font-semibold text-sky-800">这项库存现在被哪些订单占用</p>
+                              {consumers.map((consumer, index) => (
+                                <div key={`${consumer.orderNumber}-${index}`} className="flex flex-wrap items-center justify-between gap-2 rounded-lg border border-sky-100 bg-white px-3 py-2 text-xs">
+                                  <div>
+                                    <p className="font-semibold text-slate-800">{consumer.orderNumber} · {consumer.clientName}</p>
+                                    <p className="mt-1 text-[11px] text-slate-500">需求 {consumer.requiredQty} {consumer.unit}，占用前可用 {Math.max(0, consumer.availableBefore)} {consumer.unit}</p>
+                                  </div>
+                                  <div className="text-right">
+                                    <p className="text-slate-600">占用后 {Math.max(0, consumer.availableAfter)} {consumer.unit}</p>
+                                    {consumer.shortageQty > 0 ? (
+                                      <p className="mt-1 font-semibold text-rose-600">缺 {consumer.shortageQty} {consumer.unit}</p>
+                                    ) : (
+                                      <p className="mt-1 font-semibold text-emerald-600">已覆盖</p>
+                                    )}
+                                  </div>
+                                </div>
+                              ))}
+                            </div>
+                          </td>
+                        </tr>
+                      ) : null}
+                    </Fragment>
+                  );
+                })}
               </tbody>
             </table>
           </div>
@@ -4318,7 +4628,7 @@ export default function DashboardBizPage() {
               employees={employees}
             />
           )}
-          {section === "orders" && <OrdersSection orders={orders} setOrders={setOrders} settings={settings} printArchives={printArchives} setPrintArchives={setPrintArchives} />}
+          {section === "orders" && <OrdersSection orders={orders} materials={materials} setOrders={setOrders} settings={settings} printArchives={printArchives} setPrintArchives={setPrintArchives} />}
           {section === "finance" && (
             <FinanceSection
               orders={orders}

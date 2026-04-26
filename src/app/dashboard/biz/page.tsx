@@ -17,6 +17,7 @@ import {
   bizSettings,
   bizShowcases,
   bizSuppliers,
+  bizPrintArchives,
   summarizeOrders,
   type BizOrder,
   type BizSettings,
@@ -29,6 +30,7 @@ import {
   type MeasurementAppointmentRecord,
   type PaymentRecord,
   type PayrollRecord,
+  type PrintArchiveRecord,
   type PurchaseRecord,
   type QuoteRecord,
   type ShowcaseRecord,
@@ -104,6 +106,20 @@ function downloadCsv(filename: string, rows: Array<Array<string | number>>) {
 
 function mapRows<T>(items: T[], mapRow: (item: T) => Array<string | number>) {
   return items.map(mapRow);
+}
+
+function buildPrintArchiveFileName(orderNumber: string, printType: string, createdAt: string) {
+  const stamp = createdAt.replace(/[T:\.]/g, "-").slice(0, 19);
+  const suffix = printType === "pickup" ? "pickup-sheet" : "invoice";
+  return `${orderNumber}-${suffix}-${stamp}.html`;
+}
+
+function downloadHtmlFile(filename: string, html: string) {
+  downloadTextFile(filename, html, "text/html;charset=utf-8");
+}
+
+function formatPrintTypeLabel(printType: string) {
+  return printType === "pickup" ? "领料单" : "发票单";
 }
 
 type TabularSchemaConfig = {
@@ -803,6 +819,46 @@ function EditableMaterialRows({
   );
 }
 
+function PrintArchiveList({
+  records,
+  onReprint,
+}: {
+  records: PrintArchiveRecord[];
+  onReprint: (record: PrintArchiveRecord) => void;
+}) {
+  if (!records.length) {
+    return (
+      <div className="rounded-lg border border-dashed border-slate-200 bg-slate-50 py-8 text-center text-xs text-slate-400">
+        还没有保存的打印单
+      </div>
+    );
+  }
+
+  return (
+    <div className="space-y-2">
+      {records.map((record) => (
+        <div key={record.id} className="rounded-lg border border-slate-200 bg-slate-50 px-3 py-2.5">
+          <div className="flex flex-wrap items-start justify-between gap-2">
+            <div>
+              <div className="flex items-center gap-2">
+                <span className="text-xs font-semibold text-slate-900">{record.title}</span>
+                <span className="rounded-full bg-slate-200 px-2 py-0.5 text-[10px] font-semibold text-slate-600">
+                  {formatPrintTypeLabel(record.print_type)}
+                </span>
+              </div>
+              <p className="mt-1 text-[11px] text-slate-500">{record.created_at.slice(0, 16).replace("T", " ")}{record.summary ? ` · ${record.summary}` : ""}</p>
+            </div>
+            <div className="flex flex-wrap gap-2">
+              <button onClick={() => onReprint(record)} className="rounded border border-blue-200 bg-white px-2 py-1 text-[11px] font-medium text-blue-700 hover:bg-blue-50 transition-colors">再次打印</button>
+              <button onClick={() => downloadHtmlFile(record.file_name, record.html)} className="rounded border border-slate-200 bg-white px-2 py-1 text-[11px] font-medium text-slate-600 hover:border-slate-300 transition-colors">下载 HTML</button>
+            </div>
+          </div>
+        </div>
+      ))}
+    </div>
+  );
+}
+
 function buildCustomerInvoiceHTML(order: BizOrder, draft: DraftFields, rows: MaterialRow[], settings?: BizSettings): string {
   const brandBlue = "#0457da";
   const isCustom = order.order_type === "定制单";
@@ -1064,12 +1120,18 @@ function openPrintWindow(html: string) {
 /** Full order detail panel — replaces the list view when an order is selected */
 function OrderDetailView({
   order,
+  settings,
+  printArchives,
   onBack,
   onSave,
+  onSavePrintArchive,
 }: {
   order: BizOrder;
+  settings: BizSettings;
+  printArchives: PrintArchiveRecord[];
   onBack: () => void;
   onSave: (updated: BizOrder) => void;
+  onSavePrintArchive: (record: PrintArchiveRecord) => void;
 }) {
   const today = new Date().toISOString().slice(0, 10);
   const isCustom = order.order_type === "定制单";
@@ -1106,6 +1168,10 @@ function OrderDetailView({
     method: "现金",
     note: "",
   });
+  const orderPrintArchives = useMemo(
+    () => printArchives.filter((item) => item.order_number === order.order_number).sort((a, b) => String(b.created_at).localeCompare(String(a.created_at))),
+    [order.order_number, printArchives],
+  );
 
   function update<K extends keyof DraftFields>(key: K, value: DraftFields[K]) {
     setDraft((d) => ({ ...d, [key]: value }));
@@ -1142,6 +1208,35 @@ function OrderDetailView({
 
   function handleSave() {
     onSave(buildUpdated());
+  }
+
+  function buildPrintArchive(printType: "invoice" | "pickup") {
+    const updatedOrder = buildUpdated();
+    const html = printType === "pickup"
+      ? buildWorkerPickupHTML(updatedOrder, materialRows, settings)
+      : buildCustomerInvoiceHTML(updatedOrder, draft, materialRows, settings);
+    const createdAt = new Date().toISOString();
+    return {
+      id: `PRINT-${createdAt.replace(/[-:TZ.]/g, "").slice(0, 14)}-${Math.random().toString(36).slice(2, 6).toUpperCase()}`,
+      order_number: updatedOrder.order_number,
+      client_name: updatedOrder.client_name,
+      order_type: updatedOrder.order_type,
+      print_type: printType,
+      title: `${updatedOrder.order_number} ${printType === "pickup" ? "领料单" : "发票单"}`,
+      created_at: createdAt,
+      created_by: "业务后台",
+      amount: updatedOrder.total_after_tax ?? updatedOrder.total_price ?? 0,
+      file_name: buildPrintArchiveFileName(updatedOrder.order_number, printType, createdAt),
+      html,
+      summary: `${updatedOrder.client_name} · ${formatMoney(updatedOrder.total_after_tax ?? updatedOrder.total_price ?? 0)}`,
+    } satisfies PrintArchiveRecord;
+  }
+
+  function handleSavePrint(printType: "invoice" | "pickup", shouldOpen = false) {
+    const record = buildPrintArchive(printType);
+    onSave(buildUpdated());
+    onSavePrintArchive(record);
+    if (shouldOpen) openPrintWindow(record.html);
   }
 
   function handleAddPayment() {
@@ -1193,20 +1288,34 @@ function OrderDetailView({
           </span>
           <StatusBadge status={order.status ?? "下单"} />
         </div>
-        <div className="ml-auto flex gap-2">
+        <div className="ml-auto flex flex-wrap gap-2">
           <button
-            onClick={() => openPrintWindow(buildCustomerInvoiceHTML(order, draft, materialRows))}
+            onClick={() => handleSavePrint("invoice")}
             className="flex items-center gap-1.5 rounded-lg border border-slate-300 bg-white px-3 py-1.5 text-xs font-semibold text-slate-700 transition-colors hover:border-blue-400 hover:text-blue-700"
           >
-            打印发票
+            保存发票单
+          </button>
+          <button
+            onClick={() => handleSavePrint("invoice", true)}
+            className="flex items-center gap-1.5 rounded-lg border border-blue-300 bg-blue-50 px-3 py-1.5 text-xs font-semibold text-blue-700 transition-colors hover:bg-blue-100"
+          >
+            打印并归档发票
           </button>
           {!isCustom && (
-            <button
-              onClick={() => openPrintWindow(buildWorkerPickupHTML(order, materialRows))}
-              className="flex items-center gap-1.5 rounded-lg border border-amber-300 bg-amber-50 px-3 py-1.5 text-xs font-semibold text-amber-700 hover:bg-amber-100 transition-colors"
-            >
-              打印领料单
-            </button>
+            <>
+              <button
+                onClick={() => handleSavePrint("pickup")}
+                className="flex items-center gap-1.5 rounded-lg border border-amber-300 bg-white px-3 py-1.5 text-xs font-semibold text-amber-700 hover:bg-amber-50 transition-colors"
+              >
+                保存领料单
+              </button>
+              <button
+                onClick={() => handleSavePrint("pickup", true)}
+                className="flex items-center gap-1.5 rounded-lg border border-amber-300 bg-amber-50 px-3 py-1.5 text-xs font-semibold text-amber-700 hover:bg-amber-100 transition-colors"
+              >
+                打印并归档领料单
+              </button>
+            </>
           )}
           {order.status !== "已关闭" && (
             <button
@@ -1509,6 +1618,19 @@ function OrderDetailView({
             <PaymentHistoryTable records={order.payment_history ?? []} />
           </div>
         </div>
+
+        <div className="rounded-xl border border-slate-200 bg-white p-4">
+          <div className="mb-3 flex flex-wrap items-center justify-between gap-2 border-b border-slate-100 pb-2">
+            <div>
+              <h3 className="text-xs font-semibold uppercase tracking-wider text-slate-400">打印归档</h3>
+              <p className="mt-1 text-[11px] text-slate-400">保存过的单据会留在这里，方便随时复打或下载 HTML。</p>
+            </div>
+            <span className="rounded-full bg-slate-100 px-2.5 py-1 text-[11px] font-semibold text-slate-600">
+              已归档 {orderPrintArchives.length} 份
+            </span>
+          </div>
+          <PrintArchiveList records={orderPrintArchives} onReprint={(record) => openPrintWindow(record.html)} />
+        </div>
       </div>
 
     </div>
@@ -1723,10 +1845,14 @@ function OrdersSection({
   orders,
   setOrders,
   settings,
+  printArchives,
+  setPrintArchives,
 }: {
   orders: BizOrder[];
   setOrders: React.Dispatch<React.SetStateAction<BizOrder[]>>;
   settings: BizSettings;
+  printArchives: PrintArchiveRecord[];
+  setPrintArchives: React.Dispatch<React.SetStateAction<PrintArchiveRecord[]>>;
 }) {
   const [selectedOrder, setSelectedOrder] = useState<BizOrder | null>(null);
   const [typeFilter, setTypeFilter] = useState("全部");
@@ -1835,6 +1961,14 @@ function OrdersSection({
     () => orders.filter((order) => selectedOrderNumbers.includes(order.order_number)),
     [orders, selectedOrderNumbers],
   );
+  const recentPrintArchives = useMemo(
+    () => [...printArchives].sort((a, b) => String(b.created_at).localeCompare(String(a.created_at))).slice(0, 6),
+    [printArchives],
+  );
+  const todayPrintCount = useMemo(
+    () => printArchives.filter((item) => item.created_at.slice(0, 10) === todayStr).length,
+    [printArchives, todayStr],
+  );
   const selectedOutstanding = useMemo(
     () => selectedOrders.reduce((sum, order) => sum + Math.max(0, order.balance ?? 0), 0),
     [selectedOrders],
@@ -1896,8 +2030,11 @@ function OrdersSection({
     return (
       <OrderDetailView
         order={selectedOrder}
+        settings={settings}
+        printArchives={printArchives}
         onBack={() => setSelectedOrder(null)}
         onSave={handleSave}
+        onSavePrintArchive={(record) => setPrintArchives((prev) => [record, ...prev])}
       />
     );
   }
@@ -1976,6 +2113,41 @@ function OrdersSection({
           </ActionBtn>
         </div>
       )}
+
+      <div className="mb-4 grid gap-4 xl:grid-cols-[1.2fr_0.8fr]">
+        <PanelCard title="打印闭环" note="订单打印现在支持保存归档，后面可以直接复打或下载 HTML。">
+          <div className="grid gap-3 sm:grid-cols-3">
+            <div className="rounded-xl border border-slate-200 bg-slate-50 p-3">
+              <p className="text-[11px] uppercase tracking-[0.2em] text-slate-400">今日归档</p>
+              <p className="mt-2 text-2xl font-semibold text-slate-900">{todayPrintCount}</p>
+            </div>
+            <div className="rounded-xl border border-slate-200 bg-slate-50 p-3">
+              <p className="text-[11px] uppercase tracking-[0.2em] text-slate-400">全部打印单</p>
+              <p className="mt-2 text-2xl font-semibold text-slate-900">{printArchives.length}</p>
+            </div>
+            <div className="rounded-xl border border-slate-200 bg-slate-50 p-3">
+              <p className="text-[11px] uppercase tracking-[0.2em] text-slate-400">最近一份</p>
+              <p className="mt-2 text-sm font-semibold text-slate-900">{recentPrintArchives[0]?.order_number ?? "暂无"}</p>
+              <p className="mt-1 text-[11px] text-slate-500">{recentPrintArchives[0] ? `${formatPrintTypeLabel(recentPrintArchives[0].print_type)} · ${recentPrintArchives[0].client_name}` : "先进入订单详情保存打印单"}</p>
+            </div>
+          </div>
+        </PanelCard>
+        <PanelCard title="最近打印归档" note="最新 6 份打印单，支持直接下载。">
+          <div className="space-y-2">
+            {recentPrintArchives.length ? recentPrintArchives.map((item) => (
+              <div key={item.id} className="rounded-lg border border-slate-200 bg-slate-50 px-3 py-2">
+                <div className="flex items-center justify-between gap-2">
+                  <div>
+                    <p className="text-xs font-semibold text-slate-900">{item.order_number} · {item.client_name}</p>
+                    <p className="mt-1 text-[11px] text-slate-500">{formatPrintTypeLabel(item.print_type)} · {item.created_at.slice(0, 16).replace("T", " ")}</p>
+                  </div>
+                  <button onClick={() => downloadHtmlFile(item.file_name, item.html)} className="rounded border border-slate-200 bg-white px-2 py-1 text-[11px] font-medium text-slate-600 hover:border-slate-300 transition-colors">下载</button>
+                </div>
+              </div>
+            )) : <div className="rounded-xl border border-dashed border-slate-200 py-8 text-center text-sm text-slate-400">还没有保存的打印单</div>}
+          </div>
+        </PanelCard>
+      </div>
 
       <StatStrip
         items={[
@@ -3702,6 +3874,7 @@ export default function DashboardBizPage() {
   const [payrolls, setPayrolls] = useState<PayrollRecord[]>(bizPayrolls);
   const [quotes, setQuotes] = useState<QuoteRecord[]>(bizQuotes);
   const [showcases, setShowcases] = useState<ShowcaseRecord[]>(bizShowcases);
+  const [printArchives, setPrintArchives] = useState<PrintArchiveRecord[]>(bizPrintArchives);
   const [settings, setSettings] = useState<BizSettings>(bizSettings);
   const [isHydrated, setIsHydrated] = useState(false);
   const [saveState, setSaveState] = useState<"idle" | "saving" | "saved" | "error">("idle");
@@ -3729,6 +3902,7 @@ export default function DashboardBizPage() {
         setPayrolls(payload.data.payrolls ?? []);
         setQuotes(payload.data.quotes ?? []);
         setShowcases(payload.data.showcases ?? []);
+        setPrintArchives(payload.data.printArchives ?? []);
         setSettings(payload.data.settings ?? bizSettings);
       } catch {
         setSaveState("error");
@@ -3769,6 +3943,7 @@ export default function DashboardBizPage() {
             payrolls,
             quotes,
             showcases,
+            printArchives,
             settings,
           } satisfies BizStoreSnapshot),
         });
@@ -3779,7 +3954,7 @@ export default function DashboardBizPage() {
     }, 250);
 
     return () => window.clearTimeout(timer);
-  }, [isHydrated, orders, clients, suppliers, expenses, cashEntries, materials, purchases, employees, appointments, payrolls, quotes, showcases, settings]);
+  }, [isHydrated, orders, clients, suppliers, expenses, cashEntries, materials, purchases, employees, appointments, payrolls, quotes, showcases, printArchives, settings]);
 
   return (
     <PageSection>
@@ -3828,7 +4003,7 @@ export default function DashboardBizPage() {
               employees={employees}
             />
           )}
-          {section === "orders" && <OrdersSection orders={orders} setOrders={setOrders} settings={settings} />}
+          {section === "orders" && <OrdersSection orders={orders} setOrders={setOrders} settings={settings} printArchives={printArchives} setPrintArchives={setPrintArchives} />}
           {section === "finance" && (
             <FinanceSection
               orders={orders}

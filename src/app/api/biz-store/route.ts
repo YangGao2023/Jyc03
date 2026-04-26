@@ -22,6 +22,7 @@ export async function PUT(request: Request) {
     payrolls: Array.isArray(body.payrolls) ? body.payrolls : current.payrolls,
     quotes: Array.isArray(body.quotes) ? body.quotes : current.quotes,
     showcases: Array.isArray(body.showcases) ? body.showcases : current.showcases,
+    printArchives: Array.isArray(body.printArchives) ? body.printArchives : current.printArchives,
     settings: body.settings ?? current.settings,
   };
 

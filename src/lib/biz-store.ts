@@ -12,6 +12,7 @@ import type {
   MaterialRecord,
   MeasurementAppointmentRecord,
   PayrollRecord,
+  PrintArchiveRecord,
   PurchaseRecord,
   QuoteRecord,
   ShowcaseRecord,
@@ -31,6 +32,7 @@ export type BizStoreSnapshot = {
   payrolls: PayrollRecord[];
   quotes: QuoteRecord[];
   showcases: ShowcaseRecord[];
+  printArchives: PrintArchiveRecord[];
   settings: BizSettings;
 };
 
@@ -53,6 +55,7 @@ function buildSeedSnapshot(): BizStoreSnapshot {
     payrolls: Array.isArray(assets.payrolls) ? (assets.payrolls as PayrollRecord[]) : [],
     quotes: Array.isArray(assets.quotes) ? (assets.quotes as QuoteRecord[]) : [],
     showcases: Array.isArray(assets.showcases) ? (assets.showcases as ShowcaseRecord[]) : [],
+    printArchives: Array.isArray(assets.print_archives) ? (assets.print_archives as PrintArchiveRecord[]) : [],
     settings: ((assets.settings ?? {}) as BizSettings),
   };
 }

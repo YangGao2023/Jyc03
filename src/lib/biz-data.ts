@@ -165,6 +165,21 @@ export type ShowcaseRecord = {
   status: string;
 };
 
+export type PrintArchiveRecord = {
+  id: string;
+  order_number: string;
+  client_name: string;
+  order_type: string;
+  print_type: "invoice" | "pickup" | string;
+  title: string;
+  created_at: string;
+  created_by?: string;
+  amount?: number;
+  file_name: string;
+  html: string;
+  summary?: string;
+};
+
 export type BizSettings = {
   company_name: string;
   company_name_zh?: string;
@@ -407,6 +422,21 @@ export const bizShowcases = normalizeList<ShowcaseRecord>(rawAssetsRecord.showca
   description: toString(item.description) || undefined,
   created_at: toString(item.created_at),
   status: toString(item.status),
+}));
+
+export const bizPrintArchives = normalizeList<PrintArchiveRecord>(rawAssetsRecord.print_archives, (item) => ({
+  id: toString(item.id),
+  order_number: toString(item.order_number),
+  client_name: toString(item.client_name),
+  order_type: toString(item.order_type),
+  print_type: toString(item.print_type) || "invoice",
+  title: toString(item.title),
+  created_at: toString(item.created_at),
+  created_by: toString(item.created_by) || undefined,
+  amount: item.amount == null ? undefined : toNumber(item.amount),
+  file_name: toString(item.file_name),
+  html: toString(item.html),
+  summary: toString(item.summary) || undefined,
 }));
 
 export const bizSettings: BizSettings = {

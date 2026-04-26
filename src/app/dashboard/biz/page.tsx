@@ -869,7 +869,9 @@ const DEFAULT_PRINT_SHELL: Required<Pick<PrintShellOptions, "maxWidth" | "bodyPa
   extraStyles: "",
 };
 
-const STANDARD_TABLE_PRINT_STYLES = ".head{display:flex;justify-content:space-between;align-items:flex-end;border-bottom:3px solid #0f172a;padding-bottom:14px;margin-bottom:18px}.title{font-size:28px;font-weight:800}.muted{color:#64748b;font-size:12px}table{width:100%;border-collapse:collapse}";
+const BASE_PRINT_TYPOGRAPHY_STYLES = ".muted{color:#64748b}.title{font-weight:800}";
+const STANDARD_TABLE_PRINT_STYLES = `${BASE_PRINT_TYPOGRAPHY_STYLES}.head{display:flex;justify-content:space-between;align-items:flex-end;border-bottom:3px solid #0f172a;padding-bottom:14px;margin-bottom:18px}.title{font-size:28px}.muted{font-size:12px}table{width:100%;border-collapse:collapse}`;
+const QUOTE_PRINT_STYLES = `${BASE_PRINT_TYPOGRAPHY_STYLES}.brand{display:flex;justify-content:space-between;align-items:flex-start;border-bottom:3px solid #0f172a;padding-bottom:16px;margin-bottom:24px}.title{font-size:30px;letter-spacing:.04em}.card{border:1px solid #cbd5e1;border-radius:16px;padding:18px 20px;margin-bottom:16px}.row{display:flex;justify-content:space-between;gap:12px;padding:8px 0;border-bottom:1px dashed #e2e8f0}.row:last-child{border-bottom:none}.amount{font-size:28px;font-weight:800;color:#0f766e}.footer{margin-top:24px;border-top:1px solid #cbd5e1;padding-top:16px;font-size:12px;line-height:1.7;color:#475569}`;
 
 function buildStandardPrintHeader(title: string, subtitle: string) {
   return `<div class="head"><div><div class="title">${escHtml(title)}</div><div class="muted">${escHtml(subtitle)}</div></div><div class="muted">Printed ${escHtml(new Date().toLocaleString())}</div></div>`;
@@ -933,7 +935,7 @@ function buildQuotePrintHTML(quote: QuoteRecord, settings: BizSettings): string 
 <div class="card"><div class="row"><span class="muted">Client</span><strong>${escHtml(quote.client_name)}</strong></div><div class="row"><span class="muted">Project</span><strong>${escHtml(quote.title)}</strong></div><div class="row"><span class="muted">Quoted Amount</span><span class="amount">${escHtml(formatMoney(quote.amount))}</span></div></div>
 <div class="card"><div style="font-size:14px;font-weight:700;margin-bottom:10px">Payment & Contact</div><div class="row"><span class="muted">Bank</span><span>${escHtml(settings.bank_account || "-")}</span></div><div class="row"><span class="muted">WeChat Pay</span><span>${escHtml(settings.wechat_pay || "-")}</span></div><div class="row"><span class="muted">Alipay</span><span>${escHtml(settings.alipay || "-")}</span></div><div class="row"><span class="muted">Other</span><span>${escHtml(settings.other_payment || "-")}</span></div></div>
 <div class="footer">${escHtml(settings.quote_footer || "")}</div>
-`, { pageTitle: `Quote ${quote.id}`, maxWidth: "820px", extraStyles: ".brand{display:flex;justify-content:space-between;align-items:flex-start;border-bottom:3px solid #0f172a;padding-bottom:16px;margin-bottom:24px}.title{font-size:30px;font-weight:800;letter-spacing:.04em}.muted{color:#64748b}.card{border:1px solid #cbd5e1;border-radius:16px;padding:18px 20px;margin-bottom:16px}.row{display:flex;justify-content:space-between;gap:12px;padding:8px 0;border-bottom:1px dashed #e2e8f0}.row:last-child{border-bottom:none}.amount{font-size:28px;font-weight:800;color:#0f766e}.footer{margin-top:24px;border-top:1px solid #cbd5e1;padding-top:16px;font-size:12px;line-height:1.7;color:#475569}" });
+`, { pageTitle: `Quote ${quote.id}`, maxWidth: "820px", extraStyles: QUOTE_PRINT_STYLES });
 }
 
 function buildSimpleTablePrintHTML(title: string, subtitle: string, columns: string[], rows: Array<Array<string | number>>) {

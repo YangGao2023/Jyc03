@@ -16,6 +16,7 @@ import { appendEvent, clearEventChain, readEventChain } from "@/lib/event-store"
 import { formatEasternTime } from "@/lib/time";
 import { displayTaskEventType, parseEventStream, taskEventTone } from "@/lib/task-board";
 import { readWakeQueue } from "@/lib/wake-store";
+import { computeWatchdogAlerts } from "@/lib/watchdog";
 
 const profileSpecs = [
   {
@@ -448,6 +449,7 @@ export default async function DashboardSystemPage() {
   const agentStatuses = await readAgentStatuses().catch(() => []);
   const wakeItems = await readWakeQueue().catch(() => []);
   const consumedWakeItems = await readWakeQueue({ includeConsumed: true, limit: 20 }).then((items) => items.filter((item) => item.consumedAt)).catch(() => []);
+  const watchdogAlerts = await computeWatchdogAlerts().catch(() => []);
   const sentHistory = buildSentHistory(eventChain, visibleInboxMessages);
   const visibleInboxCards = [...visibleInboxMessages].reverse();
   const recipientSummary = summarizeRecipients(sentHistory.map((item) => ({ to: item.to } as (typeof outboxMessages)[number])) as Awaited<ReturnType<typeof readQueue>>);
@@ -549,6 +551,15 @@ export default async function DashboardSystemPage() {
                 <p className="mt-0.5 text-base font-semibold text-white">{wakeItems.length}</p>
               </div>
               <span className="rounded-full bg-amber-500/15 px-2 py-0.5 text-[10px] font-semibold text-amber-300">待消费</span>
+            </div>
+          </div>
+          <div className="rounded-xl border border-white/10 bg-white/5 px-3 py-2">
+            <div className="flex items-center justify-between gap-2">
+              <div>
+                <p className="text-[10px] text-slate-400">Watchdog 告警</p>
+                <p className="mt-0.5 text-base font-semibold text-white">{watchdogAlerts.length}</p>
+              </div>
+              <span className={`rounded-full px-2 py-0.5 text-[10px] font-semibold ${watchdogAlerts.some((item) => item.level === "error") ? "bg-rose-500/15 text-rose-300" : "bg-amber-500/15 text-amber-300"}`}>{watchdogAlerts.some((item) => item.level === "error") ? "error" : "warn"}</span>
             </div>
           </div>
         </div>
@@ -808,7 +819,7 @@ export default async function DashboardSystemPage() {
                   <div className="rounded-xl bg-white px-3 py-2"><span className="font-semibold text-sky-700">Bridge</span> 发件 {sentHistory.length}，待消费 {outboxMessages.length}，回执 {visibleInboxMessages.length}</div>
                   <div className="rounded-xl bg-white px-3 py-2"><span className="font-semibold text-rose-700">守望</span> 心跳 {agentStatuses.length}，超时 {staleAgentCount}</div>
                   <div className="rounded-xl bg-white px-3 py-2"><span className="font-semibold text-amber-700">Wake</span> 待消费 {wakeItems.length}，已消费 {consumedWakeItems.length}</div>
-                  <div className="rounded-xl bg-white px-3 py-2"><span className="font-semibold text-emerald-700">前台</span> 命令目标只保留阿三与零号</div>
+                  <div className="rounded-xl bg-white px-3 py-2"><span className="font-semibold text-violet-700">Watchdog</span> 告警 {watchdogAlerts.length}，错误 {watchdogAlerts.filter((item) => item.level === "error").length}</div>
                 </div>
               </div>
             </div>
@@ -883,6 +894,24 @@ export default async function DashboardSystemPage() {
                       )) : <div className="rounded-xl border border-dashed border-slate-200 bg-white px-3 py-4 text-sm text-slate-500">当前还没有已消费的 wake 记录</div>}
                     </div>
                   </div>
+                </div>
+              </div>
+
+              <div className="rounded-2xl border border-slate-200 bg-slate-50 p-3">
+                <p className="text-sm font-semibold text-slate-900">Watchdog 告警</p>
+                <p className="mt-1 text-[11px] text-slate-500">直接展示 watchdog 当前判定的告警，方便核对 stale / overdue / blocked / wake 这几类自动守望结果。</p>
+                <div className="mt-2 space-y-2">
+                  {watchdogAlerts.length > 0 ? watchdogAlerts.slice(0, 8).map((alert, index) => (
+                    <div key={`${alert.kind}-${alert.relatedId || alert.target || index}`} className="rounded-xl bg-white px-3 py-2.5">
+                      <div className="flex flex-wrap items-center gap-2">
+                        <span className={`rounded-full px-2 py-0.5 text-[10px] font-semibold ${alert.level === "error" ? "bg-rose-100 text-rose-800" : "bg-amber-100 text-amber-800"}`}>{alert.level}</span>
+                        <span className="rounded-full bg-slate-200 px-2 py-0.5 text-[10px] font-semibold text-slate-700">{alert.kind}</span>
+                        {alert.target ? <span className="text-[11px] text-slate-500">target: {alert.target}</span> : null}
+                      </div>
+                      <p className="mt-1 text-sm font-semibold text-slate-900">{alert.title}</p>
+                      <p className="mt-1 text-xs leading-5 text-slate-600">{alert.detail}</p>
+                    </div>
+                  )) : <div className="rounded-xl border border-dashed border-slate-200 bg-white px-3 py-4 text-sm text-slate-500">当前没有 watchdog 告警</div>}
                 </div>
               </div>
             </div>

@@ -214,7 +214,7 @@ export default async function DashboardOverviewPage() {
           <div className="rounded-2xl border border-white/10 bg-white/5 p-4"><p className="text-[11px] uppercase tracking-[0.2em] text-slate-400">TODO</p><p className="mt-2 text-2xl font-semibold text-white">{todoCount}</p></div>
           <div className="rounded-2xl border border-white/10 bg-white/5 p-4"><p className="text-[11px] uppercase tracking-[0.2em] text-slate-400">正式任务</p><p className="mt-2 text-2xl font-semibold text-white">{taskCount}</p></div>
           <div className="rounded-2xl border border-white/10 bg-white/5 p-4"><p className="text-[11px] uppercase tracking-[0.2em] text-slate-400">进行中 Promise</p><p className="mt-2 text-2xl font-semibold text-white">{activePromises}</p></div>
-          <div className="rounded-2xl border border-white/10 bg-white/5 p-4"><p className="text-[11px] uppercase tracking-[0.2em] text-slate-400">已移交 Promise</p><p className="mt-2 text-2xl font-semibold text-white">{handedOffPromises}</p><p className="mt-1 text-xs text-slate-400">watchdog / owner handoff</p></div>
+          <div className="rounded-2xl border border-white/10 bg-white/5 p-4"><p className="text-[11px] uppercase tracking-[0.2em] text-slate-400">已移交 Promise</p><p className="mt-2 text-2xl font-semibold text-white">{handedOffPromises}</p><p className="mt-1 text-xs text-slate-400">watchdog 或老板手动移交</p></div>
           <div className="rounded-2xl border border-white/10 bg-white/5 p-4"><p className="text-[11px] uppercase tracking-[0.2em] text-slate-400">待消费 Wake</p><p className="mt-2 text-2xl font-semibold text-white">{pendingWakeCount}</p><p className="mt-1 text-xs text-slate-400">等待 agent 拿走</p></div>
           <div className="rounded-2xl border border-white/10 bg-white/5 p-4"><p className="text-[11px] uppercase tracking-[0.2em] text-slate-400">Watchdog 告警</p><p className="mt-2 text-2xl font-semibold text-white">{alerts.length}</p><p className="mt-1 text-xs text-slate-400">超时/阻塞 {overduePromises + blockedPromises}</p></div>
         </div>
@@ -299,7 +299,7 @@ export default async function DashboardOverviewPage() {
 
         <section className="space-y-4">
           <DashboardCard>
-            <DashboardCardTitle title="WakeQueue / Startup Inbox" desc="开始把醒来必读的事项独立落层。" right={<span className="rounded-full bg-slate-900 px-3 py-1 text-xs font-semibold text-white">{wakeItems.length} 条</span>} />
+            <DashboardCardTitle title="Wake 队列" desc="开始把醒来必读的事项独立落层。" right={<span className="rounded-full bg-slate-900 px-3 py-1 text-xs font-semibold text-white">{wakeItems.length} 条</span>} />
             <div className="mt-4 grid gap-3">
               {recentWakeItems.length > 0 ? recentWakeItems.map((item) => (
                 <div key={item.id} className="rounded-2xl border border-slate-200 bg-slate-50 p-4">

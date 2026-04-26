@@ -1,15 +1,19 @@
 import { NextResponse } from "next/server";
 import { parseMessageBody, verifyBridgeRequest } from "@/lib/agent-bridge";
-import { appendWakeItem, makeWakeId, readWakeQueue } from "@/lib/wake-store";
+import { appendWakeItem, consumeWakeQueue, makeWakeId, readWakeQueue } from "@/lib/wake-store";
 
 export async function GET(request: Request) {
   try {
     await verifyBridgeRequest(request);
     const url = new URL(request.url);
     const targetAgent = (url.searchParams.get("agent") || "").trim();
-    const items = await readWakeQueue();
-    const filtered = targetAgent ? items.filter((item) => item.targetAgent === targetAgent) : items;
-    return NextResponse.json({ ok: true, items: filtered });
+    const consume = ["1", "true", "yes"].includes((url.searchParams.get("consume") || "").trim().toLowerCase());
+    const includeConsumed = ["1", "true", "yes"].includes((url.searchParams.get("includeConsumed") || "").trim().toLowerCase());
+    const limit = Number(url.searchParams.get("limit") || "20");
+    const items = consume
+      ? await consumeWakeQueue(targetAgent || undefined, limit)
+      : await readWakeQueue({ targetAgent: targetAgent || undefined, includeConsumed, limit });
+    return NextResponse.json({ ok: true, items, consume, includeConsumed });
   } catch (error) {
     return NextResponse.json({ ok: false, error: error instanceof Error ? error.message : "Wake queue read failed" }, { status: 401 });
   }

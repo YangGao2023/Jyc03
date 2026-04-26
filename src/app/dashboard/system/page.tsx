@@ -447,6 +447,7 @@ export default async function DashboardSystemPage() {
   const discussionThreads = await readDiscussionThreads().catch(() => []);
   const agentStatuses = await readAgentStatuses().catch(() => []);
   const wakeItems = await readWakeQueue().catch(() => []);
+  const consumedWakeItems = await readWakeQueue({ includeConsumed: true, limit: 20 }).then((items) => items.filter((item) => item.consumedAt)).catch(() => []);
   const sentHistory = buildSentHistory(eventChain, visibleInboxMessages);
   const visibleInboxCards = [...visibleInboxMessages].reverse();
   const recipientSummary = summarizeRecipients(sentHistory.map((item) => ({ to: item.to } as (typeof outboxMessages)[number])) as Awaited<ReturnType<typeof readQueue>>);
@@ -806,7 +807,7 @@ export default async function DashboardSystemPage() {
                 <div className="grid gap-2 sm:grid-cols-2">
                   <div className="rounded-xl bg-white px-3 py-2"><span className="font-semibold text-sky-700">Bridge</span> 发件 {sentHistory.length}，待消费 {outboxMessages.length}，回执 {visibleInboxMessages.length}</div>
                   <div className="rounded-xl bg-white px-3 py-2"><span className="font-semibold text-rose-700">守望</span> 心跳 {agentStatuses.length}，超时 {staleAgentCount}</div>
-                  <div className="rounded-xl bg-white px-3 py-2"><span className="font-semibold text-amber-700">Wake</span> 待消费 {wakeItems.length}，最近目标 {wakeItems[0]?.targetAgent || "-"}</div>
+                  <div className="rounded-xl bg-white px-3 py-2"><span className="font-semibold text-amber-700">Wake</span> 待消费 {wakeItems.length}，已消费 {consumedWakeItems.length}</div>
                   <div className="rounded-xl bg-white px-3 py-2"><span className="font-semibold text-emerald-700">前台</span> 命令目标只保留阿三与零号</div>
                 </div>
               </div>
@@ -849,18 +850,39 @@ export default async function DashboardSystemPage() {
 
               <div className="rounded-2xl border border-slate-200 bg-slate-50 p-3">
                 <p className="text-sm font-semibold text-slate-900">Wake 队列</p>
-                <p className="mt-1 text-[11px] text-slate-500">展示尚未被 agent 消费的 wake 项，方便确认 outbox / handoff / watchdog 是否真的推送出去了。</p>
-                <div className="mt-2 space-y-2">
-                  {wakeItems.length > 0 ? wakeItems.slice(0, 8).map((item) => (
-                    <div key={item.id} className="rounded-xl bg-white px-3 py-2.5">
-                      <div className="flex flex-wrap items-center gap-2">
-                        <span className="text-[11px] text-slate-500">{formatEasternTime(item.createdAt)}</span>
-                        <span className="rounded-full bg-amber-100 px-2 py-0.5 text-[10px] font-semibold text-amber-800">{item.kind}</span>
-                        <span className="rounded-full bg-slate-200 px-2 py-0.5 text-[10px] font-semibold text-slate-700">{item.targetAgent}</span>
-                      </div>
-                      <p className="mt-1 text-xs leading-5 text-slate-600">related: {item.relatedId || "-"}{item.note ? ` · ${item.note}` : ""}</p>
+                <p className="mt-1 text-[11px] text-slate-500">展示待消费与最近已消费的 wake 项，方便确认 outbox / handoff / watchdog 是否真的推送并被 agent 拿走了。</p>
+                <div className="mt-2 space-y-3">
+                  <div>
+                    <p className="text-[11px] font-semibold text-slate-500">待消费</p>
+                    <div className="mt-2 space-y-2">
+                      {wakeItems.length > 0 ? wakeItems.slice(0, 8).map((item) => (
+                        <div key={item.id} className="rounded-xl bg-white px-3 py-2.5">
+                          <div className="flex flex-wrap items-center gap-2">
+                            <span className="text-[11px] text-slate-500">{formatEasternTime(item.createdAt)}</span>
+                            <span className="rounded-full bg-amber-100 px-2 py-0.5 text-[10px] font-semibold text-amber-800">{item.kind}</span>
+                            <span className="rounded-full bg-slate-200 px-2 py-0.5 text-[10px] font-semibold text-slate-700">{item.targetAgent}</span>
+                          </div>
+                          <p className="mt-1 text-xs leading-5 text-slate-600">related: {item.relatedId || "-"}{item.note ? ` · ${item.note}` : ""}</p>
+                        </div>
+                      )) : <div className="rounded-xl border border-dashed border-slate-200 bg-white px-3 py-4 text-sm text-slate-500">当前没有待消费的 wake 项</div>}
                     </div>
-                  )) : <div className="rounded-xl border border-dashed border-slate-200 bg-white px-3 py-4 text-sm text-slate-500">当前没有待消费的 wake 项</div>}
+                  </div>
+
+                  <div>
+                    <p className="text-[11px] font-semibold text-slate-500">最近已消费</p>
+                    <div className="mt-2 space-y-2">
+                      {consumedWakeItems.length > 0 ? consumedWakeItems.slice(0, 8).map((item) => (
+                        <div key={item.id} className="rounded-xl bg-white px-3 py-2.5">
+                          <div className="flex flex-wrap items-center gap-2">
+                            <span className="text-[11px] text-slate-500">{formatEasternTime(item.consumedAt || item.createdAt)}</span>
+                            <span className="rounded-full bg-emerald-100 px-2 py-0.5 text-[10px] font-semibold text-emerald-800">{item.consumeResult || "consumed"}</span>
+                            <span className="rounded-full bg-slate-200 px-2 py-0.5 text-[10px] font-semibold text-slate-700">{item.targetAgent}</span>
+                          </div>
+                          <p className="mt-1 text-xs leading-5 text-slate-600">kind: {item.kind} · related: {item.relatedId || "-"}{item.note ? ` · ${item.note}` : ""}</p>
+                        </div>
+                      )) : <div className="rounded-xl border border-dashed border-slate-200 bg-white px-3 py-4 text-sm text-slate-500">当前还没有已消费的 wake 记录</div>}
+                    </div>
+                  </div>
                 </div>
               </div>
             </div>

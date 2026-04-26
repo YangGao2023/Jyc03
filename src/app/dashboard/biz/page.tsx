@@ -893,6 +893,13 @@ body{font-family:Arial,sans-serif;color:#111827;padding:0}
 <script>window.onload=function(){window.print();}<\/script></body></html>`;
 }
 
+function buildPrintShell(title: string, body: string, options?: { pageTitle?: string; maxWidth?: string; bodyPadding?: string; extraStyles?: string }) {
+  return `<!DOCTYPE html><html><head><meta charset="UTF-8"><title>${escHtml(options?.pageTitle || title)}</title>
+<style>
+*{box-sizing:border-box}body{font-family:Arial,sans-serif;color:#0f172a;padding:${options?.bodyPadding || "28px"};background:#fff}.sheet{max-width:${options?.maxWidth || "1080px"};margin:0 auto}${options?.extraStyles || ""}@media print{body{padding:0}.sheet{max-width:none}}
+</style></head><body><div class="sheet">${body}</div><script>window.onload=function(){window.print();}<\/script></body></html>`;
+}
+
 function buildWorkerPickupHTML(order: BizOrder, rows: MaterialRow[]): string {
   const rowsHTML = rows.length
     ? rows
@@ -915,13 +922,7 @@ function buildWorkerPickupHTML(order: BizOrder, rows: MaterialRow[]): string {
         .join("")
     : `<tr><td colspan="4" style="padding:24px;text-align:center;color:#94a3b8;border:1px solid #bfdbfe">暂无物料 / No materials</td></tr>`;
 
-  return `<!DOCTYPE html><html><head><meta charset="UTF-8"><title>领料单 · ${escHtml(order.order_number)}</title>
-<style>
-*{margin:0;padding:0;box-sizing:border-box}
-body{font-family:Arial,sans-serif;font-size:13px;color:#1e293b;padding:32px}
-@media print{body{padding:16px}}
-</style></head>
-<body>
+  return buildPrintShell("领料单 / Worker Pickup Sheet", `
 <div style="border-bottom:3px solid #1e40af;padding-bottom:14px;margin-bottom:18px">
   <h1 style="font-size:22px;font-weight:800;color:#1e40af">领料单 / Worker Pickup Sheet</h1>
   <p style="margin-top:6px;color:#475569;font-size:13px">${escHtml(order.order_number)} &nbsp;·&nbsp; ${escHtml(order.client_name)} &nbsp;·&nbsp; ${escHtml(order.order_date ?? "-")}</p>
@@ -936,21 +937,16 @@ body{font-family:Arial,sans-serif;font-size:13px;color:#1e293b;padding:32px}
     </tr>
   </thead>
   <tbody>${rowsHTML}</tbody>
-</table>
-<script>window.onload=function(){window.print();}<\/script>
-</body></html>`;
+</table>`, { pageTitle: `领料单 · ${order.order_number}` });
 }
 
 function buildQuotePrintHTML(quote: QuoteRecord, settings: BizSettings): string {
-  return `<!DOCTYPE html><html><head><meta charset="UTF-8"><title>Quote ${escHtml(quote.id)}</title>
-<style>
-*{box-sizing:border-box}body{font-family:Arial,sans-serif;color:#0f172a;padding:28px;background:#fff}.sheet{max-width:820px;margin:0 auto}.brand{display:flex;justify-content:space-between;align-items:flex-start;border-bottom:3px solid #0f172a;padding-bottom:16px;margin-bottom:24px}.title{font-size:30px;font-weight:800;letter-spacing:.04em}.muted{color:#64748b}.card{border:1px solid #cbd5e1;border-radius:16px;padding:18px 20px;margin-bottom:16px}.row{display:flex;justify-content:space-between;gap:12px;padding:8px 0;border-bottom:1px dashed #e2e8f0}.row:last-child{border-bottom:none}.amount{font-size:28px;font-weight:800;color:#0f766e}.footer{margin-top:24px;border-top:1px solid #cbd5e1;padding-top:16px;font-size:12px;line-height:1.7;color:#475569}@media print{body{padding:0}.sheet{max-width:none}}
-</style></head><body><div class="sheet">
+  return buildPrintShell("QUOTE", `
 <div class="brand"><div><div class="title">QUOTE</div><div class="muted">${escHtml(settings.company_name || "Company")}</div><div class="muted">${escHtml(settings.address || "")}</div><div class="muted">${escHtml(settings.phone || "")}${settings.email ? ` · ${escHtml(settings.email)}` : ""}</div></div><div style="text-align:right"><div><strong>${escHtml(quote.id)}</strong></div><div class="muted">Created: ${escHtml(quote.created_at)}</div><div class="muted">Valid Until: ${escHtml(quote.valid_until)}</div><div class="muted">Status: ${escHtml(quote.status)}</div></div></div>
 <div class="card"><div class="row"><span class="muted">Client</span><strong>${escHtml(quote.client_name)}</strong></div><div class="row"><span class="muted">Project</span><strong>${escHtml(quote.title)}</strong></div><div class="row"><span class="muted">Quoted Amount</span><span class="amount">${escHtml(formatMoney(quote.amount))}</span></div></div>
 <div class="card"><div style="font-size:14px;font-weight:700;margin-bottom:10px">Payment & Contact</div><div class="row"><span class="muted">Bank</span><span>${escHtml(settings.bank_account || "-")}</span></div><div class="row"><span class="muted">WeChat Pay</span><span>${escHtml(settings.wechat_pay || "-")}</span></div><div class="row"><span class="muted">Alipay</span><span>${escHtml(settings.alipay || "-")}</span></div><div class="row"><span class="muted">Other</span><span>${escHtml(settings.other_payment || "-")}</span></div></div>
 <div class="footer">${escHtml(settings.quote_footer || "")}</div>
-</div><script>window.onload=function(){window.print();}<\/script></body></html>`;
+`, { pageTitle: `Quote ${quote.id}`, maxWidth: "820px", extraStyles: ".brand{display:flex;justify-content:space-between;align-items:flex-start;border-bottom:3px solid #0f172a;padding-bottom:16px;margin-bottom:24px}.title{font-size:30px;font-weight:800;letter-spacing:.04em}.muted{color:#64748b}.card{border:1px solid #cbd5e1;border-radius:16px;padding:18px 20px;margin-bottom:16px}.row{display:flex;justify-content:space-between;gap:12px;padding:8px 0;border-bottom:1px dashed #e2e8f0}.row:last-child{border-bottom:none}.amount{font-size:28px;font-weight:800;color:#0f766e}.footer{margin-top:24px;border-top:1px solid #cbd5e1;padding-top:16px;font-size:12px;line-height:1.7;color:#475569}" });
 }
 
 function buildSimpleTablePrintHTML(title: string, subtitle: string, columns: string[], rows: Array<Array<string | number>>) {
@@ -967,10 +963,7 @@ function buildSimpleTablePrintHTML(title: string, subtitle: string, columns: str
         .join("")
     : `<tr><td colspan="${columns.length}" style="border:1px solid #e2e8f0;padding:18px 8px;text-align:center;color:#64748b;font-size:12px">暂无数据</td></tr>`;
 
-  return `<!DOCTYPE html><html><head><meta charset="UTF-8"><title>${escHtml(title)}</title>
-<style>
-*{box-sizing:border-box}body{font-family:Arial,sans-serif;color:#0f172a;padding:28px;background:#fff}.sheet{max-width:1080px;margin:0 auto}.head{display:flex;justify-content:space-between;align-items:flex-end;border-bottom:3px solid #0f172a;padding-bottom:14px;margin-bottom:18px}.title{font-size:28px;font-weight:800}.muted{color:#64748b;font-size:12px}table{width:100%;border-collapse:collapse}@media print{body{padding:0}.sheet{max-width:none}}
-</style></head><body><div class="sheet"><div class="head"><div><div class="title">${escHtml(title)}</div><div class="muted">${escHtml(subtitle)}</div></div><div class="muted">Printed ${escHtml(new Date().toLocaleString())}</div></div><table><thead><tr>${headerHtml}</tr></thead><tbody>${bodyHtml}</tbody></table></div><script>window.onload=function(){window.print();}<\/script></body></html>`;
+  return buildPrintShell(title, `<div class="head"><div><div class="title">${escHtml(title)}</div><div class="muted">${escHtml(subtitle)}</div></div><div class="muted">Printed ${escHtml(new Date().toLocaleString())}</div></div><table><thead><tr>${headerHtml}</tr></thead><tbody>${bodyHtml}</tbody></table>`, { extraStyles: ".head{display:flex;justify-content:space-between;align-items:flex-end;border-bottom:3px solid #0f172a;padding-bottom:14px;margin-bottom:18px}.title{font-size:28px;font-weight:800}.muted{color:#64748b;font-size:12px}table{width:100%;border-collapse:collapse}" });
 }
 
 function openPrintWindow(html: string) {

@@ -7,6 +7,7 @@ import { makePromiseId, readPromises, upsertPromise } from "@/lib/promise-store"
 import { appendProof, makeProofId, readProofs } from "@/lib/proof-store";
 import { formatEasternTime } from "@/lib/time";
 import { countTodoItems, readTodoBoard } from "@/lib/todo-board";
+import { countEventItems, countTaskItems, readEventStream, readTaskQueue } from "@/lib/task-board";
 import { readWakeQueue, upsertWakeItem } from "@/lib/wake-store";
 import { computeWatchdogAlerts } from "@/lib/watchdog";
 
@@ -196,9 +197,9 @@ export default async function DashboardOverviewPage() {
   const eventPath = path.join(process.cwd(), "..", "共享协作区", "日志", "事件流.md");
 
   const todoRaw = readTodoBoard();
-  const taskRaw = safeRead(taskPath);
+  const taskRaw = readTaskQueue();
   const handoffRaw = safeRead(handoffPath);
-  const eventRaw = safeRead(eventPath);
+  const eventRaw = readEventStream();
   const promises = await readPromises().catch(() => []);
   const proofs = await readProofs().catch(() => []);
   const wakeItems = await readWakeQueue().catch(() => []);
@@ -206,10 +207,10 @@ export default async function DashboardOverviewPage() {
   const events = await readEventChain().catch(() => []);
 
   const todoCount = countTodoItems(todoRaw);
-  const taskCount = countMatches(taskRaw, /^### \[TASK-/);
+  const taskCount = countTaskItems(taskRaw);
   const handoffCount = countMatches(handoffRaw, /^### /);
   const recentEvents = parseRecentEvents(eventRaw);
-  const totalEventCount = countMatches(eventRaw, /^- \[/);
+  const totalEventCount = countEventItems(eventRaw);
   const openPromises = promises.filter((item) => !["completed", "expired"].includes(item.status));
   const activePromises = openPromises.length;
   const blockedPromises = promises.filter((item) => item.status === "blocked").length;

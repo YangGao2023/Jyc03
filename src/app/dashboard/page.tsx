@@ -3,6 +3,7 @@ import path from "node:path";
 import { homedir } from "node:os";
 import net from "node:net";
 import { countTodoItems, readTodoBoard } from "@/lib/todo-board";
+import { countBlockedTaskItems, countEventItems, countTaskItems, readEventStream, readTaskQueue } from "@/lib/task-board";
 
 type AgentSpec = {
   key: string;
@@ -71,10 +72,6 @@ function probePort(port: number) {
   });
 }
 
-function countMatches(raw: string, pattern: RegExp) {
-  return raw.split(/\r?\n/).filter((line) => pattern.test(line.trim())).length;
-}
-
 const workspaceLinks = [
   ["总览页", "/dashboard/overview", "先看今天整体状态和重点"],
   ["业务页", "/dashboard/biz", "先做一句话下单、收据/PDF、导入导出"],
@@ -85,13 +82,13 @@ const workspaceLinks = [
 
 export default async function DashboardPage() {
   const todoRaw = readTodoBoard();
-  const taskRaw = safeRead(path.join(process.cwd(), "..", "共享协作区", "任务", "任务队列.md"));
-  const eventRaw = safeRead(path.join(process.cwd(), "..", "共享协作区", "日志", "事件流.md"));
+  const taskRaw = readTaskQueue();
+  const eventRaw = readEventStream();
 
   const todoCount = countTodoItems(todoRaw);
-  const taskCount = countMatches(taskRaw, /^### \[TASK-/);
-  const blockedCount = taskRaw.split(/\r?\n/).filter((line) => line.includes("- status: blocked")).length;
-  const eventCount = eventRaw.split(/\r?\n/).filter((line) => line.trim().startsWith("- [")).length;
+  const taskCount = countTaskItems(taskRaw);
+  const blockedCount = countBlockedTaskItems(taskRaw);
+  const eventCount = countEventItems(eventRaw);
   const recentEventCount = Math.min(eventCount, 10);
 
   const liveAgents = await Promise.all(

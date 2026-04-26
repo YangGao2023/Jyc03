@@ -87,8 +87,20 @@ export function readTaskQueue() {
   return safeRead(TASK_QUEUE_PATH);
 }
 
+export function countTaskItems(raw = readTaskQueue()) {
+  return raw.split(/\r?\n/).filter((line) => /^### \[TASK-/.test(line.trim())).length;
+}
+
+export function countBlockedTaskItems(raw = readTaskQueue()) {
+  return raw.split(/\r?\n/).filter((line) => line.includes("- status: blocked")).length;
+}
+
 export function readEventStream() {
   return safeRead(EVENT_STREAM_PATH);
+}
+
+export function countEventItems(raw = readEventStream()) {
+  return raw.split(/\r?\n/).filter((line) => line.trim().startsWith("- [")).length;
 }
 
 export function nextTaskId(raw: string) {

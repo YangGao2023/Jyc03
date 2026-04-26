@@ -58,6 +58,28 @@ function addDaysIso(base: string, days: number) {
   return value.toISOString().slice(0, 10);
 }
 
+function getPrintTemplateSettings(settings?: BizSettings) {
+  const phoneLines = (settings?.phones || settings?.phone || "")
+    .split(/\r?\n/)
+    .map((line) => line.trim())
+    .filter(Boolean);
+
+  return {
+    invoiceTitle: settings?.invoice_title?.trim() || "Invoice",
+    pickingTitle: settings?.picking_title?.trim() || "\u9886\u6599\u5355 / Worker Pickup Sheet",
+    companyName: settings?.company_name?.trim() || "JYC STEEL GROUP INC",
+    companyNameZh: settings?.company_name_zh?.trim() || "",
+    companyAddress: settings?.company_address?.trim() || settings?.address?.trim() || "34-41 College Point Blvd, Flushing, NY,11354",
+    phoneLines,
+    phoneDisplay: phoneLines.join(" | "),
+    email: settings?.email?.trim() || "",
+    website: settings?.website?.trim() || "WWW.JYCNYC.NET",
+    zelle: settings?.zelle?.trim() || "3478227777",
+    invoiceNote: settings?.invoice_note?.trim() || "1. Customer will be billed after indicating acceptance of this quote.\n2. 40% deposit required when placing the order.\n3. When the job is complete, the balance must be paid in full.\n4. Extra requirements will charge extra.\n5. Warranty depends on the size and style.",
+  };
+}
+
+
 function downloadTextFile(filename: string, content: string, type = "text/plain;charset=utf-8") {
   const blob = new Blob([content], { type });
   const url = URL.createObjectURL(blob);
@@ -781,7 +803,7 @@ function EditableMaterialRows({
   );
 }
 
-function buildCustomerInvoiceHTML(order: BizOrder, draft: DraftFields, rows: MaterialRow[]): string {
+function buildCustomerInvoiceHTML(order: BizOrder, draft: DraftFields, rows: MaterialRow[], settings?: BizSettings): string {
   const brandBlue = "#0457da";
   const isCustom = order.order_type === "定制单";
   const taxAmount = (draft.total_price || 0) * (draft.tax_rate || 0) / 100;
@@ -789,11 +811,8 @@ function buildCustomerInvoiceHTML(order: BizOrder, draft: DraftFields, rows: Mat
   const photo = draft.preview_image
     ? `<img src="${escHtml(draft.preview_image)}" alt="preview" style="width:100%;height:100%;object-fit:cover;display:block"/>`
     : `<div style="width:100%;height:100%;display:flex;align-items:center;justify-content:center;background:#dbeafe;color:#1e3a8a;font-weight:700;font-size:18px">PHOTO</div>`;
-  const notes = (draft.remarks || `1. Customer will be billed after indicating acceptance of this quote.
-2. 40% deposit required when placing the order.
-3. When the job is complete, the balance must be paid in full.
-4. Extra requirements will charge extra.
-5. Warranty depends on the size and style.`)
+  const template = getPrintTemplateSettings(settings);
+  const notes = (draft.remarks || template.invoiceNote)
     .split(/\n+/)
     .filter(Boolean)
     .map((line, index) => `<div style="margin-bottom:4px">${index + 1}. ${escHtml(line.replace(/^\d+[.)]?\s*/, ""))}</div>`)
@@ -830,15 +849,15 @@ function buildCustomerInvoiceHTML(order: BizOrder, draft: DraftFields, rows: Mat
   <div class="topbar">
     <div class="topbox">
       <div>
-        <h1>34-41 College Point Blvd, Flushing, NY,11354</h1>
-        <p>JYC STEEL GROUP INC</p>
+        <h1>${escHtml(template.companyAddress)}</h1>
+        <p>${escHtml(template.companyName)}</p>
       </div>
       <div style="text-align:right" class="officePhone">
-        <h1>OFFICE: 347-251-1719</h1>
+        <h1>${escHtml(template.phoneDisplay ? `OFFICE: ${template.phoneDisplay}` : "OFFICE")}</h1>
       </div>
     </div>
     <div class="topbox" style="justify-content:center;text-align:center">
-      <div><h1>JYC STEEL GROUP INC</h1></div>
+      <div><h1>${escHtml(template.companyNameZh || template.companyName)}</h1></div>
     </div>
   </div>
 
@@ -859,15 +878,15 @@ function buildCustomerInvoiceHTML(order: BizOrder, draft: DraftFields, rows: Mat
       </div>
     </div>
     <div class="panel invoiceBox">
-      <div class="sectionBlue" style="text-align:center">Invoice</div>
+      <div class="sectionBlue" style="text-align:center">${escHtml(template.invoiceTitle)}</div>
       <div class="big">${escHtml(order.order_number)}</div>
       <div class="date">${escHtml(order.order_date || "-")}</div>
     </div>
   </div>
 
   <div class="midBlue">
-    <span>WWW.JYCNYC.NET</span>
-    <span>Zelle 3478227777</span>
+    <span>${escHtml(template.website)}</span>
+    <span>${escHtml(template.zelle ? `Zelle ${template.zelle}` : template.email || "")}</span>
   </div>
 
   ${middleSection}
@@ -924,7 +943,7 @@ function buildPrintShell(title: string, body: string, options?: PrintShellOption
 </style></head><body><div class="sheet">${body}</div><script>window.onload=function(){window.print();}<\/script></body></html>`;
 }
 
-function buildWorkerPickupHTML(order: BizOrder, rows: MaterialRow[]): string {
+function buildWorkerPickupHTML(order: BizOrder, rows: MaterialRow[], settings?: BizSettings): string {
   const rowsHTML = rows.length
     ? rows
         .map(
@@ -1047,10 +1066,12 @@ function OrderDetailView({
   order,
   onBack,
   onSave,
+  settings,
 }: {
   order: BizOrder;
   onBack: () => void;
   onSave: (updated: BizOrder) => void;
+  settings: BizSettings;
 }) {
   const today = new Date().toISOString().slice(0, 10);
   const isCustom = order.order_type === "定制单";
@@ -1703,9 +1724,11 @@ function NewOrderModal({
 function OrdersSection({
   orders,
   setOrders,
+  settings,
 }: {
   orders: BizOrder[];
   setOrders: React.Dispatch<React.SetStateAction<BizOrder[]>>;
+  settings: BizSettings;
 }) {
   const [selectedOrder, setSelectedOrder] = useState<BizOrder | null>(null);
   const [typeFilter, setTypeFilter] = useState("全部");
@@ -1784,6 +1807,7 @@ function OrdersSection({
         order={selectedOrder}
         onBack={() => setSelectedOrder(null)}
         onSave={handleSave}
+        settings={settings}
       />
     );
   }
@@ -2524,28 +2548,35 @@ function SettingsSection({ settings, setSettings }: { settings: BizSettings; set
   };
 
   const settingRows: Array<{ label: string; value: string | number }> = [
-    { label: "公司名称", value: settings.company_name || "-" },
-    { label: "地址", value: settings.address || "-" },
-    { label: "电话", value: settings.phone || "-" },
-    { label: "电子邮箱", value: settings.email || "-" },
-    { label: "网站", value: settings.website || "-" },
-    { label: "税号(BN)", value: settings.tax_number || "-" },
-    { label: "默认税率", value: String(settings.default_tax_rate ?? "-") },
-    { label: "默认货币", value: settings.default_currency || "-" },
-    { label: "财年开始月", value: String(settings.fiscal_start_month ?? "-") },
-    { label: "银行账户", value: settings.bank_account || "-" },
-    { label: "支付宝", value: settings.alipay || "-" },
-    { label: "微信收款", value: settings.wechat_pay || "-" },
-    { label: "其他方式", value: settings.other_payment || "-" },
-    { label: "报价默认有效期", value: String(settings.quote_valid_days ?? "-") },
-    { label: "报价页脚备注", value: settings.quote_footer || "-" },
+    { label: "\u516c\u53f8\u540d\u79f0", value: settings.company_name || "-" },
+    { label: "\u516c\u53f8\u4e2d\u6587\u540d\u79f0", value: settings.company_name_zh || "-" },
+    { label: "\u5730\u5740", value: settings.address || "-" },
+    { label: "\u6253\u5370\u5730\u5740", value: settings.company_address || settings.address || "-" },
+    { label: "\u7535\u8bdd", value: settings.phone || "-" },
+    { label: "\u6253\u5370\u7535\u8bdd", value: settings.phones || settings.phone || "-" },
+    { label: "\u7535\u5b50\u90ae\u7bb1", value: settings.email || "-" },
+    { label: "\u7f51\u7ad9", value: settings.website || "-" },
+    { label: "\u7a0e\u53f7(BN)", value: settings.tax_number || "-" },
+    { label: "\u9ed8\u8ba4\u7a0e\u7387", value: String(settings.default_tax_rate ?? "-") },
+    { label: "\u9ed8\u8ba4\u8d27\u5e01", value: settings.default_currency || "-" },
+    { label: "\u8d22\u5e74\u5f00\u59cb\u6708", value: String(settings.fiscal_start_month ?? "-") },
+    { label: "\u94f6\u884c\u8d26\u6237", value: settings.bank_account || "-" },
+    { label: "\u652f\u4ed8\u5b9d", value: settings.alipay || "-" },
+    { label: "\u5fae\u4fe1\u6536\u6b3e", value: settings.wechat_pay || "-" },
+    { label: "\u5176\u4ed6\u65b9\u5f0f", value: settings.other_payment || "-" },
+    { label: "\u53d1\u7968\u6807\u9898", value: settings.invoice_title || "Invoice" },
+    { label: "\u9886\u6599\u5355\u6807\u9898", value: settings.picking_title || "\u9886\u6599\u5355 / Worker Pickup Sheet" },
+    { label: "Zelle", value: settings.zelle || "-" },
+    { label: "\u53d1\u7968\u5907\u6ce8\u6a21\u677f", value: settings.invoice_note || "-" },
+    { label: "\u62a5\u4ef7\u9ed8\u8ba4\u6709\u6548\u671f", value: String(settings.quote_valid_days ?? "-") },
+    { label: "\u62a5\u4ef7\u9875\u811a\u5907\u6ce8", value: settings.quote_footer || "-" },
     { label: "Logo URL", value: settings.logo_url || "-" },
   ];
 
   const settingsConfig: TabularSchemaConfig = {
-    title: "系统设置",
+    title: "\u7cfb\u7edf\u8bbe\u7f6e",
     filePrefix: "biz-settings",
-    columns: ["字段", "值"],
+    columns: ["\u5b57\u6bb5", "\u503c"],
     exportRows: () => mapRows(settingRows, (item) => [item.label, item.value]),
     printRows: () => mapRows(settingRows, (item) => [item.label, item.value]),
   };
@@ -2555,12 +2586,13 @@ function SettingsSection({ settings, setSettings }: { settings: BizSettings; set
   }
 
   function printSettings() {
-    printTabularSchema(settingsConfig, "当前业务配置");
+    printTabularSchema(settingsConfig, "\u5f53\u524d\u4e1a\u52a1\u914d\u7f6e");
   }
 
-  return <div><SectionHeader eyebrow="Configuration" title="系统设置" actions={<><ActionBtn onClick={exportSettings}>↓ 导出设置</ActionBtn><ActionBtn onClick={printSettings}>🖨 打印设置</ActionBtn><ActionBtn tone="success">自动保存中</ActionBtn></>} /><div className="grid gap-4 lg:grid-cols-2"><SettingsGroup title="公司信息"><SettingsField label="公司名称" value={settings.company_name} onChange={(value) => update("company_name", value)} /><SettingsField label="地址" value={settings.address} onChange={(value) => update("address", value)} /><SettingsField label="电话" value={settings.phone} onChange={(value) => update("phone", value)} /><SettingsField label="电子邮箱" value={settings.email} onChange={(value) => update("email", value)} /><SettingsField label="网站" value={settings.website} onChange={(value) => update("website", value)} /></SettingsGroup><SettingsGroup title="税务 & 财务"><SettingsField label="税号 (BN)" value={settings.tax_number} note="Business Number" onChange={(value) => update("tax_number", value)} /><SettingsField label="默认税率" value={String(settings.default_tax_rate)} onChange={(value) => update("default_tax_rate", value)} type="number" /><SettingsField label="默认货币" value={settings.default_currency} onChange={(value) => update("default_currency", value)} /><SettingsField label="财年开始月" value={String(settings.fiscal_start_month)} onChange={(value) => update("fiscal_start_month", value)} type="number" /></SettingsGroup><SettingsGroup title="支付方式"><SettingsField label="银行账户" value={settings.bank_account} onChange={(value) => update("bank_account", value)} /><SettingsField label="支付宝" value={settings.alipay} onChange={(value) => update("alipay", value)} /><SettingsField label="微信收款" value={settings.wechat_pay} onChange={(value) => update("wechat_pay", value)} /><SettingsField label="其他方式" value={settings.other_payment} onChange={(value) => update("other_payment", value)} /></SettingsGroup><SettingsGroup title="报价单模板"><SettingsField label="默认有效期" value={String(settings.quote_valid_days)} note="Days until quote expires" onChange={(value) => update("quote_valid_days", value)} type="number" /><SettingsField label="页脚备注" value={settings.quote_footer} onChange={(value) => update("quote_footer", value)} /><SettingsField label="Logo URL" value={settings.logo_url} note="Used in printed quotes" onChange={(value) => update("logo_url", value)} /></SettingsGroup></div></div>;
+  return <div><SectionHeader eyebrow="Configuration" title="\u516c\u53f8\u4fe1\u606f" actions={<><ActionBtn onClick={exportSettings}>? 导出设置</ActionBtn><ActionBtn onClick={printSettings}>?? 打印设置</ActionBtn><ActionBtn tone="success">自动保存中</ActionBtn></>} /><div className="grid gap-4 lg:grid-cols-2"><SettingsGroup title="\u516c\u53f8\u4fe1\u606f"><SettingsField label="????" value={settings.company_name} onChange={(value) => update("company_name", value)} /><SettingsField label="\u516c\u53f8\u4e2d\u6587\u540d\u79f0" value={settings.company_name_zh ?? ""} onChange={(value) => update("company_name_zh", value)} /><SettingsField label="\u5730\u5740" value={settings.address} onChange={(value) => update("address", value)} /><SettingsField label="\u6253\u5370\u5730\u5740" value={settings.company_address ?? ""} note="\u7559\u7a7a\u65f6\u56de\u9000\u5230\u516c\u53f8\u5730\u5740" onChange={(value) => update("company_address", value)} /><SettingsField label="\u7535\u8bdd" value={settings.phone} onChange={(value) => update("phone", value)} /><SettingsField label="\u6253\u5370\u7535\u8bdd" value={settings.phones ?? ""} note="\u652f\u6301\u591a\u884c\uff0c\u6253\u5370\u65f6\u4f1a\u81ea\u52a8\u62fc\u63a5" onChange={(value) => update("phones", value)} /><SettingsField label="\u7535\u5b50\u90ae\u7bb1" value={settings.email} onChange={(value) => update("email", value)} /><SettingsField label="\u7f51\u7ad9" value={settings.website} onChange={(value) => update("website", value)} /></SettingsGroup><SettingsGroup title="\u7a0e\u52a1 & \u8d22\u52a1"><SettingsField label="\u7a0e\u53f7 (BN)" value={settings.tax_number} note="Business Number" onChange={(value) => update("tax_number", value)} /><SettingsField label="\u9ed8\u8ba4\u7a0e\u7387" value={String(settings.default_tax_rate)} onChange={(value) => update("default_tax_rate", value)} type="number" /><SettingsField label="\u9ed8\u8ba4\u8d27\u5e01" value={settings.default_currency} onChange={(value) => update("default_currency", value)} /><SettingsField label="\u8d22\u5e74\u5f00\u59cb\u6708" value={String(settings.fiscal_start_month)} onChange={(value) => update("fiscal_start_month", value)} type="number" /></SettingsGroup><SettingsGroup title="\u516c\u53f8\u4fe1\u606f"><SettingsField label="????" value={settings.bank_account} onChange={(value) => update("bank_account", value)} /><SettingsField label="\u652f\u4ed8\u5b9d" value={settings.alipay} onChange={(value) => update("alipay", value)} /><SettingsField label="\u5fae\u4fe1\u6536\u6b3e" value={settings.wechat_pay} onChange={(value) => update("wechat_pay", value)} /><SettingsField label="\u5176\u4ed6\u65b9\u5f0f" value={settings.other_payment} onChange={(value) => update("other_payment", value)} /><SettingsField label="Zelle" value={settings.zelle ?? ""} onChange={(value) => update("zelle", value)} /></SettingsGroup><SettingsGroup title="\u516c\u53f8\u4fe1\u606f"><SettingsField label="????" value={settings.invoice_title ?? ""} onChange={(value) => update("invoice_title", value)} /><SettingsField label="\u9886\u6599\u5355\u6807\u9898" value={settings.picking_title ?? ""} onChange={(value) => update("picking_title", value)} /><SettingsField label="\u53d1\u7968\u5907\u6ce8\u6a21\u677f" value={settings.invoice_note ?? ""} note="\u8ba2\u5355\u6ca1\u586b\u5907\u6ce8\u65f6\u81ea\u52a8\u4f7f\u7528\u8fd9\u91cc" onChange={(value) => update("invoice_note", value)} /></SettingsGroup><SettingsGroup title="\u62a5\u4ef7\u5355\u6a21\u677f"><SettingsField label="\u9ed8\u8ba4\u6709\u6548\u671f" value={String(settings.quote_valid_days)} note="Days until quote expires" onChange={(value) => update("quote_valid_days", value)} type="number" /><SettingsField label="\u9875\u811a\u5907\u6ce8" value={settings.quote_footer} onChange={(value) => update("quote_footer", value)} /><SettingsField label="Logo URL" value={settings.logo_url} note="Used in printed quotes" onChange={(value) => update("logo_url", value)} /></SettingsGroup></div></div>;
 }
-// ─── Sidebar nav ─────────────────────────────────────────────────────────────
+
+// ─── Sidebar nav ?????????????????????????????????????????????????????????????
 
 type Section =
   | "overview"
@@ -2743,7 +2775,7 @@ export default function DashboardBizPage() {
               employees={employees}
             />
           )}
-          {section === "orders" && <OrdersSection orders={orders} setOrders={setOrders} />}
+          {section === "orders" && <OrdersSection orders={orders} setOrders={setOrders} settings={settings} />}
           {section === "finance" && (
             <FinanceSection
               orders={orders}

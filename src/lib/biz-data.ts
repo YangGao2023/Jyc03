@@ -167,8 +167,11 @@ export type ShowcaseRecord = {
 
 export type BizSettings = {
   company_name: string;
+  company_name_zh?: string;
   address: string;
+  company_address?: string;
   phone: string;
+  phones?: string;
   email: string;
   website: string;
   tax_number: string;
@@ -179,6 +182,10 @@ export type BizSettings = {
   alipay: string;
   wechat_pay: string;
   other_payment: string;
+  invoice_title?: string;
+  picking_title?: string;
+  zelle?: string;
+  invoice_note?: string;
   quote_valid_days: number;
   quote_footer: string;
   logo_url: string;
@@ -404,8 +411,11 @@ export const bizShowcases = normalizeList<ShowcaseRecord>(rawAssetsRecord.showca
 
 export const bizSettings: BizSettings = {
   company_name: toString(rawAssetsRecord.settings && (rawAssetsRecord.settings as Record<string, unknown>).company_name),
+  company_name_zh: toString(rawAssetsRecord.settings && (rawAssetsRecord.settings as Record<string, unknown>).company_name_zh),
   address: toString(rawAssetsRecord.settings && (rawAssetsRecord.settings as Record<string, unknown>).address),
+  company_address: toString(rawAssetsRecord.settings && (rawAssetsRecord.settings as Record<string, unknown>).company_address),
   phone: toString(rawAssetsRecord.settings && (rawAssetsRecord.settings as Record<string, unknown>).phone),
+  phones: toString(rawAssetsRecord.settings && (rawAssetsRecord.settings as Record<string, unknown>).phones),
   email: toString(rawAssetsRecord.settings && (rawAssetsRecord.settings as Record<string, unknown>).email),
   website: toString(rawAssetsRecord.settings && (rawAssetsRecord.settings as Record<string, unknown>).website),
   tax_number: toString(rawAssetsRecord.settings && (rawAssetsRecord.settings as Record<string, unknown>).tax_number),
@@ -416,6 +426,10 @@ export const bizSettings: BizSettings = {
   alipay: toString(rawAssetsRecord.settings && (rawAssetsRecord.settings as Record<string, unknown>).alipay),
   wechat_pay: toString(rawAssetsRecord.settings && (rawAssetsRecord.settings as Record<string, unknown>).wechat_pay),
   other_payment: toString(rawAssetsRecord.settings && (rawAssetsRecord.settings as Record<string, unknown>).other_payment),
+  invoice_title: toString(rawAssetsRecord.settings && (rawAssetsRecord.settings as Record<string, unknown>).invoice_title),
+  picking_title: toString(rawAssetsRecord.settings && (rawAssetsRecord.settings as Record<string, unknown>).picking_title),
+  zelle: toString(rawAssetsRecord.settings && (rawAssetsRecord.settings as Record<string, unknown>).zelle),
+  invoice_note: toString(rawAssetsRecord.settings && (rawAssetsRecord.settings as Record<string, unknown>).invoice_note),
   quote_valid_days: toNumber(rawAssetsRecord.settings && (rawAssetsRecord.settings as Record<string, unknown>).quote_valid_days),
   quote_footer: toString(rawAssetsRecord.settings && (rawAssetsRecord.settings as Record<string, unknown>).quote_footer),
   logo_url: toString(rawAssetsRecord.settings && (rawAssetsRecord.settings as Record<string, unknown>).logo_url),

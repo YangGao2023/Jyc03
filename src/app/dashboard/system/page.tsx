@@ -41,8 +41,9 @@ type SentHistoryItem = {
   to: string;
   kind: string;
   text: string;
-  status: "pending" | "done";
-  relatedInbox?: Awaited<ReturnType<typeof readQueue>>[number];
+  status: "pending" | "receipt" | "done";
+  relatedReceipt?: Awaited<ReturnType<typeof readQueue>>[number];
+  relatedResult?: Awaited<ReturnType<typeof readQueue>>[number];
 };
 
 type DiscussionTimelineItem = {
@@ -430,19 +431,25 @@ function buildDiscussionTimeline(thread: DiscussionThread, _outboxMessages: Awai
 }
 
 function buildSentHistory(items: Awaited<ReturnType<typeof readEventChain>>, inboxMessages: Awaited<ReturnType<typeof readQueue>>) {
-  const latestInboxByCommandId = new Map<string, (typeof inboxMessages)[number]>();
+  const latestReceiptByCommandId = new Map<string, (typeof inboxMessages)[number]>();
+  const latestResultByCommandId = new Map<string, (typeof inboxMessages)[number]>();
+
   for (const message of inboxMessages) {
     if (extractTopicId((message.meta || null) as Record<string, unknown> | null)) {
       continue;
     }
     const commandId = String(message.meta?.commandId || "").trim();
-    if (commandId) latestInboxByCommandId.set(commandId, message);
+    if (!commandId) continue;
+    const kind = String(message.kind || "").trim().toLowerCase();
+    if (kind === "receipt") latestReceiptByCommandId.set(commandId, message);
+    if (kind === "result") latestResultByCommandId.set(commandId, message);
   }
 
   return items
     .filter((item) => item.actor === "YANG" && item.type === "promise_created" && (item.target || "") !== "" && !(item.summary || "").startsWith("Owner opened discussion via website:"))
     .map((item) => {
-      const relatedInbox = item.promiseId ? latestInboxByCommandId.get(item.promiseId) : undefined;
+      const relatedReceipt = item.promiseId ? latestReceiptByCommandId.get(item.promiseId) : undefined;
+      const relatedResult = item.promiseId ? latestResultByCommandId.get(item.promiseId) : undefined;
       return {
         id: item.id,
         commandId: item.promiseId,
@@ -450,8 +457,9 @@ function buildSentHistory(items: Awaited<ReturnType<typeof readEventChain>>, inb
         to: item.target || "未指定",
         kind: extractCommandKindFromSummary(item.summary || ""),
         text: extractCommandTextFromSummary(item.summary || ""),
-        status: relatedInbox ? "done" : "pending",
-        relatedInbox,
+        status: relatedResult ? "done" : relatedReceipt ? "receipt" : "pending",
+        relatedReceipt,
+        relatedResult,
       } satisfies SentHistoryItem;
     })
     .sort((a, b) => Date.parse(b.createdAt) - Date.parse(a.createdAt));
@@ -713,7 +721,7 @@ export default async function DashboardSystemPage() {
           <DashboardCardTitle
             title="命令中心 / 回执中心"
             desc="命令能力先保留，但降为第二优先，等讨论层跑稳后再继续升级。"
-            right={<div className="flex items-center gap-2"><span className="rounded-full bg-slate-900 px-3 py-1 text-xs font-semibold text-white">历史发件 {sentHistory.length} 条 · 回执 {visibleInboxMessages.length} 条</span></div>}
+            right={<div className="flex items-center gap-2"><span className="rounded-full bg-slate-900 px-3 py-1 text-xs font-semibold text-white">历史发件 {sentHistory.length} 条 · 已收到 {visibleInboxMessages.filter((item) => String(item.kind || "").toLowerCase() === "receipt").length} 条 · 已完成 {visibleInboxMessages.filter((item) => String(item.kind || "").toLowerCase() === "result").length} 条</span></div>}
           />
 
           <div className="mt-4 grid gap-3 xl:grid-cols-[0.62fr_1.38fr]">
@@ -756,7 +764,7 @@ export default async function DashboardSystemPage() {
                             <div className="flex flex-wrap items-center gap-1.5">
                               <span className="text-[11px] text-slate-500">{formatEasternTime(message.createdAt)}</span>
                               <span className={`rounded-full px-2 py-0.5 text-[10px] font-semibold ${bridgeKindBadge(message.kind)}`}>{displayBridgeKind(message.kind)}</span>
-                              <span className={`rounded-full px-2 py-0.5 text-[10px] font-semibold ${message.status === "done" ? "bg-emerald-100 text-emerald-800" : "bg-amber-100 text-amber-800"}`}>{message.status === "done" ? "已回执" : "等待回执"}</span>
+                              <span className={`rounded-full px-2 py-0.5 text-[10px] font-semibold ${message.status === "done" ? "bg-emerald-100 text-emerald-800" : message.status === "receipt" ? "bg-amber-100 text-amber-800" : "bg-slate-200 text-slate-700"}`}>{message.status === "done" ? "已完成" : message.status === "receipt" ? "已收到" : "等待响应"}</span>
                               <span className="rounded-full bg-slate-200 px-2 py-0.5 text-[10px] font-semibold text-slate-700">YANG → {message.to}</span>
                             </div>
                             <p className="mt-1.5 text-xs font-semibold leading-5 text-slate-800">{summarizeMessageTitle(message.text)}</p>
@@ -767,13 +775,19 @@ export default async function DashboardSystemPage() {
                             <div className="rounded-xl bg-slate-50 px-2.5 py-2 text-[11px] leading-5 text-slate-600">
                               <div>目标: {message.to}</div>
                               <div>命令ID: {message.commandId || "旧记录未存"}</div>
-                              <div>回执状态: {message.status === "done" ? "已收到结果" : "尚未看到结果"}</div>
+                              <div>响应状态: {message.status === "done" ? "已收到最终结果" : message.status === "receipt" ? "仅收到系统回执" : "尚未看到响应"}</div>
                               <div>显示方式: 标题摘要 + 展开详情</div>
                             </div>
-                            {message.relatedInbox ? (
+                            {message.relatedReceipt ? (
+                              <div className="rounded-xl bg-amber-50 px-2.5 py-2 text-[11px] leading-5 text-slate-700">
+                                <div className="font-semibold text-amber-700">系统回执</div>
+                                <div className="mt-1">{summarizeMessageTitle(message.relatedReceipt.text)}</div>
+                              </div>
+                            ) : null}
+                            {message.relatedResult ? (
                               <div className="rounded-xl bg-emerald-50 px-2.5 py-2 text-[11px] leading-5 text-slate-700">
-                                <div className="font-semibold text-emerald-700">最新结果</div>
-                                <div className="mt-1">{summarizeMessageTitle(message.relatedInbox.text)}</div>
+                                <div className="font-semibold text-emerald-700">真实结果</div>
+                                <div className="mt-1">{summarizeMessageTitle(message.relatedResult.text)}</div>
                               </div>
                             ) : null}
                           </div>

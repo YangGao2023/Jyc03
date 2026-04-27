@@ -5035,6 +5035,28 @@ export default function DashboardBizPage() {
         setSettings(payload.data.settings ?? bizSettings);
       } catch {
         setSaveState("error");
+        // Fallback: restore from localStorage backup
+        try {
+          const backup = localStorage.getItem("biz-store-backup");
+          if (backup) {
+            const parsed = JSON.parse(backup);
+            if (parsed.orders) setOrders(parsed.orders);
+            if (parsed.clients) setClients(parsed.clients);
+            if (parsed.suppliers) setSuppliers(parsed.suppliers);
+            if (parsed.expenses) setExpenses(parsed.expenses);
+            if (parsed.cashEntries) setCashEntries(parsed.cashEntries);
+            if (parsed.materials) setMaterials(parsed.materials);
+            if (parsed.purchases) setPurchases(parsed.purchases);
+            if (parsed.employees) setEmployees(parsed.employees);
+            if (parsed.attendances) setAttendances(parsed.attendances);
+            if (parsed.appointments) setAppointments(parsed.appointments);
+            if (parsed.payrolls) setPayrolls(parsed.payrolls);
+            if (parsed.quotes) setQuotes(parsed.quotes);
+            if (parsed.showcases) setShowcases(parsed.showcases);
+            if (parsed.printArchives) setPrintArchives(parsed.printArchives);
+            if (parsed.settings) setSettings(parsed.settings);
+          }
+        } catch {}
       } finally {
         if (!cancelled) setIsHydrated(true);
       }
@@ -5056,26 +5078,28 @@ export default function DashboardBizPage() {
     const timer = window.setTimeout(async () => {
       try {
         setSaveState("saving");
+        const snapshot = {
+          orders,
+          clients,
+          suppliers,
+          expenses,
+          cashEntries,
+          materials,
+          purchases,
+          employees,
+          attendances,
+          appointments,
+          payrolls,
+          quotes,
+          showcases,
+          printArchives,
+          settings,
+        } satisfies BizStoreSnapshot;
+        try { localStorage.setItem("biz-store-backup", JSON.stringify(snapshot)); } catch {}
         await fetch("/api/biz-store", {
           method: "PUT",
           headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({
-            orders,
-            clients,
-            suppliers,
-            expenses,
-            cashEntries,
-            materials,
-            purchases,
-            employees,
-            attendances,
-            appointments,
-            payrolls,
-            quotes,
-            showcases,
-            printArchives,
-            settings,
-          } satisfies BizStoreSnapshot),
+          body: JSON.stringify(snapshot),
         });
         setSaveState("saved");
       } catch {

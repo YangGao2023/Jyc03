@@ -38,7 +38,8 @@ export type BizStoreSnapshot = {
   settings: BizSettings;
 };
 
-const STORE_DIR = path.join(process.cwd(), "state");
+const DATA_DIR = process.env.VERCEL ? "/tmp" : process.cwd();
+const STORE_DIR = path.join(DATA_DIR, "state");
 const STORE_PATH = path.join(STORE_DIR, "biz-store.json");
 
 function buildSeedSnapshot(): BizStoreSnapshot {

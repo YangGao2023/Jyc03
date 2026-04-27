@@ -2,6 +2,11 @@ import { NextResponse } from "next/server";
 import { parseMessageBody, verifyBridgeRequest } from "@/lib/agent-bridge";
 import { appendWakeItem, consumeWakeQueue, makeWakeId, readWakeQueue } from "@/lib/wake-store";
 
+function parseLimit(raw: string | null, fallback = 20) {
+  const parsed = Number(raw ?? fallback);
+  return Number.isFinite(parsed) ? parsed : fallback;
+}
+
 export async function GET(request: Request) {
   try {
     await verifyBridgeRequest(request);
@@ -9,7 +14,7 @@ export async function GET(request: Request) {
     const targetAgent = (url.searchParams.get("agent") || "").trim();
     const consume = ["1", "true", "yes"].includes((url.searchParams.get("consume") || "").trim().toLowerCase());
     const includeConsumed = ["1", "true", "yes"].includes((url.searchParams.get("includeConsumed") || "").trim().toLowerCase());
-    const limit = Number(url.searchParams.get("limit") || "20");
+    const limit = parseLimit(url.searchParams.get("limit"), 20);
     const items = consume
       ? await consumeWakeQueue(targetAgent || undefined, limit)
       : await readWakeQueue({ targetAgent: targetAgent || undefined, includeConsumed, limit });

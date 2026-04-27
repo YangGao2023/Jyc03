@@ -20,6 +20,18 @@ function isRetiredAgent(agent: string | undefined) {
   return RETIRED_AGENTS.has(String(agent || "").trim());
 }
 
+function shouldSkipStaleAlert(item: { agent?: string; role?: string; source?: string; status?: string }) {
+  if (isRetiredAgent(item.agent)) {
+    return true;
+  }
+  const role = String(item.role || "").toLowerCase();
+  const source = String(item.source || "").toLowerCase();
+  if (role.includes("cloud") || source.includes("zero_command_semantics_test")) {
+    return true;
+  }
+  return ["dead", "archived"].includes(String(item.status || "").toLowerCase());
+}
+
 export async function computeWatchdogAlerts() {
   const [agentStatuses, promises, proofs, wakeItems] = await Promise.all([
     readAgentStatuses().catch(() => []),
@@ -32,7 +44,7 @@ export async function computeWatchdogAlerts() {
   const alerts: WatchdogAlert[] = [];
 
   for (const item of agentStatuses) {
-    if (isRetiredAgent(item.agent) || ["dead", "archived"].includes(String(item.status || "").toLowerCase())) {
+    if (shouldSkipStaleAlert(item)) {
       continue;
     }
     const updatedAt = Date.parse(item.updatedAt || "");

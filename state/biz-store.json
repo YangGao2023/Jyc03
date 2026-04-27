@@ -1,0 +1,375 @@
+{
+  "orders": [
+    {
+      "order_number": "C-2026-0001",
+      "order_type": "定制单",
+      "client_name": "张美丽",
+      "phone": "604-555-0101",
+      "address": "123 Main St, Vancouver, BC V6A 1A1",
+      "preview_image": "https://picsum.photos/id/1068/900/1200",
+      "description": "客厅窗帘一套，遮光布+纱帘，米色/咖啡色配色，导轨式安装",
+      "total_price": 1280,
+      "amount_paid": 800,
+      "order_date": "2026-04-10",
+      "status": "未付清",
+      "install_info": "安装日期：2026-04-25 上午10:00。客户需在场。楼梯间需清空，预留安装工具车位。",
+      "remarks": "要求左开；帘子带厚衬里；导轨颜色与窗框统一（白色）",
+      "payment_history": [
+        {
+          "date": "2026-04-10",
+          "amount": 800,
+          "method": "微信",
+          "note": "定金 50%",
+          "type": "payment"
+        }
+      ]
+    },
+    {
+      "order_number": "C-2026-0002",
+      "order_type": "定制单",
+      "client_name": "李建国",
+      "phone": "778-555-0202",
+      "address": "456 Oak Ave, Burnaby, BC V5H 2B3",
+      "preview_image": "https://picsum.photos/id/1018/900/1200",
+      "description": "卧室铝合金百叶窗 3 扇，白色遮光型，单扇尺寸 W90×H160 cm",
+      "total_price": 960,
+      "amount_paid": 960,
+      "order_date": "2026-04-05",
+      "status": "结清",
+      "install_info": "2026-04-15 已安装完成，客户验收签字。",
+      "remarks": "",
+      "payment_history": [
+        {
+          "date": "2026-04-05",
+          "amount": 500,
+          "method": "现金",
+          "note": "定金",
+          "type": "payment"
+        },
+        {
+          "date": "2026-04-15",
+          "amount": 460,
+          "method": "微信",
+          "note": "尾款结清",
+          "type": "payment"
+        }
+      ]
+    },
+    {
+      "order_number": "W-2026-0001",
+      "order_type": "批发单",
+      "client_name": "Star Deco Ltd.",
+      "phone": "604-555-0303",
+      "address": "789 Industrial Blvd, Surrey, BC V3S 4K2",
+      "preview_image": "https://picsum.photos/id/1040/900/1200",
+      "description": "批量采购遮光布料及铝合金轨道配件，第一批出货",
+      "total_price": 4490,
+      "amount_paid": 2000,
+      "order_date": "2026-04-12",
+      "status": "未付清",
+      "remarks": "分两批发货，第二批预计4月底出。请提前3天确认数量。",
+      "material_rows": [
+        {
+          "name": "遮光布 (Blackout Fabric)",
+          "spec": "宽280cm，米白色",
+          "qty": 50,
+          "unit": "米",
+          "unit_price": 38
+        },
+        {
+          "name": "铝合金轨道 (Aluminum Track)",
+          "spec": "200cm 直轨，银色",
+          "qty": 30,
+          "unit": "根",
+          "unit_price": 45
+        },
+        {
+          "name": "S型挂钩 (S-Hook)",
+          "spec": "标准型",
+          "qty": 200,
+          "unit": "个",
+          "unit_price": 0.8
+        }
+      ],
+      "payment_history": [
+        {
+          "date": "2026-04-12",
+          "amount": 2000,
+          "method": "银行转账",
+          "note": "预付款50%",
+          "type": "payment"
+        }
+      ]
+    }
+  ],
+  "clients": [
+    {
+      "id": "CL-001",
+      "name": "张美丽",
+      "contact": "张美丽",
+      "phone": "604-555-0101",
+      "email": "zhang.meili@example.com",
+      "address": "123 Main St, Vancouver, BC V6A 1A1",
+      "created_at": "2026-04-10",
+      "note": "窗帘复购客户，偏好米白色。",
+      "is_vip": true,
+      "balance": 480,
+      "wechat": "meili-curtain"
+    },
+    {
+      "id": "CL-002",
+      "name": "李建国",
+      "contact": "李建国",
+      "phone": "778-555-0202",
+      "email": "lijg@example.com",
+      "address": "456 Oak Ave, Burnaby, BC V5H 2B3",
+      "created_at": "2026-04-05",
+      "note": "已完工，结清。",
+      "is_vip": false,
+      "balance": 0,
+      "wechat": "li-jg"
+    },
+    {
+      "id": "CL-003",
+      "name": "Star Deco Ltd.",
+      "contact": "Amy Chen",
+      "phone": "604-555-0303",
+      "email": "procurement@stardeco.ca",
+      "address": "789 Industrial Blvd, Surrey, BC V3S 4K2",
+      "created_at": "2026-04-12",
+      "note": "批发客户，月结。",
+      "is_vip": true,
+      "balance": 2490,
+      "wechat": "Amy-StarDeco"
+    }
+  ],
+  "suppliers": [
+    {
+      "id": "SUP-001",
+      "name": "华兴布料行",
+      "category": "布料",
+      "contact_person": "王先生",
+      "phone": "917-555-1001",
+      "email": "sales@huaxingfabric.com",
+      "address": "Queens, NY",
+      "last_purchase_date": "2026-04-11",
+      "remark": "常用遮光布供应商"
+    },
+    {
+      "id": "SUP-002",
+      "name": "Metro Track Supply",
+      "category": "轨道五金",
+      "contact_person": "Kevin",
+      "phone": "718-555-1002",
+      "email": "kevin@metrotrack.com",
+      "address": "Brooklyn, NY",
+      "last_purchase_date": "2026-04-14",
+      "remark": "轨道交期稳定"
+    }
+  ],
+  "expenses": [
+    {
+      "id": "EXP-2026-001",
+      "target": "华兴布料行",
+      "detail": "遮光布采购尾款",
+      "amount": 1260,
+      "expense_type": "采购",
+      "payment_method": "转账",
+      "expense_date": "2026-04-11",
+      "remark": "对应 PO-2026-001"
+    },
+    {
+      "id": "EXP-2026-002",
+      "target": "办公室",
+      "detail": "展厅电费",
+      "amount": 320,
+      "expense_type": "办公",
+      "payment_method": "刷卡",
+      "expense_date": "2026-04-16",
+      "remark": "April utility"
+    }
+  ],
+  "cashEntries": [
+    {
+      "id": "CASH-2026-001",
+      "type": "收入",
+      "amount": 800,
+      "date": "2026-04-10",
+      "note": "张美丽定金"
+    },
+    {
+      "id": "CASH-2026-002",
+      "type": "支出",
+      "amount": 320,
+      "date": "2026-04-16",
+      "note": "展厅电费"
+    }
+  ],
+  "materials": [
+    {
+      "id": "MAT-001",
+      "code": "FAB-BLK-280",
+      "name": "遮光布",
+      "specification": "宽280cm，米白色",
+      "unit": "米",
+      "stock_quantity": 186,
+      "min_stock": 80,
+      "purchase_price": 24,
+      "supplier": "华兴布料行",
+      "last_stock_date": "2026-04-11",
+      "remark": "主力布料"
+    },
+    {
+      "id": "MAT-002",
+      "code": "TRK-200-S",
+      "name": "铝合金轨道",
+      "specification": "200cm 直轨，银色",
+      "unit": "根",
+      "stock_quantity": 24,
+      "min_stock": 30,
+      "purchase_price": 28,
+      "supplier": "Metro Track Supply",
+      "last_stock_date": "2026-04-14",
+      "remark": "低库存预警"
+    },
+    {
+      "id": "MAT-003",
+      "code": "HOOK-S-01",
+      "name": "S型挂钩",
+      "specification": "标准型",
+      "unit": "个",
+      "stock_quantity": 460,
+      "min_stock": 200,
+      "purchase_price": 0.35,
+      "supplier": "Metro Track Supply",
+      "last_stock_date": "2026-04-14",
+      "remark": "配件"
+    }
+  ],
+  "purchases": [
+    {
+      "id": "PO-2026-001",
+      "supplier": "华兴布料行",
+      "item_name": "遮光布",
+      "quantity": 80,
+      "unit": "米",
+      "unit_price": 24,
+      "total_amount": 1920,
+      "purchase_date": "2026-04-11",
+      "status": "部分付款"
+    },
+    {
+      "id": "PO-2026-002",
+      "supplier": "Metro Track Supply",
+      "item_name": "铝合金轨道",
+      "quantity": 40,
+      "unit": "根",
+      "unit_price": 28,
+      "total_amount": 1120,
+      "purchase_date": "2026-04-14",
+      "status": "已付款"
+    }
+  ],
+  "employees": [
+    {
+      "id": "EMP-001",
+      "name": "阿峰",
+      "position": "安装师傅",
+      "phone": "929-555-2001",
+      "hire_date": "2025-09-01",
+      "contract_end": "2026-09-01",
+      "monthly_salary": 4800,
+      "status": "在职"
+    },
+    {
+      "id": "EMP-002",
+      "name": "小周",
+      "position": "仓库 / 送货",
+      "phone": "929-555-2002",
+      "hire_date": "2026-02-15",
+      "contract_end": "2026-08-15",
+      "monthly_salary": 4200,
+      "status": "在职"
+    }
+  ],
+  "payrolls": [
+    {
+      "id": "PAY-2026-04-001",
+      "month": "2026-04",
+      "employee_name": "阿峰",
+      "base_salary": 4800,
+      "bonus": 300,
+      "deduction": 0,
+      "net_salary": 5100,
+      "payment_status": "未发放"
+    },
+    {
+      "id": "PAY-2026-04-002",
+      "month": "2026-04",
+      "employee_name": "小周",
+      "base_salary": 4200,
+      "bonus": 150,
+      "deduction": 50,
+      "net_salary": 4300,
+      "payment_status": "已发放"
+    }
+  ],
+  "quotes": [
+    {
+      "id": "QT-2026-001",
+      "client_name": "Maple Living",
+      "title": "餐厅隔断玻璃门",
+      "amount": 3680,
+      "created_at": "2026-04-18",
+      "valid_until": "2026-05-18",
+      "status": "已发出"
+    },
+    {
+      "id": "QT-2026-002",
+      "client_name": "张美丽",
+      "title": "二楼卧室纱帘追加",
+      "amount": 680,
+      "created_at": "2026-04-20",
+      "valid_until": "2026-05-05",
+      "status": "草稿"
+    }
+  ],
+  "showcases": [
+    {
+      "id": "GAL-001",
+      "name": "法式奶油风客厅窗帘",
+      "category": "窗帘",
+      "image_count": 6,
+      "description": "落地纱帘 + 遮光主帘完工实拍",
+      "created_at": "2026-04-08",
+      "status": "已发布"
+    },
+    {
+      "id": "GAL-002",
+      "name": "办公室玻璃隔断",
+      "category": "隔断",
+      "image_count": 9,
+      "description": "铝合金框架隔断现场安装",
+      "created_at": "2026-04-15",
+      "status": "待整理"
+    }
+  ],
+  "settings": {
+    "company_name": "JYC STEEL GROUP INC",
+    "address": "34-41 College Point Blvd, Flushing, NY 11354",
+    "phone": "347-251-1719",
+    "email": "office@jycnyc.net",
+    "website": "www.jycnyc.net",
+    "tax_number": "12-3456789",
+    "default_tax_rate": 8.875,
+    "default_currency": "USD",
+    "fiscal_start_month": 1,
+    "bank_account": "Chase •••• 8188",
+    "alipay": "jyc-finance",
+    "wechat_pay": "JYC-Collection",
+    "other_payment": "Zelle 3478227777",
+    "quote_valid_days": 30,
+    "quote_footer": "感谢惠顾，如有疑问请联系我们。",
+    "logo_url": "https://picsum.photos/id/1025/300/120"
+  }
+}

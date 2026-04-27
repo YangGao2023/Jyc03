@@ -120,6 +120,7 @@ export type PurchaseRecord = {
   total_amount: number;
   purchase_date: string;
   status: string;
+  expense_id?: string;
 };
 
 export type EmployeeRecord = {

@@ -1,0 +1,21 @@
+import fs from 'node:fs';
+import { createClient } from 'redis';
+
+const [threadId, status] = process.argv.slice(2);
+if (!threadId || !status) throw new Error('usage: node set_discussion_status.mjs <threadId> <status>');
+const env = fs.readFileSync(new URL('../.env.runtime', import.meta.url), 'utf8');
+const match = env.match(/REDIS_URL="([^"]+)"/);
+const url = match?.[1];
+if (!url) throw new Error('REDIS_URL missing');
+const client = createClient({ url });
+await client.connect();
+const key = 'agent-bridge:discussion-threads';
+const raw = await client.hGet(key, threadId);
+const now = new Date().toISOString();
+const next = raw ? JSON.parse(raw) : { id: threadId, title: threadId, prompt: '', participants: ['阿三','零号'], createdBy: 'YANG', createdAt: now };
+next.status = status;
+next.updatedAt = now;
+next.summary = `status -> ${status}`;
+await client.hSet(key, threadId, JSON.stringify(next));
+console.log(JSON.stringify(next, null, 2));
+await client.quit();

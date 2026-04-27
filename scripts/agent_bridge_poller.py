@@ -215,12 +215,12 @@ def handle_message(message):
 def main():
     if not BASE_URL or not SHARED_SECRET:
         raise SystemExit("Missing AGENT_BRIDGE_BASE_URL or AGENT_BRIDGE_HMAC_SECRET")
+    if not RECIPIENT:
+        raise SystemExit("Missing AGENT_BRIDGE_RECIPIENT. Refusing to consume shared outbox without a target recipient.")
 
     while True:
         try:
-            query_data = {"limit": LIMIT, "consume": 1}
-            if RECIPIENT:
-                query_data["to"] = RECIPIENT
+            query_data = {"limit": LIMIT, "consume": 1, "to": RECIPIENT}
             query = urllib.parse.urlencode(query_data)
             result = request_json("GET", f"/api/outbox?{query}")
             for message in result.get("messages", []):

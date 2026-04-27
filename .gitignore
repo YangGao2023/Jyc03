@@ -42,3 +42,7 @@ next-env.d.ts
 
 .vercel
 .env*.local
+
+# Local SQLite database
+/data/biz-store.db
+/data/

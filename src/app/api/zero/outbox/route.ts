@@ -5,11 +5,16 @@ import { readDiscussionThread } from "@/lib/discussion-store";
 export const dynamic = "force-dynamic";
 export const revalidate = 0;
 
+function parseLimit(raw: string | null, fallback = 20) {
+  const parsed = Number(raw ?? fallback);
+  return Number.isFinite(parsed) ? Math.max(1, Math.min(50, parsed)) : fallback;
+}
+
 export async function GET(request: Request) {
   try {
     await verifyBridgeRequest(request);
     const url = new URL(request.url);
-    const limit = Math.max(1, Math.min(50, Number(url.searchParams.get("limit") || 20)));
+    const limit = parseLimit(url.searchParams.get("limit"), 20);
     const consume = url.searchParams.get("consume") === "1";
     const recipient = String(url.searchParams.get("to") || "零号").trim() || "零号";
     const kind = String(url.searchParams.get("kind") || "").trim().toLowerCase();

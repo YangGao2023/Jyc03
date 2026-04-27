@@ -5232,7 +5232,27 @@ function SettingsGroup({ title, children }: { title: string; children: React.Rea
   return <div className="rounded-xl border border-slate-200 bg-white p-4"><h3 className="mb-3 border-b border-slate-100 pb-2.5 text-xs font-semibold uppercase tracking-wider text-slate-500">{title}</h3><div className="flex flex-col gap-3.5">{children}</div></div>;
 }
 
-function SettingsSection({ settings, setSettings }: { settings: BizSettings; setSettings: React.Dispatch<React.SetStateAction<BizSettings>>; }) {
+function SettingsTextArea({
+  label,
+  value,
+  note,
+  rows = 5,
+  onChange,
+}: {
+  label: string;
+  value: string;
+  note?: string;
+  rows?: number;
+  onChange: (value: string) => void;
+}) {
+  return <div className="flex flex-col gap-1"><label className="text-xs font-semibold text-slate-600">{label}</label><textarea value={value} onChange={(e) => onChange(e.target.value)} rows={rows} className="w-full rounded-lg border border-slate-300 bg-white px-3 py-2 text-xs text-slate-700 focus:border-blue-400 focus:outline-none resize-none" />{note && <p className="text-[11px] text-slate-400">{note}</p>}</div>;
+}
+
+type SettingsTab = "company" | "finance" | "print" | "lists";
+
+function SettingsSection({ settings, setSettings, saveState }: { settings: BizSettings; setSettings: React.Dispatch<React.SetStateAction<BizSettings>>; saveState: "idle" | "saving" | "saved" | "error" | "conflict"; }) {
+  const [tab, setTab] = useState<SettingsTab>("company");
+
   const update = (key: keyof BizSettings, value: string) => {
     setSettings((prev) => ({
       ...prev,
@@ -5244,35 +5264,127 @@ function SettingsSection({ settings, setSettings }: { settings: BizSettings; set
 
   const expenseTypeValue = settings.expense_types || "采购\n工资\n物流\n办公\n其他";
   const supplierCategoryValue = settings.supplier_categories || "布料\n五金\n玻璃\n物流\n其他";
-  const settingRows: Array<{ label: string; value: string | number }> = [
-    { label: "\u516c\u53f8\u540d\u79f0", value: settings.company_name || "-" },
-    { label: "\u516c\u53f8\u4e2d\u6587\u540d\u79f0", value: settings.company_name_zh || "-" },
-    { label: "\u5730\u5740", value: settings.address || "-" },
-    { label: "\u6253\u5370\u5730\u5740", value: settings.company_address || settings.address || "-" },
-    { label: "\u7535\u8bdd", value: settings.phone || "-" },
-    { label: "\u6253\u5370\u7535\u8bdd", value: settings.phones || settings.phone || "-" },
-    { label: "\u7535\u5b50\u90ae\u7bb1", value: settings.email || "-" },
-    { label: "\u7f51\u7ad9", value: settings.website || "-" },
-    { label: "\u7a0e\u53f7(BN)", value: settings.tax_number || "-" },
-    { label: "\u9ed8\u8ba4\u7a0e\u7387", value: String(settings.default_tax_rate ?? "-") },
-    { label: "\u9ed8\u8ba4\u8d27\u5e01", value: settings.default_currency || "-" },
-    { label: "\u8d22\u5e74\u5f00\u59cb\u6708", value: String(settings.fiscal_start_month ?? "-") },
-    { label: "\u94f6\u884c\u8d26\u6237", value: settings.bank_account || "-" },
-    { label: "\u652f\u4ed8\u5b9d", value: settings.alipay || "-" },
-    { label: "\u5fae\u4fe1\u6536\u6b3e", value: settings.wechat_pay || "-" },
-    { label: "\u5176\u4ed6\u65b9\u5f0f", value: settings.other_payment || "-" },
-    { label: "\u53d1\u7968\u6807\u9898", value: settings.invoice_title || "Invoice" },
-    { label: "\u9886\u6599\u5355\u6807\u9898", value: settings.picking_title || "\u9886\u6599\u5355 / Worker Pickup Sheet" },
-    { label: "Zelle", value: settings.zelle || "-" },
-    { label: "\u53d1\u7968\u5907\u6ce8\u6a21\u677f", value: settings.invoice_note || "-" },
-    { label: "\u62a5\u4ef7\u9ed8\u8ba4\u6709\u6548\u671f", value: String(settings.quote_valid_days ?? "-") },
-    { label: "\u62a5\u4ef7\u9875\u811a\u5907\u6ce8", value: settings.quote_footer || "-" },
-    { label: "Logo URL", value: settings.logo_url || "-" },
-    { label: "支出类型", value: expenseTypeValue || "-" },
-    { label: "供应商分类", value: supplierCategoryValue || "-" },
-  ];
+  const saveTone = saveState === "error" || saveState === "conflict"
+    ? "border-rose-200 bg-rose-50 text-rose-700"
+    : saveState === "saved"
+      ? "border-emerald-200 bg-emerald-50 text-emerald-700"
+      : saveState === "saving"
+        ? "border-sky-200 bg-sky-50 text-sky-700"
+        : "border-slate-200 bg-slate-50 text-slate-600";
+  const saveText = saveState === "saved"
+    ? "设置已保存成功"
+    : saveState === "saving"
+      ? "正在保存设置…"
+      : saveState === "conflict"
+        ? "设置保存冲突，请刷新后重试"
+        : saveState === "error"
+          ? "设置保存失败"
+          : "设置会自动保存";
 
-  return <div><SectionHeader eyebrow="Configuration" title="公司信息" actions={<ActionBtn tone="success">自动保存中</ActionBtn>} /><div className="grid gap-4 lg:grid-cols-2"><SettingsGroup title="公司信息"><SettingsField label="公司名称" value={settings.company_name} onChange={(value) => update("company_name", value)} /><SettingsField label="公司中文名称" value={settings.company_name_zh ?? ""} onChange={(value) => update("company_name_zh", value)} /><SettingsField label="地址" value={settings.address} onChange={(value) => update("address", value)} /><SettingsField label="电话" value={settings.phone} onChange={(value) => update("phone", value)} /><SettingsField label="电子邮箱" value={settings.email} onChange={(value) => update("email", value)} /><SettingsField label="网站" value={settings.website} onChange={(value) => update("website", value)} /></SettingsGroup><SettingsGroup title="税务 & 财务"><SettingsField label="税号 (BN)" value={settings.tax_number} note="Business Number" onChange={(value) => update("tax_number", value)} /><SettingsField label="默认税率" value={String(settings.default_tax_rate)} onChange={(value) => update("default_tax_rate", value)} type="number" /><SettingsField label="默认货币" value={settings.default_currency} onChange={(value) => update("default_currency", value)} /><SettingsField label="财年开始月" value={String(settings.fiscal_start_month)} onChange={(value) => update("fiscal_start_month", value)} type="number" /></SettingsGroup><SettingsGroup title="收款信息"><SettingsField label="银行账户" value={settings.bank_account} onChange={(value) => update("bank_account", value)} /><SettingsField label="支付宝" value={settings.alipay} onChange={(value) => update("alipay", value)} /><SettingsField label="微信收款" value={settings.wechat_pay} onChange={(value) => update("wechat_pay", value)} /><SettingsField label="其他方式" value={settings.other_payment} onChange={(value) => update("other_payment", value)} /><SettingsField label="Zelle" value={settings.zelle ?? ""} onChange={(value) => update("zelle", value)} /></SettingsGroup><SettingsGroup title="支出类型"><div className="flex flex-col gap-1"><label className="text-xs font-semibold text-slate-600">支出类型列表</label><textarea value={expenseTypeValue} onChange={(e) => update("expense_types", e.target.value)} rows={6} className="w-full rounded-lg border border-slate-300 bg-white px-3 py-2 text-xs text-slate-700 focus:border-blue-400 focus:outline-none resize-none" /><p className="text-[11px] text-slate-400">一行一个，或者用逗号分隔。收支管理会直接读取这里。</p></div></SettingsGroup><SettingsGroup title="供应商分类"><div className="flex flex-col gap-1"><label className="text-xs font-semibold text-slate-600">供应商分类列表</label><textarea value={supplierCategoryValue} onChange={(e) => update("supplier_categories", e.target.value)} rows={6} className="w-full rounded-lg border border-slate-300 bg-white px-3 py-2 text-xs text-slate-700 focus:border-blue-400 focus:outline-none resize-none" /><p className="text-[11px] text-slate-400">一行一个，或者用逗号分隔。供应商新增/编辑会直接读取这里。</p></div></SettingsGroup></div></div>;
+  return (
+    <div className="space-y-3 xl:space-y-2">
+      <SectionHeader
+        eyebrow="Configuration"
+        title="系统设置"
+        actions={<div className={`rounded-lg border px-3 py-1.5 text-xs font-semibold ${saveTone}`}>{saveText}</div>}
+      />
+
+      <div className={`rounded-xl border px-4 py-3 text-xs font-medium ${saveTone}`}>
+        {saveText}，你改完不用再猜，保存状态会直接在这里告诉你。
+      </div>
+
+      <StatStrip
+        items={[
+          { label: "公司名", value: settings.company_name ? "已填" : "未填", accent: settings.company_name ? "text-emerald-600" : "text-amber-600" },
+          { label: "电话", value: settings.phone ? "已填" : "未填", accent: settings.phone ? "text-emerald-600" : "text-amber-600" },
+          { label: "打印标题", value: settings.invoice_title ? "已填" : "未填", accent: settings.invoice_title ? "text-emerald-600" : "text-amber-600" },
+          { label: "支出类型", value: expenseTypeValue.split(/\r?\n|,/).filter(Boolean).length.toString() },
+          { label: "供应商分类", value: supplierCategoryValue.split(/\r?\n|,/).filter(Boolean).length.toString() },
+        ]}
+      />
+
+      <SegmentedControl
+        options={[
+          { key: "company", label: "公司信息" },
+          { key: "finance", label: "财务收款" },
+          { key: "print", label: "打印模板" },
+          { key: "lists", label: "分类列表" },
+        ]}
+        value={tab}
+        onChange={(value) => setTab(value as SettingsTab)}
+      />
+
+      <div className="xl:max-h-[calc(100vh-18rem)] xl:overflow-y-auto xl:pr-1">
+        {tab === "company" ? (
+          <div className="grid gap-3 xl:grid-cols-2">
+            <SettingsGroup title="基础信息">
+              <SettingsField label="公司名称" value={settings.company_name} onChange={(value) => update("company_name", value)} />
+              <SettingsField label="公司中文名" value={settings.company_name_zh ?? ""} onChange={(value) => update("company_name_zh", value)} />
+              <SettingsField label="后台地址" value={settings.address} onChange={(value) => update("address", value)} />
+              <SettingsField label="打印地址" value={settings.company_address ?? ""} onChange={(value) => update("company_address", value)} />
+              <SettingsField label="后台电话" value={settings.phone} onChange={(value) => update("phone", value)} />
+              <SettingsField label="打印电话" value={settings.phones ?? ""} onChange={(value) => update("phones", value)} />
+              <SettingsField label="电子邮箱" value={settings.email} onChange={(value) => update("email", value)} />
+              <SettingsField label="网站" value={settings.website} onChange={(value) => update("website", value)} />
+            </SettingsGroup>
+            <SettingsGroup title="页面预览">
+              <div className="space-y-3 text-sm">
+                <div className="flex items-center justify-between"><span className="text-slate-500">公司名称</span><span className="max-w-[220px] text-right font-medium text-slate-900">{settings.company_name || "未填写"}</span></div>
+                <div className="flex items-center justify-between"><span className="text-slate-500">打印名称</span><span className="max-w-[220px] text-right font-medium text-slate-900">{settings.company_name_zh || settings.company_name || "未填写"}</span></div>
+                <div className="flex items-center justify-between"><span className="text-slate-500">联系电话</span><span className="max-w-[220px] text-right font-medium text-slate-900">{settings.phones || settings.phone || "未填写"}</span></div>
+                <div className="flex items-center justify-between"><span className="text-slate-500">展示地址</span><span className="max-w-[220px] text-right text-slate-900">{settings.company_address || settings.address || "未填写"}</span></div>
+                <div className="flex items-center justify-between"><span className="text-slate-500">Logo URL</span><span className="max-w-[220px] truncate text-right text-slate-900">{settings.logo_url || "未填写"}</span></div>
+              </div>
+            </SettingsGroup>
+          </div>
+        ) : null}
+
+        {tab === "finance" ? (
+          <div className="grid gap-3 xl:grid-cols-2">
+            <SettingsGroup title="税务与默认值">
+              <SettingsField label="税号 (BN)" value={settings.tax_number} note="Business Number" onChange={(value) => update("tax_number", value)} />
+              <SettingsField label="默认税率" value={String(settings.default_tax_rate)} onChange={(value) => update("default_tax_rate", value)} type="number" />
+              <SettingsField label="默认货币" value={settings.default_currency} onChange={(value) => update("default_currency", value)} />
+              <SettingsField label="财年开始月" value={String(settings.fiscal_start_month)} onChange={(value) => update("fiscal_start_month", value)} type="number" />
+              <SettingsField label="报价默认有效期" value={String(settings.quote_valid_days ?? 30)} onChange={(value) => update("quote_valid_days", value)} type="number" />
+            </SettingsGroup>
+            <SettingsGroup title="收款方式">
+              <SettingsField label="银行账户" value={settings.bank_account} onChange={(value) => update("bank_account", value)} />
+              <SettingsField label="支付宝" value={settings.alipay} onChange={(value) => update("alipay", value)} />
+              <SettingsField label="微信收款" value={settings.wechat_pay} onChange={(value) => update("wechat_pay", value)} />
+              <SettingsField label="其他方式" value={settings.other_payment} onChange={(value) => update("other_payment", value)} />
+              <SettingsField label="Zelle" value={settings.zelle ?? ""} onChange={(value) => update("zelle", value)} />
+            </SettingsGroup>
+          </div>
+        ) : null}
+
+        {tab === "print" ? (
+          <div className="grid gap-3 xl:grid-cols-[0.95fr_1.05fr]">
+            <SettingsGroup title="打印标题与素材">
+              <SettingsField label="Invoice 标题" value={settings.invoice_title ?? "Invoice"} onChange={(value) => update("invoice_title", value)} />
+              <SettingsField label="领料单标题" value={settings.picking_title ?? "领料单 / Worker Pickup Sheet"} onChange={(value) => update("picking_title", value)} />
+              <SettingsField label="Logo URL" value={settings.logo_url ?? ""} onChange={(value) => update("logo_url", value)} />
+            </SettingsGroup>
+            <SettingsGroup title="模板备注">
+              <SettingsTextArea label="发票备注模板" value={settings.invoice_note ?? ""} rows={7} onChange={(value) => update("invoice_note", value)} />
+              <SettingsTextArea label="报价页脚备注" value={settings.quote_footer ?? ""} rows={5} onChange={(value) => update("quote_footer", value)} />
+            </SettingsGroup>
+          </div>
+        ) : null}
+
+        {tab === "lists" ? (
+          <div className="grid gap-3 xl:grid-cols-2">
+            <SettingsGroup title="支出类型">
+              <SettingsTextArea label="支出类型列表" value={expenseTypeValue} rows={8} onChange={(value) => update("expense_types", value)} note="一行一个，或者用逗号分隔。收支管理会直接读取这里。" />
+            </SettingsGroup>
+            <SettingsGroup title="供应商分类">
+              <SettingsTextArea label="供应商分类列表" value={supplierCategoryValue} rows={8} onChange={(value) => update("supplier_categories", value)} note="一行一个，或者用逗号分隔。供应商新增/编辑会直接读取这里。" />
+            </SettingsGroup>
+          </div>
+        ) : null}
+      </div>
+    </div>
+  );
 }
 
 // ─── Sidebar nav ─────────────────────────────────────────────────────────────
@@ -5591,7 +5703,7 @@ export default function DashboardBizPage() {
               setSettings={setSettings}
             />
           )}
-          {section === "settings" && <SettingsSection settings={settings} setSettings={setSettings} />}
+          {section === "settings" && <SettingsSection settings={settings} setSettings={setSettings} saveState={saveState} />}
         </div>
       </div>
     </PageSection>

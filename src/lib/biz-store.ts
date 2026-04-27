@@ -603,6 +603,9 @@ async function sqliteWrite(snapshot: BizStoreSnapshot): Promise<void> {
   });
 
   txn();
+
+  // Fire-and-forget cloud backup
+  syncToRedis(snapshot).catch(() => {});
 }
 
 // ─── Redis implementation (Vercel) ────────────────────────────────────────────
@@ -628,6 +631,16 @@ async function redisWrite(snapshot: BizStoreSnapshot): Promise<void> {
 }
 
 // ─── Seed data (first-time initialisation) ────────────────────────────────────
+
+async function syncToRedis(snapshot: BizStoreSnapshot) {
+  if (typeof window !== "undefined") return;
+  try {
+    const { kv } = await import("@vercel/kv");
+    await kv.set("biz-store", snapshot);
+  } catch {
+    // best-effort cloud sync; local is primary
+  }
+}
 
 async function buildSeedDefault(): Promise<BizStoreSnapshot> {
   const { bizOrders, bizClients, bizSuppliers, bizExpenses, bizCashEntries,

@@ -62,6 +62,7 @@ function migrate(db: Database.Database) {
       order_number TEXT PRIMARY KEY,
       order_type TEXT NOT NULL DEFAULT '定制单',
       client_name TEXT NOT NULL,
+      client_id TEXT,
       phone TEXT,
       address TEXT,
       preview_image TEXT,
@@ -155,6 +156,7 @@ function migrate(db: Database.Database) {
       weight REAL,
       purchase_price REAL DEFAULT 0,
       supplier TEXT,
+      supplier_id TEXT,
       image TEXT,
       last_stock_date TEXT,
       remark TEXT,
@@ -164,6 +166,7 @@ function migrate(db: Database.Database) {
     CREATE TABLE IF NOT EXISTS purchases (
       id TEXT PRIMARY KEY,
       supplier TEXT NOT NULL,
+      supplier_id TEXT,
       item_name TEXT NOT NULL,
       quantity REAL NOT NULL DEFAULT 0,
       unit TEXT NOT NULL DEFAULT '个',
@@ -242,6 +245,7 @@ function migrate(db: Database.Database) {
     CREATE TABLE IF NOT EXISTS quotes (
       id TEXT PRIMARY KEY,
       client_name TEXT NOT NULL,
+      client_id TEXT,
       title TEXT NOT NULL,
       amount REAL NOT NULL DEFAULT 0,
       created_at TEXT NOT NULL,
@@ -284,11 +288,15 @@ function migrate(db: Database.Database) {
     );
   `);
 
+  ensureColumn(db, "orders", "client_id", "TEXT");
   ensureColumn(db, "expenses", "source_type", "TEXT");
   ensureColumn(db, "expenses", "source_id", "TEXT");
   ensureColumn(db, "cash_entries", "order_number", "TEXT");
   ensureColumn(db, "cash_entries", "source_type", "TEXT");
   ensureColumn(db, "cash_entries", "source_id", "TEXT");
+  ensureColumn(db, "materials", "supplier_id", "TEXT");
+  ensureColumn(db, "purchases", "supplier_id", "TEXT");
+  ensureColumn(db, "quotes", "client_id", "TEXT");
 }
 
 function ensureColumn(db: Database.Database, table: string, column: string, definition: string) {

@@ -23,6 +23,7 @@ export type BizOrder = {
   order_number: string;
   order_type: "定制单" | "批发单" | string;
   client_name: string;
+  client_id?: string;
   phone?: string;
   address?: string;
   preview_image?: string;
@@ -110,6 +111,7 @@ export type MaterialRecord = {
   weight?: number;
   purchase_price: number;
   supplier?: string;
+  supplier_id?: string;
   image?: string;
   last_stock_date?: string;
   remark?: string;
@@ -118,6 +120,7 @@ export type MaterialRecord = {
 export type PurchaseRecord = {
   id: string;
   supplier: string;
+  supplier_id?: string;
   item_name: string;
   quantity: number;
   unit: string;
@@ -191,6 +194,7 @@ export type PayrollRecord = {
 export type QuoteRecord = {
   id: string;
   client_name: string;
+  client_id?: string;
   title: string;
   amount: number;
   created_at: string;
@@ -319,6 +323,7 @@ function normalizeOrder(raw: Record<string, unknown>): BizOrder {
     order_number: String(raw.order_number ?? ""),
     order_type: String(raw.order_type ?? "定制单"),
     client_name: String(raw.client_name ?? ""),
+    client_id: raw.client_id != null ? String(raw.client_id) : undefined,
     phone: raw.phone != null ? String(raw.phone) : undefined,
     address: raw.address != null ? String(raw.address) : undefined,
     preview_image: raw.preview_image != null ? String(raw.preview_image) : undefined,
@@ -414,6 +419,7 @@ export const bizMaterials = normalizeList<MaterialRecord>(rawAssetsRecord.materi
   weight: item.weight == null ? undefined : toNumber(item.weight),
   purchase_price: toNumber(item.purchase_price || item.usd_cost),
   supplier: toString(item.supplier) || undefined,
+  supplier_id: toString(item.supplier_id) || undefined,
   image: toString(item.image) || undefined,
   last_stock_date: toString(item.last_stock_date) || undefined,
   remark: toString(item.remark) || undefined,
@@ -422,6 +428,7 @@ export const bizMaterials = normalizeList<MaterialRecord>(rawAssetsRecord.materi
 export const bizPurchases = normalizeList<PurchaseRecord>(rawAssetsRecord.purchases, (item) => ({
   id: toString(item.id),
   supplier: toString(item.supplier),
+  supplier_id: toString(item.supplier_id) || undefined,
   item_name: toString(item.item_name),
   quantity: toNumber(item.quantity),
   unit: toString(item.unit),
@@ -494,6 +501,7 @@ export const bizPayrolls = normalizeList<PayrollRecord>(rawAssetsRecord.payrolls
 export const bizQuotes = normalizeList<QuoteRecord>(rawAssetsRecord.quotes, (item) => ({
   id: toString(item.id),
   client_name: toString(item.client_name),
+  client_id: toString(item.client_id) || undefined,
   title: toString(item.title),
   amount: toNumber(item.amount),
   created_at: toString(item.created_at),

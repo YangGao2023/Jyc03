@@ -63,6 +63,7 @@ function rowToOrder(r: Record<string, unknown>): BizOrder {
     order_number: String(r.order_number ?? ""),
     order_type: String(r.order_type ?? "定制单"),
     client_name: String(r.client_name ?? ""),
+    client_id: val(r.client_id, undefined),
     phone: val(r.phone, undefined),
     address: val(r.address, undefined),
     preview_image: val(r.preview_image, undefined),
@@ -88,6 +89,7 @@ function orderToRow(o: BizOrder): Record<string, unknown> {
     order_number: o.order_number,
     order_type: o.order_type,
     client_name: o.client_name,
+    client_id: o.client_id ?? null,
     phone: o.phone ?? null,
     address: o.address ?? null,
     preview_image: o.preview_image ?? null,
@@ -113,26 +115,128 @@ function nullStr(v: unknown): string | null {
   return v == null || v === "" ? null : String(v);
 }
 
+function normalizeRelationText(value?: string | null) {
+  return value?.trim().toLowerCase() ?? "";
+}
+
+function normalizeRelationPhone(value?: string | null) {
+  return value?.replace(/\D+/g, "") ?? "";
+}
+
+function resolveClientId(
+  clients: ContactRecord[],
+  input: { clientId?: string; clientName?: string; phone?: string },
+) {
+  if (input.clientId && clients.some((item) => item.id === input.clientId)) return input.clientId;
+
+  const normalizedName = normalizeRelationText(input.clientName);
+  const normalizedPhone = normalizeRelationPhone(input.phone);
+  const nameMatches = normalizedName
+    ? clients.filter((item) => normalizeRelationText(item.name) === normalizedName)
+    : [];
+
+  if (normalizedPhone && nameMatches.length > 1) {
+    const exactMatches = nameMatches.filter((item) => normalizeRelationPhone(item.phone) === normalizedPhone);
+    if (exactMatches.length === 1) return exactMatches[0].id;
+  }
+
+  if (nameMatches.length === 1) {
+    const matched = nameMatches[0];
+    const matchedPhone = normalizeRelationPhone(matched.phone);
+    if (!normalizedPhone || !matchedPhone || matchedPhone === normalizedPhone) return matched.id;
+  }
+
+  if (normalizedPhone) {
+    const phoneMatches = clients.filter((item) => normalizeRelationPhone(item.phone) === normalizedPhone);
+    if (phoneMatches.length === 1) return phoneMatches[0].id;
+  }
+
+  return undefined;
+}
+
+function resolveSupplierId(
+  suppliers: SupplierRecord[],
+  input: { supplierId?: string; supplierName?: string },
+) {
+  if (input.supplierId && suppliers.some((item) => item.id === input.supplierId)) return input.supplierId;
+
+  const normalizedName = normalizeRelationText(input.supplierName);
+  if (!normalizedName) return undefined;
+
+  const matches = suppliers.filter((item) => normalizeRelationText(item.name) === normalizedName);
+  return matches.length === 1 ? matches[0].id : undefined;
+}
+
 export function createStoreRevision() {
   return `${Date.now()}-${Math.random().toString(36).slice(2, 10)}`;
 }
 
 function normalizeSnapshot(snapshot: Partial<BizStoreSnapshot>): BizStoreSnapshot {
   const settings = snapshot.settings;
+  const clients = Array.isArray(snapshot.clients) ? snapshot.clients : [];
+  const suppliers = Array.isArray(snapshot.suppliers) ? snapshot.suppliers : [];
+  const orders = Array.isArray(snapshot.orders)
+    ? snapshot.orders.map((item) => ({
+        ...item,
+        client_id: resolveClientId(clients, {
+          clientId: item.client_id,
+          clientName: item.client_name,
+          phone: item.phone,
+        }),
+      }))
+    : [];
+  const appointments = Array.isArray(snapshot.appointments)
+    ? snapshot.appointments.map((item) => ({
+        ...item,
+        client_id: resolveClientId(clients, {
+          clientId: item.client_id,
+          clientName: item.client_name,
+          phone: item.phone,
+        }),
+      }))
+    : [];
+  const quotes = Array.isArray(snapshot.quotes)
+    ? snapshot.quotes.map((item) => ({
+        ...item,
+        client_id: resolveClientId(clients, {
+          clientId: item.client_id,
+          clientName: item.client_name,
+        }),
+      }))
+    : [];
+  const materials = Array.isArray(snapshot.materials)
+    ? snapshot.materials.map((item) => ({
+        ...item,
+        supplier_id: resolveSupplierId(suppliers, {
+          supplierId: item.supplier_id,
+          supplierName: item.supplier,
+        }),
+      }))
+    : [];
+  const purchases = Array.isArray(snapshot.purchases)
+    ? snapshot.purchases.map((item) => ({
+        ...item,
+        supplier_id: resolveSupplierId(suppliers, {
+          supplierId: item.supplier_id,
+          supplierName: item.supplier,
+        }),
+      }))
+    : [];
+
   return {
     revision: typeof snapshot.revision === "string" && snapshot.revision.trim() ? snapshot.revision : createStoreRevision(),
-    orders: Array.isArray(snapshot.orders) ? snapshot.orders : [],
-    clients: Array.isArray(snapshot.clients) ? snapshot.clients : [],
-    suppliers: Array.isArray(snapshot.suppliers) ? snapshot.suppliers : [],
+    orders,
+    clients,
+    suppliers,
     expenses: Array.isArray(snapshot.expenses) ? snapshot.expenses : [],
     cashEntries: Array.isArray(snapshot.cashEntries) ? snapshot.cashEntries : [],
-    materials: Array.isArray(snapshot.materials) ? snapshot.materials : [],
-    purchases: Array.isArray(snapshot.purchases) ? snapshot.purchases : [],
+    materials,
+    purchases,
     employees: Array.isArray(snapshot.employees) ? snapshot.employees : [],
     attendances: Array.isArray(snapshot.attendances) ? snapshot.attendances : [],
-    appointments: Array.isArray(snapshot.appointments) ? snapshot.appointments : [],
+    appointments,
     payrolls: Array.isArray(snapshot.payrolls) ? snapshot.payrolls : [],
-    quotes: Array.isArray(snapshot.quotes) ? snapshot.quotes : [],
+    quotes,
     showcases: Array.isArray(snapshot.showcases) ? snapshot.showcases : [],
     printArchives: Array.isArray(snapshot.printArchives) ? snapshot.printArchives : [],
     settings: settings && typeof settings === "object"
@@ -231,6 +335,7 @@ async function sqliteRead(): Promise<BizStoreSnapshot> {
     weight: r.weight == null ? undefined : Number(r.weight),
     purchase_price: Number(r.purchase_price ?? 0),
     supplier: nullStr(r.supplier) ?? undefined,
+    supplier_id: nullStr(r.supplier_id) ?? undefined,
     image: nullStr(r.image) ?? undefined,
     last_stock_date: nullStr(r.last_stock_date) ?? undefined,
     remark: nullStr(r.remark) ?? undefined,
@@ -239,6 +344,7 @@ async function sqliteRead(): Promise<BizStoreSnapshot> {
   const purchases = db.prepare("SELECT * FROM purchases").all().map((r: any) => ({
     id: String(r.id),
     supplier: String(r.supplier),
+    supplier_id: nullStr(r.supplier_id) ?? undefined,
     item_name: String(r.item_name),
     quantity: Number(r.quantity ?? 0),
     unit: String(r.unit ?? "个"),
@@ -312,6 +418,7 @@ async function sqliteRead(): Promise<BizStoreSnapshot> {
   const quotes = db.prepare("SELECT * FROM quotes").all().map((r: any) => ({
     id: String(r.id),
     client_name: String(r.client_name),
+    client_id: nullStr(r.client_id) ?? undefined,
     title: String(r.title),
     amount: Number(r.amount ?? 0),
     created_at: String(r.created_at),
@@ -455,11 +562,11 @@ async function sqliteWrite(snapshot: BizStoreSnapshot): Promise<void> {
     // Orders: delete + insert
     db.prepare("DELETE FROM orders").run();
     const insertOrder = db.prepare(`
-      INSERT INTO orders (order_number, order_type, client_name, phone, address,
+      INSERT INTO orders (order_number, order_type, client_name, client_id, phone, address,
         preview_image, description, total_price, tax_rate, discount, total_after_tax,
         amount_paid, balance, order_date, status, operation_type, install_info, remarks,
         payment_history, material_rows, updated_at)
-      VALUES (@order_number, @order_type, @client_name, @phone, @address,
+      VALUES (@order_number, @order_type, @client_name, @client_id, @phone, @address,
         @preview_image, @description, @total_price, @tax_rate, @discount, @total_after_tax,
         @amount_paid, @balance, @order_date, @status, @operation_type, @install_info, @remarks,
         @payment_history, @material_rows, @updated_at)
@@ -529,10 +636,10 @@ async function sqliteWrite(snapshot: BizStoreSnapshot): Promise<void> {
     const insertMaterial = db.prepare(`
       INSERT INTO materials (id, code, name, specification, size, unit, stock_quantity, min_stock,
         factory_price_rmb, usd_cost, sale_price_usd, vip_sale_price_usd, weight, purchase_price,
-        supplier, image, last_stock_date, remark, updated_at)
+        supplier, supplier_id, image, last_stock_date, remark, updated_at)
       VALUES (@id, @code, @name, @specification, @size, @unit, @stock_quantity, @min_stock,
         @factory_price_rmb, @usd_cost, @sale_price_usd, @vip_sale_price_usd, @weight, @purchase_price,
-        @supplier, @image, @last_stock_date, @remark, @updated_at)
+        @supplier, @supplier_id, @image, @last_stock_date, @remark, @updated_at)
     `);
     for (const m of snapshot.materials) insertMaterial.run({
       id: m.id, code: m.code ?? "", name: m.name, specification: m.specification ?? null,
@@ -541,6 +648,7 @@ async function sqliteWrite(snapshot: BizStoreSnapshot): Promise<void> {
       usd_cost: m.usd_cost ?? 0, sale_price_usd: m.sale_price_usd ?? 0,
       vip_sale_price_usd: m.vip_sale_price_usd ?? null, weight: m.weight ?? null,
       purchase_price: m.purchase_price ?? 0, supplier: m.supplier ?? null,
+      supplier_id: m.supplier_id ?? null,
       image: m.image ?? null, last_stock_date: m.last_stock_date ?? null,
       remark: m.remark ?? null, updated_at: new Date().toISOString(),
     });
@@ -548,11 +656,11 @@ async function sqliteWrite(snapshot: BizStoreSnapshot): Promise<void> {
     // Purchases
     db.prepare("DELETE FROM purchases").run();
     const insertPurchase = db.prepare(`
-      INSERT INTO purchases (id, supplier, item_name, quantity, unit, unit_price, total_amount, purchase_date, status, expense_id, updated_at)
-      VALUES (@id, @supplier, @item_name, @quantity, @unit, @unit_price, @total_amount, @purchase_date, @status, @expense_id, @updated_at)
+      INSERT INTO purchases (id, supplier, supplier_id, item_name, quantity, unit, unit_price, total_amount, purchase_date, status, expense_id, updated_at)
+      VALUES (@id, @supplier, @supplier_id, @item_name, @quantity, @unit, @unit_price, @total_amount, @purchase_date, @status, @expense_id, @updated_at)
     `);
     for (const p of snapshot.purchases) insertPurchase.run({
-      id: p.id, supplier: p.supplier, item_name: p.item_name, quantity: p.quantity,
+      id: p.id, supplier: p.supplier, supplier_id: p.supplier_id ?? null, item_name: p.item_name, quantity: p.quantity,
       unit: p.unit, unit_price: p.unit_price, total_amount: p.total_amount,
       purchase_date: p.purchase_date, status: p.status, expense_id: p.expense_id ?? null,
       updated_at: new Date().toISOString(),
@@ -631,11 +739,11 @@ async function sqliteWrite(snapshot: BizStoreSnapshot): Promise<void> {
     // Quotes
     db.prepare("DELETE FROM quotes").run();
     const insertQuote = db.prepare(`
-      INSERT INTO quotes (id, client_name, title, amount, created_at, valid_until, status, updated_at)
-      VALUES (@id, @client_name, @title, @amount, @created_at, @valid_until, @status, @updated_at)
+      INSERT INTO quotes (id, client_name, client_id, title, amount, created_at, valid_until, status, updated_at)
+      VALUES (@id, @client_name, @client_id, @title, @amount, @created_at, @valid_until, @status, @updated_at)
     `);
     for (const q of snapshot.quotes) insertQuote.run({
-      id: q.id, client_name: q.client_name, title: q.title, amount: q.amount,
+      id: q.id, client_name: q.client_name, client_id: q.client_id ?? null, title: q.title, amount: q.amount,
       created_at: q.created_at, valid_until: q.valid_until, status: q.status,
       updated_at: new Date().toISOString(),
     });
@@ -749,7 +857,8 @@ export async function readBizStore(): Promise<BizStoreSnapshot> {
 }
 
 export async function writeBizStore(snapshot: BizStoreSnapshot): Promise<void> {
+  const normalized = normalizeSnapshot(snapshot);
   const backend = await getStore();
-  if (backend === "redis") return redisWrite(snapshot);
-  return sqliteWrite(snapshot);
+  if (backend === "redis") return redisWrite(normalized);
+  return sqliteWrite(normalized);
 }

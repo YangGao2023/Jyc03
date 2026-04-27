@@ -81,6 +81,94 @@ function cashEntryReferencesOrder(item: CashEntry, orderNumber: string) {
   return item.order_number === orderNumber || textHasExactOrderNumber(item.note, orderNumber);
 }
 
+function normalizeEntityText(value?: string | null) {
+  return value?.trim().toLowerCase() ?? "";
+}
+
+function normalizeEntityPhone(value?: string | null) {
+  return value?.replace(/\D+/g, "") ?? "";
+}
+
+function findClientByReference(
+  clients: ContactRecord[],
+  input: { clientId?: string; clientName?: string; phone?: string },
+) {
+  if (input.clientId) {
+    const byId = clients.find((item) => item.id === input.clientId);
+    if (byId) return byId;
+  }
+
+  const normalizedName = normalizeEntityText(input.clientName);
+  const normalizedPhone = normalizeEntityPhone(input.phone);
+  const nameMatches = normalizedName
+    ? clients.filter((item) => normalizeEntityText(item.name) === normalizedName)
+    : [];
+
+  if (normalizedPhone && nameMatches.length > 1) {
+    const exactMatches = nameMatches.filter((item) => normalizeEntityPhone(item.phone) === normalizedPhone);
+    if (exactMatches.length === 1) return exactMatches[0];
+  }
+
+  if (nameMatches.length === 1) {
+    const matched = nameMatches[0];
+    const matchedPhone = normalizeEntityPhone(matched.phone);
+    if (!normalizedPhone || !matchedPhone || matchedPhone === normalizedPhone) return matched;
+  }
+
+  if (normalizedPhone) {
+    const phoneMatches = clients.filter((item) => normalizeEntityPhone(item.phone) === normalizedPhone);
+    if (phoneMatches.length === 1) return phoneMatches[0];
+  }
+
+  return undefined;
+}
+
+function findSupplierByReference(
+  suppliers: SupplierRecord[],
+  input: { supplierId?: string; supplierName?: string },
+) {
+  if (input.supplierId) {
+    const byId = suppliers.find((item) => item.id === input.supplierId);
+    if (byId) return byId;
+  }
+
+  const normalizedName = normalizeEntityText(input.supplierName);
+  if (!normalizedName) return undefined;
+
+  const matches = suppliers.filter((item) => normalizeEntityText(item.name) === normalizedName);
+  return matches.length === 1 ? matches[0] : undefined;
+}
+
+function orderBelongsToClient(order: BizOrder, client: ContactRecord) {
+  if (order.client_id && order.client_id === client.id) return true;
+  const sameName = normalizeEntityText(order.client_name) === normalizeEntityText(client.name);
+  const orderPhone = normalizeEntityPhone(order.phone);
+  const clientPhone = normalizeEntityPhone(client.phone);
+  if (sameName && (!orderPhone || !clientPhone || orderPhone === clientPhone)) return true;
+  return Boolean(orderPhone && clientPhone && orderPhone === clientPhone);
+}
+
+function appointmentBelongsToClient(item: MeasurementAppointmentRecord, client: ContactRecord) {
+  if (item.client_id && item.client_id === client.id) return true;
+  const sameName = normalizeEntityText(item.client_name) === normalizeEntityText(client.name);
+  const itemPhone = normalizeEntityPhone(item.phone);
+  const clientPhone = normalizeEntityPhone(client.phone);
+  if (sameName && (!itemPhone || !clientPhone || itemPhone === clientPhone)) return true;
+  return Boolean(itemPhone && clientPhone && itemPhone === clientPhone);
+}
+
+function quoteBelongsToClient(item: QuoteRecord, client: ContactRecord) {
+  return item.client_id === client.id || normalizeEntityText(item.client_name) === normalizeEntityText(client.name);
+}
+
+function materialBelongsToSupplier(item: MaterialRecord, supplier: SupplierRecord) {
+  return item.supplier_id === supplier.id || normalizeEntityText(item.supplier) === normalizeEntityText(supplier.name);
+}
+
+function purchaseBelongsToSupplier(item: PurchaseRecord, supplier: SupplierRecord) {
+  return item.supplier_id === supplier.id || normalizeEntityText(item.supplier) === normalizeEntityText(supplier.name);
+}
+
 function nextSequentialId(values: string[], prefix: string, width = 3) {
   const pattern = new RegExp(`^${escapeRegExp(prefix)}-(\\d+)$`);
   const max = values.reduce((current, value) => {
@@ -1703,7 +1791,7 @@ function NewOrderModal({
   }
 
   function hydrateClient(name: string) {
-    const matched = clients.find((item) => item.name === name.trim());
+    const matched = findClientByReference(clients, { clientName: name.trim() });
     if (!matched) return;
     setFields((f) => ({ ...f, client_name: matched.name, phone: matched.phone ?? f.phone, address: matched.address ?? f.address }));
   }
@@ -1740,10 +1828,13 @@ function NewOrderModal({
           ]
         : [];
 
+    const matchedClient = findClientByReference(clients, { clientName: fields.client_name.trim(), phone: fields.phone });
+
     const newOrder: BizOrder = {
       order_number: orderNumber,
       order_type: type,
       client_name: fields.client_name.trim(),
+      client_id: matchedClient?.id,
       phone: fields.phone || undefined,
       address: fields.address || undefined,
       description: fields.description || undefined,
@@ -1944,25 +2035,37 @@ function OrdersSection({
 
 
   function handleSave(updated: BizOrder) {
+    const matchedClient = findClientByReference(clients, {
+      clientId: updated.client_id,
+      clientName: updated.client_name,
+      phone: updated.phone,
+    });
+    const normalizedUpdated = { ...updated, client_id: matchedClient?.id };
     setOrders((prev) =>
-      prev.map((o) => (o.order_number === updated.order_number ? updated : o))
+      prev.map((o) => (o.order_number === updated.order_number ? normalizedUpdated : o))
     );
-    setSelectedOrder(updated);
+    setSelectedOrder(normalizedUpdated);
   }
 
   function handleCreate(newOrder: BizOrder) {
-    setOrders((prev) => [newOrder, ...prev]);
-    const depositRecord = newOrder.payment_history?.[0];
+    const matchedClient = findClientByReference(clients, {
+      clientId: newOrder.client_id,
+      clientName: newOrder.client_name,
+      phone: newOrder.phone,
+    });
+    const normalizedOrder = { ...newOrder, client_id: matchedClient?.id };
+    setOrders((prev) => [normalizedOrder, ...prev]);
+    const depositRecord = normalizedOrder.payment_history?.[0];
     if (depositRecord?.office) {
       setCashEntries((prev) => [{
         id: nextYearScopedId(prev.map((item) => item.id), "CASH", new Date().getFullYear()),
         type: "收入",
         amount: depositRecord.amount,
         date: depositRecord.date,
-        note: `${newOrder.order_number} 新单定金`,
-        order_number: newOrder.order_number,
+        note: `${normalizedOrder.order_number} 新单定金`,
+        order_number: normalizedOrder.order_number,
         source_type: "order-deposit",
-        source_id: `${newOrder.order_number}:deposit`,
+        source_id: `${normalizedOrder.order_number}:deposit`,
       }, ...prev]);
     }
   }
@@ -3272,7 +3375,7 @@ function FinanceSection({ orders, setOrders, expenses, setExpenses, cashEntries,
 
 type ContactSub = "clients" | "suppliers";
 
-function ClientsSection({ clients, setClients, suppliers, setSuppliers, orders, setOrders, appointments, setAppointments, setCashEntries, purchases, setPurchases, settings, onCreateAppointment }: { clients: ContactRecord[]; setClients: React.Dispatch<React.SetStateAction<ContactRecord[]>>; suppliers: SupplierRecord[]; setSuppliers: React.Dispatch<React.SetStateAction<SupplierRecord[]>>; orders: BizOrder[]; setOrders: React.Dispatch<React.SetStateAction<BizOrder[]>>; appointments: MeasurementAppointmentRecord[]; setAppointments: React.Dispatch<React.SetStateAction<MeasurementAppointmentRecord[]>>; setCashEntries: React.Dispatch<React.SetStateAction<CashEntry[]>>; purchases: PurchaseRecord[]; setPurchases: React.Dispatch<React.SetStateAction<PurchaseRecord[]>>; settings: BizSettings; onCreateAppointment: (client: ContactRecord) => void; }) {
+function ClientsSection({ clients, setClients, suppliers, setSuppliers, orders, setOrders, appointments, setAppointments, quotes, setQuotes, setCashEntries, materials, setMaterials, purchases, setPurchases, settings, onCreateAppointment }: { clients: ContactRecord[]; setClients: React.Dispatch<React.SetStateAction<ContactRecord[]>>; suppliers: SupplierRecord[]; setSuppliers: React.Dispatch<React.SetStateAction<SupplierRecord[]>>; orders: BizOrder[]; setOrders: React.Dispatch<React.SetStateAction<BizOrder[]>>; appointments: MeasurementAppointmentRecord[]; setAppointments: React.Dispatch<React.SetStateAction<MeasurementAppointmentRecord[]>>; quotes: QuoteRecord[]; setQuotes: React.Dispatch<React.SetStateAction<QuoteRecord[]>>; setCashEntries: React.Dispatch<React.SetStateAction<CashEntry[]>>; materials: MaterialRecord[]; setMaterials: React.Dispatch<React.SetStateAction<MaterialRecord[]>>; purchases: PurchaseRecord[]; setPurchases: React.Dispatch<React.SetStateAction<PurchaseRecord[]>>; settings: BizSettings; onCreateAppointment: (client: ContactRecord) => void; }) {
   const [sub, setSub] = useState<ContactSub>("clients");
   const today = new Date().toISOString().slice(0, 10);
   const [clientDraft, setClientDraft] = useState({ name: "", contact: "", phone: "", wechat: "", address: "", note: "" });
@@ -3286,6 +3389,7 @@ function ClientsSection({ clients, setClients, suppliers, setSuppliers, orders, 
   const [confirmingClientId, setConfirmingClientId] = useState<string | null>(null);
   const [confirmingSupplierId, setConfirmingSupplierId] = useState<string | null>(null);
   const [showSupplierPurchaseModal, setShowSupplierPurchaseModal] = useState(false);
+  const [directoryHint, setDirectoryHint] = useState("");
   const [clientSearch, setClientSearch] = useState("");
   const [clientPage, setClientPage] = useState(1);
   const [selectedClientId, setSelectedClientId] = useState<string>(clients[0]?.id ?? "");
@@ -3318,14 +3422,17 @@ function ClientsSection({ clients, setClients, suppliers, setSuppliers, orders, 
       const nextAddress = clientDraft.address || undefined;
       setClients((prev) => prev.map((item) => item.id === editingClientId ? { ...item, name: nextName, contact: clientDraft.contact || undefined, phone: nextPhone, wechat: clientDraft.wechat || undefined, address: nextAddress, note: clientDraft.note || undefined } : item));
       if (originalClient) {
-        setOrders((prev) => prev.map((item) => item.client_name === originalClient.name || (!!originalClient.phone && item.phone === originalClient.phone) ? { ...item, client_name: nextName, phone: nextPhone, address: nextAddress } : item));
-        setAppointments((prev) => prev.map((item) => item.client_id === originalClient.id || item.client_name === originalClient.name || (!!originalClient.phone && item.phone === originalClient.phone) ? { ...item, client_name: nextName, phone: nextPhone, address: nextAddress, client_id: originalClient.id } : item));
+        setOrders((prev) => prev.map((item) => orderBelongsToClient(item, originalClient) ? { ...item, client_name: nextName, client_id: originalClient.id, phone: nextPhone, address: nextAddress } : item));
+        setAppointments((prev) => prev.map((item) => appointmentBelongsToClient(item, originalClient) ? { ...item, client_name: nextName, phone: nextPhone, address: nextAddress, client_id: originalClient.id } : item));
+        setQuotes((prev) => prev.map((item) => quoteBelongsToClient(item, originalClient) ? { ...item, client_name: nextName, client_id: originalClient.id } : item));
       }
       setSelectedClientId(editingClientId);
+      setDirectoryHint(`已同步客户 ${nextName} 的订单、预约和报价关联。`);
     } else {
       const newId = nextSequentialId(clients.map((item) => item.id), "CL");
       setClients((prev) => [{ id: newId, name: clientDraft.name.trim(), contact: clientDraft.contact || undefined, phone: clientDraft.phone || undefined, wechat: clientDraft.wechat || undefined, address: clientDraft.address || undefined, note: clientDraft.note || undefined, created_at: today, balance: 0, is_vip: false }, ...prev]);
       setSelectedClientId(newId);
+      setDirectoryHint(`已新增客户 ${clientDraft.name.trim()}。`);
     }
     setEditingClientId(null);
     setClientDraft({ name: "", contact: "", phone: "", wechat: "", address: "", note: "" });
@@ -3339,17 +3446,34 @@ function ClientsSection({ clients, setClients, suppliers, setSuppliers, orders, 
   }
 
   function deleteClient(client: ContactRecord) {
+    const linkedOrders = orders.filter((item) => orderBelongsToClient(item, client));
+    const linkedAppointments = appointments.filter((item) => appointmentBelongsToClient(item, client));
+    const linkedQuotes = quotes.filter((item) => quoteBelongsToClient(item, client));
+    if (linkedOrders.length || linkedAppointments.length || linkedQuotes.length) {
+      setDirectoryHint(`客户 ${client.name} 还有 ${linkedOrders.length} 个订单、${linkedAppointments.length} 个预约、${linkedQuotes.length} 个报价，先处理这些记录再删。`);
+      setConfirmingClientId(null);
+      return;
+    }
     setClients((prev) => prev.filter((item) => item.id !== client.id));
     if (selectedClientId === client.id) setSelectedClientId("");
+    setDirectoryHint(`已删除客户 ${client.name}。`);
     setConfirmingClientId(null);
   }
 
   function addSupplier() {
     if (!supplierDraft.name.trim()) return;
     if (editingSupplierId) {
-      setSuppliers((prev) => prev.map((item) => item.id === editingSupplierId ? { ...item, name: supplierDraft.name.trim(), category: supplierDraft.category, contact_person: supplierDraft.contact_person || undefined, phone: supplierDraft.phone || undefined, email: supplierDraft.email || undefined, website: supplierDraft.website || undefined, address: supplierDraft.address || undefined, remark: supplierDraft.remark || undefined } : item));
+      const originalSupplier = suppliers.find((item) => item.id === editingSupplierId);
+      const nextName = supplierDraft.name.trim();
+      setSuppliers((prev) => prev.map((item) => item.id === editingSupplierId ? { ...item, name: nextName, category: supplierDraft.category, contact_person: supplierDraft.contact_person || undefined, phone: supplierDraft.phone || undefined, email: supplierDraft.email || undefined, website: supplierDraft.website || undefined, address: supplierDraft.address || undefined, remark: supplierDraft.remark || undefined } : item));
+      if (originalSupplier) {
+        setMaterials((prev) => prev.map((item) => materialBelongsToSupplier(item, originalSupplier) ? { ...item, supplier: nextName, supplier_id: originalSupplier.id } : item));
+        setPurchases((prev) => prev.map((item) => purchaseBelongsToSupplier(item, originalSupplier) ? { ...item, supplier: nextName, supplier_id: originalSupplier.id } : item));
+      }
+      setDirectoryHint(`已同步供应商 ${nextName} 的物料和采购关联。`);
     } else {
       setSuppliers((prev) => [{ id: nextSequentialId(prev.map((item) => item.id), "SUP"), name: supplierDraft.name.trim(), category: supplierDraft.category, contact_person: supplierDraft.contact_person || undefined, phone: supplierDraft.phone || undefined, email: supplierDraft.email || undefined, website: supplierDraft.website || undefined, address: supplierDraft.address || undefined, remark: supplierDraft.remark || undefined, last_purchase_date: today }, ...prev]);
+      setDirectoryHint(`已新增供应商 ${supplierDraft.name.trim()}。`);
     }
     setSupplierDraft({ name: "", category: supplierCategoryOptions[0] ?? "布料", contact_person: "", phone: "", email: "", website: "", address: "", remark: "" });
     setEditingSupplierId(null);
@@ -3363,12 +3487,21 @@ function ClientsSection({ clients, setClients, suppliers, setSuppliers, orders, 
   }
 
   function deleteSupplier(supplier: SupplierRecord) {
+    const linkedMaterials = materials.filter((item) => materialBelongsToSupplier(item, supplier));
+    const linkedPurchases = purchases.filter((item) => purchaseBelongsToSupplier(item, supplier));
+    if (linkedMaterials.length || linkedPurchases.length) {
+      setDirectoryHint(`供应商 ${supplier.name} 还有 ${linkedMaterials.length} 个物料、${linkedPurchases.length} 条采购记录，先处理这些记录再删。`);
+      setConfirmingSupplierId(null);
+      return;
+    }
     setSuppliers((prev) => prev.filter((item) => item.id !== supplier.id));
+    setDirectoryHint(`已删除供应商 ${supplier.name}。`);
     setConfirmingSupplierId(null);
   }
 
   function openSupplierPurchase(supplier: SupplierRecord) {
     setSupplierPurchaseDraft({ supplier: supplier.name, detail: "", amount: "", payment_method: "转账", purchase_date: today, office: false, note: "" });
+    setDirectoryHint("");
     setShowSupplierPurchaseModal(true);
   }
 
@@ -3376,10 +3509,12 @@ function ClientsSection({ clients, setClients, suppliers, setSuppliers, orders, 
     const amount = Number(supplierPurchaseDraft.amount) || 0;
     if (!supplierPurchaseDraft.supplier || amount <= 0) return;
     const purchaseId = nextYearScopedId(purchases.map((item) => item.id), "PO", new Date().getFullYear());
-    setPurchases((prev) => [{ id: purchaseId, supplier: supplierPurchaseDraft.supplier, item_name: supplierPurchaseDraft.detail.trim() || "采购支出", quantity: 1, unit: "笔", unit_price: amount, total_amount: amount, purchase_date: supplierPurchaseDraft.purchase_date, status: supplierPurchaseDraft.payment_method }, ...prev]);
+    const matchedSupplier = findSupplierByReference(suppliers, { supplierName: supplierPurchaseDraft.supplier });
+    setPurchases((prev) => [{ id: purchaseId, supplier: supplierPurchaseDraft.supplier, supplier_id: matchedSupplier?.id, item_name: supplierPurchaseDraft.detail.trim() || "采购支出", quantity: 1, unit: "笔", unit_price: amount, total_amount: amount, purchase_date: supplierPurchaseDraft.purchase_date, status: supplierPurchaseDraft.payment_method }, ...prev]);
     if (supplierPurchaseDraft.office) {
       setCashEntries((prev) => [{ id: nextYearScopedId(prev.map((item) => item.id), "CASH", new Date().getFullYear()), type: "转出", amount, date: supplierPurchaseDraft.purchase_date, note: supplierPurchaseDraft.note || `${supplierPurchaseDraft.supplier} 采购支出`, source_type: "purchase", source_id: purchaseId }, ...prev]);
     }
+    setDirectoryHint(`已新增采购 ${purchaseId}${matchedSupplier ? "，已绑定供应商" : "，但供应商名称未唯一匹配"}。`);
     setShowSupplierPurchaseModal(false);
   }
 
@@ -3400,13 +3535,18 @@ function ClientsSection({ clients, setClients, suppliers, setSuppliers, orders, 
   const selectedClient = filteredClients.find((item) => item.id === resolvedSelectedClientId) ?? clients.find((item) => item.id === resolvedSelectedClientId) ?? filteredClients[0] ?? clients[0] ?? null;
   const selectedClientOrders = selectedClient
     ? [...orders]
-        .filter((item) => item.client_name === selectedClient.name || (!!selectedClient.phone && item.phone === selectedClient.phone))
+        .filter((item) => orderBelongsToClient(item, selectedClient))
         .sort((a, b) => String(b.order_date ?? "").localeCompare(String(a.order_date ?? "")))
     : [];
   const selectedClientAppointments = selectedClient
     ? [...appointments]
-        .filter((item) => item.client_id === selectedClient.id || item.client_name === selectedClient.name || (!!selectedClient.phone && item.phone === selectedClient.phone))
+        .filter((item) => appointmentBelongsToClient(item, selectedClient))
         .sort((a, b) => String(b.appointment_date).localeCompare(String(a.appointment_date)))
+    : [];
+  const selectedClientQuotes = selectedClient
+    ? [...quotes]
+        .filter((item) => quoteBelongsToClient(item, selectedClient))
+        .sort((a, b) => String(b.created_at).localeCompare(String(a.created_at)))
     : [];
   const clientTotal = selectedClientOrders.reduce((sum, item) => sum + (item.total_after_tax ?? item.total_price ?? 0), 0);
   const clientPaid = selectedClientOrders.reduce((sum, item) => sum + (item.amount_paid ?? 0), 0);
@@ -3440,6 +3580,13 @@ function ClientsSection({ clients, setClients, suppliers, setSuppliers, orders, 
       label: "预约",
       detail: `${formatAppointmentDate(item.appointment_date)} · ${item.address ?? "未填写地址"}`,
       tone: "text-sky-700",
+    })),
+    ...selectedClientQuotes.map((item) => ({
+      key: `quote-${item.id}`,
+      date: item.created_at,
+      label: `报价 ${item.id}`,
+      detail: `${item.title} · ${item.status} · ${formatMoney(item.amount)}`,
+      tone: "text-violet-700",
     })),
     ...clientRecentPayments.map((item, index) => ({
       key: `payment-${item.order_number}-${index}-${item.date}`,
@@ -3575,7 +3722,12 @@ function ClientsSection({ clients, setClients, suppliers, setSuppliers, orders, 
         ]}
       />
 
-      <SegmentedControl options={[{ key: "clients", label: "客户档案" }, { key: "suppliers", label: "供应商" }]} value={sub} onChange={setSub} />
+      <SegmentedControl options={[{ key: "clients", label: "客户档案" }, { key: "suppliers", label: "供应商" }]} value={sub} onChange={(value) => {
+        setSub(value as ContactSub);
+        setDirectoryHint("");
+      }} />
+
+      {directoryHint ? <div className="mb-4 rounded-xl border border-sky-100 bg-sky-50 px-4 py-3 text-xs text-sky-700">{directoryHint}</div> : null}
 
       {showClientModal && (
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-slate-950/45 px-4">
@@ -3669,8 +3821,8 @@ function ClientsSection({ clients, setClients, suppliers, setSuppliers, orders, 
                 </div>
                 <div className="max-h-[560px] space-y-2 overflow-y-auto pr-1">
                   {pagedClients.length ? pagedClients.map((item) => {
-                    const itemOrders = orders.filter((order) => order.client_name === item.name || (!!item.phone && order.phone === item.phone));
-                    const itemAppointments = appointments.filter((entry) => entry.client_id === item.id || entry.client_name === item.name || (!!item.phone && entry.phone === item.phone));
+                    const itemOrders = orders.filter((order) => orderBelongsToClient(order, item));
+                    const itemAppointments = appointments.filter((entry) => appointmentBelongsToClient(entry, item));
                     const itemBalance = itemOrders.reduce((sum, order) => sum + (order.balance ?? 0), 0);
                     const isActive = selectedClient?.id === item.id;
                     return (
@@ -3737,6 +3889,7 @@ function ClientsSection({ clients, setClients, suppliers, setSuppliers, orders, 
                   <StatStrip
                     items={[
                       { label: "订单数", value: String(selectedClientOrders.length) },
+                      { label: "报价数", value: String(selectedClientQuotes.length), accent: "text-violet-600" },
                       { label: "定制 / 批发", value: `${clientCustomOrderCount} / ${clientWholesaleOrderCount}` },
                       { label: "业务总额", value: formatMoney(clientTotal), accent: "text-slate-800" },
                       { label: "已收 / 余款", value: `${formatMoney(clientPaid)} / ${formatMoney(clientBalance)}`, accent: clientBalance > 0 ? "text-amber-600" : "text-emerald-600" },
@@ -4202,13 +4355,14 @@ function MaterialsSection({ materials, setMaterials, purchases, setPurchases, su
     const weight = Number(materialDraft.weight) || 1;
     const usdCost = Number(materialDraft.usd_cost) || calcUsdCost(factoryPrice, weight);
     const salePrice = Number(materialDraft.sale_price_usd) || 0;
-    const nextItem = { id: editingMaterialId || nextSequentialId(materials.map((item) => item.id), "MAT"), code: materialDraft.code.trim(), name: materialDraft.name.trim(), specification: materialDraft.specification || undefined, size: materialDraft.size || undefined, unit: materialDraft.unit, stock_quantity: Number(materialDraft.stock_quantity) || 0, min_stock: 0, factory_price_rmb: factoryPrice, usd_cost: usdCost, sale_price_usd: salePrice, weight, purchase_price: usdCost, supplier: materialDraft.supplier || undefined, image: materialDraft.image || undefined, last_stock_date: today, remark: materialDraft.remark || undefined } satisfies MaterialRecord;
+    const matchedSupplier = findSupplierByReference(suppliers, { supplierName: materialDraft.supplier });
+    const nextItem = { id: editingMaterialId || nextSequentialId(materials.map((item) => item.id), "MAT"), code: materialDraft.code.trim(), name: materialDraft.name.trim(), specification: materialDraft.specification || undefined, size: materialDraft.size || undefined, unit: materialDraft.unit, stock_quantity: Number(materialDraft.stock_quantity) || 0, min_stock: 0, factory_price_rmb: factoryPrice, usd_cost: usdCost, sale_price_usd: salePrice, weight, purchase_price: usdCost, supplier: materialDraft.supplier || undefined, supplier_id: matchedSupplier?.id, image: materialDraft.image || undefined, last_stock_date: today, remark: materialDraft.remark || undefined } satisfies MaterialRecord;
     if (editingMaterialId) {
       setMaterials((prev) => prev.map((item) => item.id === editingMaterialId ? nextItem : item));
-      setInventoryHint(`已更新物料 ${nextItem.name}。`);
+      setInventoryHint(`已更新物料 ${nextItem.name}${matchedSupplier ? "，已绑定供应商" : "，但供应商名称未唯一匹配"}。`);
     } else {
       setMaterials((prev) => [nextItem, ...prev]);
-      setInventoryHint(`已新增物料 ${nextItem.name}。`);
+      setInventoryHint(`已新增物料 ${nextItem.name}${matchedSupplier ? "，已绑定供应商" : "，但供应商名称未唯一匹配"}。`);
     }
     resetMaterialDraft();
     setShowMaterialModal(false);
@@ -4446,7 +4600,7 @@ function AppointmentsSection({ appointments, setAppointments, clients, prefillCl
   }
 
   function hydrateFromClientName(name: string) {
-    const client = clients.find((item) => item.name === name.trim());
+    const client = findClientByReference(clients, { clientName: name.trim() });
     if (!client) {
       setDraft((prev) => ({ ...prev, client_name: name }));
       return;
@@ -4985,13 +5139,34 @@ function EmployeesSection({ employees, setEmployees, attendances, setAttendances
 
 type QuoteSub = "quotes" | "showcase";
 
-function QuotesSection({ quotes, setQuotes, showcases, setShowcases, settings }: { quotes: QuoteRecord[]; setQuotes: React.Dispatch<React.SetStateAction<QuoteRecord[]>>; showcases: ShowcaseRecord[]; setShowcases: React.Dispatch<React.SetStateAction<ShowcaseRecord[]>>; settings: BizSettings; }) {
+function QuotesSection({ clients, quotes, setQuotes, showcases, setShowcases, settings }: { clients: ContactRecord[]; quotes: QuoteRecord[]; setQuotes: React.Dispatch<React.SetStateAction<QuoteRecord[]>>; showcases: ShowcaseRecord[]; setShowcases: React.Dispatch<React.SetStateAction<ShowcaseRecord[]>>; settings: BizSettings; }) {
   const [sub, setSub] = useState<QuoteSub>("quotes");
   const today = new Date().toISOString().slice(0, 10);
   const [quoteDraft, setQuoteDraft] = useState({ client_name: "", title: "", amount: "", valid_until: today, status: "草稿" });
   const [showcaseDraft, setShowcaseDraft] = useState({ name: "", category: "窗帘", image_count: "", description: "", status: "待整理" });
-  function addQuote() { if (!quoteDraft.client_name.trim() || !quoteDraft.title.trim()) return; setQuotes((prev) => [{ id: nextYearScopedId(prev.map((item) => item.id), "QT", new Date().getFullYear()), client_name: quoteDraft.client_name.trim(), title: quoteDraft.title.trim(), amount: Number(quoteDraft.amount) || 0, created_at: today, valid_until: quoteDraft.valid_until || today, status: quoteDraft.status }, ...prev]); setQuoteDraft({ client_name: "", title: "", amount: "", valid_until: today, status: "草稿" }); }
-  function addShowcase() { if (!showcaseDraft.name.trim()) return; setShowcases((prev) => [{ id: nextSequentialId(prev.map((item) => item.id), "GAL"), name: showcaseDraft.name.trim(), category: showcaseDraft.category, image_count: Number(showcaseDraft.image_count) || 0, description: showcaseDraft.description || undefined, created_at: today, status: showcaseDraft.status }, ...prev]); setShowcaseDraft({ name: "", category: "窗帘", image_count: "", description: "", status: "待整理" }); }
+
+  function addQuote() {
+    if (!quoteDraft.client_name.trim() || !quoteDraft.title.trim()) return;
+    const matchedClient = findClientByReference(clients, { clientName: quoteDraft.client_name.trim() });
+    setQuotes((prev) => [{
+      id: nextYearScopedId(prev.map((item) => item.id), "QT", new Date().getFullYear()),
+      client_name: quoteDraft.client_name.trim(),
+      client_id: matchedClient?.id,
+      title: quoteDraft.title.trim(),
+      amount: Number(quoteDraft.amount) || 0,
+      created_at: today,
+      valid_until: quoteDraft.valid_until || today,
+      status: quoteDraft.status,
+    }, ...prev]);
+    setQuoteDraft({ client_name: "", title: "", amount: "", valid_until: today, status: "草稿" });
+  }
+
+  function addShowcase() {
+    if (!showcaseDraft.name.trim()) return;
+    setShowcases((prev) => [{ id: nextSequentialId(prev.map((item) => item.id), "GAL"), name: showcaseDraft.name.trim(), category: showcaseDraft.category, image_count: Number(showcaseDraft.image_count) || 0, description: showcaseDraft.description || undefined, created_at: today, status: showcaseDraft.status }, ...prev]);
+    setShowcaseDraft({ name: "", category: "窗帘", image_count: "", description: "", status: "待整理" });
+  }
+
   const quoteConfigs: Record<QuoteSub, SplitTabularSchemaConfig> = {
     quotes: {
       title: "报价单列表",
@@ -5010,7 +5185,8 @@ function QuotesSection({ quotes, setQuotes, showcases, setShowcases, settings }:
       printRows: () => mapRows(showcases, (item) => [item.name, item.category, item.image_count, item.description ?? "-", item.created_at, item.status]),
     },
   };
-  return <div><SectionHeader eyebrow="Quotes & Showcase" title="报价 & 展示" actions={<ActionBtn tone="primary" onClick={sub === "quotes" ? addQuote : addShowcase}>+ {sub === "quotes" ? "新建报价单" : "新建作品"}</ActionBtn>} /><StatStrip items={[{ label: "草稿", value: String(quotes.filter((item) => item.status === "草稿").length), accent: "text-slate-500" }, { label: "已发出", value: String(quotes.filter((item) => item.status === "已发出").length), accent: "text-blue-600" }, { label: "已成交", value: String(quotes.filter((item) => item.status === "已成交").length), accent: "text-green-600" }, { label: "展示作品", value: String(showcases.length), accent: "text-violet-600" }]} /><SegmentedControl options={[{ key: "quotes", label: "报价单" }, { key: "showcase", label: "作品展示" }]} value={sub} onChange={setSub} />{sub === "quotes" ? <div className="space-y-4"><PanelCard title="新增报价单"><div className="grid gap-2 sm:grid-cols-2 xl:grid-cols-5"><SmallInput value={quoteDraft.client_name} onChange={(v) => setQuoteDraft((d) => ({ ...d, client_name: v }))} placeholder="客户" /><SmallInput value={quoteDraft.title} onChange={(v) => setQuoteDraft((d) => ({ ...d, title: v }))} placeholder="标题 / 项目" /><SmallInput value={quoteDraft.amount} onChange={(v) => setQuoteDraft((d) => ({ ...d, amount: v }))} type="number" placeholder="金额" /><SmallInput value={quoteDraft.valid_until} onChange={(v) => setQuoteDraft((d) => ({ ...d, valid_until: v }))} type="date" /><SmallSelect value={quoteDraft.status} onChange={(v) => setQuoteDraft((d) => ({ ...d, status: v }))} options={["草稿", "已发出", "已成交", "已失效"]} /></div></PanelCard><div className="overflow-x-auto rounded-xl border border-slate-200 bg-white"><table className="w-full text-left text-xs"><thead><tr className="border-b border-slate-200 bg-slate-50"><th className="px-4 py-2.5 font-semibold text-slate-600">报价单号</th><th className="px-4 py-2.5 font-semibold text-slate-600">客户</th><th className="px-4 py-2.5 font-semibold text-slate-600">标题 / 项目</th><th className="px-4 py-2.5 font-semibold text-slate-600">报价金额</th><th className="px-4 py-2.5 font-semibold text-slate-600">创建日期</th><th className="px-4 py-2.5 font-semibold text-slate-600">有效期至</th><th className="px-4 py-2.5 font-semibold text-slate-600">状态</th></tr></thead><tbody>{quotes.map((item) => <tr key={item.id} className="border-b border-slate-100 last:border-b-0"><td className="px-4 py-2.5 font-medium text-slate-700">{item.id}</td><td className="px-4 py-2.5 text-slate-700">{item.client_name}</td><td className="px-4 py-2.5 text-slate-500">{item.title}</td><td className="px-4 py-2.5 text-slate-700">{formatMoney(item.amount)}</td><td className="px-4 py-2.5 text-slate-500">{item.created_at}</td><td className="px-4 py-2.5 text-slate-500">{item.valid_until}</td><td className="px-4 py-2.5 text-slate-600">{item.status}</td></tr>)}</tbody></table></div></div> : <div className="space-y-4"><PanelCard title="新增作品展示"><div className="grid gap-2 sm:grid-cols-2 xl:grid-cols-5"><SmallInput value={showcaseDraft.name} onChange={(v) => setShowcaseDraft((d) => ({ ...d, name: v }))} placeholder="作品名称" /><SmallSelect value={showcaseDraft.category} onChange={(v) => setShowcaseDraft((d) => ({ ...d, category: v }))} options={["窗帘", "隔断", "雨棚", "扶手", "其他"]} /><SmallInput value={showcaseDraft.image_count} onChange={(v) => setShowcaseDraft((d) => ({ ...d, image_count: v }))} type="number" placeholder="图片数" /><SmallInput value={showcaseDraft.description} onChange={(v) => setShowcaseDraft((d) => ({ ...d, description: v }))} placeholder="描述" /><SmallSelect value={showcaseDraft.status} onChange={(v) => setShowcaseDraft((d) => ({ ...d, status: v }))} options={["待整理", "已发布", "隐藏"]} /></div></PanelCard><div className="overflow-x-auto rounded-xl border border-slate-200 bg-white"><table className="w-full text-left text-xs"><thead><tr className="border-b border-slate-200 bg-slate-50"><th className="px-4 py-2.5 font-semibold text-slate-600">作品名称</th><th className="px-4 py-2.5 font-semibold text-slate-600">类别</th><th className="px-4 py-2.5 font-semibold text-slate-600">图片数</th><th className="px-4 py-2.5 font-semibold text-slate-600">描述</th><th className="px-4 py-2.5 font-semibold text-slate-600">创建日期</th><th className="px-4 py-2.5 font-semibold text-slate-600">展示状态</th></tr></thead><tbody>{showcases.map((item) => <tr key={item.id} className="border-b border-slate-100 last:border-b-0"><td className="px-4 py-2.5 font-medium text-slate-700">{item.name}</td><td className="px-4 py-2.5 text-slate-600">{item.category}</td><td className="px-4 py-2.5 text-slate-600">{item.image_count}</td><td className="px-4 py-2.5 text-slate-500">{item.description ?? "-"}</td><td className="px-4 py-2.5 text-slate-500">{item.created_at}</td><td className="px-4 py-2.5 text-slate-600">{item.status}</td></tr>)}</tbody></table></div></div>}</div>;
+
+  return <div><SectionHeader eyebrow="Quotes & Showcase" title="报价 & 展示" actions={<ActionBtn tone="primary" onClick={sub === "quotes" ? addQuote : addShowcase}>+ {sub === "quotes" ? "新建报价单" : "新建作品"}</ActionBtn>} /><StatStrip items={[{ label: "草稿", value: String(quotes.filter((item) => item.status === "草稿").length), accent: "text-slate-500" }, { label: "已发出", value: String(quotes.filter((item) => item.status === "已发出").length), accent: "text-blue-600" }, { label: "已成交", value: String(quotes.filter((item) => item.status === "已成交").length), accent: "text-green-600" }, { label: "展示作品", value: String(showcases.length), accent: "text-violet-600" }]} /><SegmentedControl options={[{ key: "quotes", label: "报价单" }, { key: "showcase", label: "作品展示" }]} value={sub} onChange={setSub} />{sub === "quotes" ? <div className="space-y-4"><PanelCard title="新增报价单"><div className="grid gap-2 sm:grid-cols-2 xl:grid-cols-5"><div><input list="quote-client-options" value={quoteDraft.client_name} onChange={(e) => setQuoteDraft((d) => ({ ...d, client_name: e.target.value }))} placeholder="客户" className="h-8 w-full rounded-lg border border-slate-300 bg-white px-3 text-xs text-slate-700 focus:border-blue-400 focus:outline-none" /><datalist id="quote-client-options">{clients.map((item) => <option key={item.id} value={item.name} />)}</datalist></div><SmallInput value={quoteDraft.title} onChange={(v) => setQuoteDraft((d) => ({ ...d, title: v }))} placeholder="标题 / 项目" /><SmallInput value={quoteDraft.amount} onChange={(v) => setQuoteDraft((d) => ({ ...d, amount: v }))} type="number" placeholder="金额" /><SmallInput value={quoteDraft.valid_until} onChange={(v) => setQuoteDraft((d) => ({ ...d, valid_until: v }))} type="date" /><SmallSelect value={quoteDraft.status} onChange={(v) => setQuoteDraft((d) => ({ ...d, status: v }))} options={["草稿", "已发出", "已成交", "已失效"]} /></div></PanelCard><div className="overflow-x-auto rounded-xl border border-slate-200 bg-white"><table className="w-full text-left text-xs"><thead><tr className="border-b border-slate-200 bg-slate-50"><th className="px-4 py-2.5 font-semibold text-slate-600">报价单号</th><th className="px-4 py-2.5 font-semibold text-slate-600">客户</th><th className="px-4 py-2.5 font-semibold text-slate-600">标题 / 项目</th><th className="px-4 py-2.5 font-semibold text-slate-600">报价金额</th><th className="px-4 py-2.5 font-semibold text-slate-600">创建日期</th><th className="px-4 py-2.5 font-semibold text-slate-600">有效期至</th><th className="px-4 py-2.5 font-semibold text-slate-600">状态</th></tr></thead><tbody>{quotes.map((item) => <tr key={item.id} className="border-b border-slate-100 last:border-b-0"><td className="px-4 py-2.5 font-medium text-slate-700">{item.id}</td><td className="px-4 py-2.5 text-slate-700">{item.client_name}</td><td className="px-4 py-2.5 text-slate-500">{item.title}</td><td className="px-4 py-2.5 text-slate-700">{formatMoney(item.amount)}</td><td className="px-4 py-2.5 text-slate-500">{item.created_at}</td><td className="px-4 py-2.5 text-slate-500">{item.valid_until}</td><td className="px-4 py-2.5 text-slate-600">{item.status}</td></tr>)}</tbody></table></div></div> : <div className="space-y-4"><PanelCard title="新增作品展示"><div className="grid gap-2 sm:grid-cols-2 xl:grid-cols-5"><SmallInput value={showcaseDraft.name} onChange={(v) => setShowcaseDraft((d) => ({ ...d, name: v }))} placeholder="作品名称" /><SmallSelect value={showcaseDraft.category} onChange={(v) => setShowcaseDraft((d) => ({ ...d, category: v }))} options={["窗帘", "隔断", "雨棚", "扶手", "其他"]} /><SmallInput value={showcaseDraft.image_count} onChange={(v) => setShowcaseDraft((d) => ({ ...d, image_count: v }))} type="number" placeholder="图片数" /><SmallInput value={showcaseDraft.description} onChange={(v) => setShowcaseDraft((d) => ({ ...d, description: v }))} placeholder="描述" /><SmallSelect value={showcaseDraft.status} onChange={(v) => setShowcaseDraft((d) => ({ ...d, status: v }))} options={["待整理", "已发布", "隐藏"]} /></div></PanelCard><div className="overflow-x-auto rounded-xl border border-slate-200 bg-white"><table className="w-full text-left text-xs"><thead><tr className="border-b border-slate-200 bg-slate-50"><th className="px-4 py-2.5 font-semibold text-slate-600">作品名称</th><th className="px-4 py-2.5 font-semibold text-slate-600">类别</th><th className="px-4 py-2.5 font-semibold text-slate-600">图片数</th><th className="px-4 py-2.5 font-semibold text-slate-600">描述</th><th className="px-4 py-2.5 font-semibold text-slate-600">创建日期</th><th className="px-4 py-2.5 font-semibold text-slate-600">展示状态</th></tr></thead><tbody>{showcases.map((item) => <tr key={item.id} className="border-b border-slate-100 last:border-b-0"><td className="px-4 py-2.5 font-medium text-slate-700">{item.name}</td><td className="px-4 py-2.5 text-slate-600">{item.category}</td><td className="px-4 py-2.5 text-slate-600">{item.image_count}</td><td className="px-4 py-2.5 text-slate-500">{item.description ?? "-"}</td><td className="px-4 py-2.5 text-slate-500">{item.created_at}</td><td className="px-4 py-2.5 text-slate-600">{item.status}</td></tr>)}</tbody></table></div></div>}</div>;
 }
 
 // ─── Settings ────────────────────────────────────────────────────────────────
@@ -5327,6 +5503,7 @@ export default function DashboardBizPage() {
           )}
           {section === "quotes" && (
             <QuotesSection
+              clients={clients}
               quotes={quotes}
               setQuotes={setQuotes}
               showcases={showcases}
@@ -5344,7 +5521,11 @@ export default function DashboardBizPage() {
               setOrders={setOrders}
               appointments={appointments}
               setAppointments={setAppointments}
+              quotes={quotes}
+              setQuotes={setQuotes}
               setCashEntries={setCashEntries}
+              materials={materials}
+              setMaterials={setMaterials}
               purchases={purchases}
               setPurchases={setPurchases}
               settings={settings}

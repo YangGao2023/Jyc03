@@ -37,5 +37,5 @@ export async function PUT(request: Request) {
   };
 
   await writeBizStore(next);
-  return NextResponse.json({ ok: true, data: next });
+  return NextResponse.json({ ok: true, data: await readBizStore() });
 }

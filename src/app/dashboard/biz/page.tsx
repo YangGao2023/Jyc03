@@ -4888,24 +4888,23 @@ function ensureAttendanceRows(employees: EmployeeRecord[], attendances: Attendan
     });
   });
 
-  return next
-    .filter((item) => item.note !== "__deleted__")
-    .map((item) => {
-      const employee = employeeMap.get(item.employee_id || "") || employees.find((row) => row.name === item.employee_name);
-      const leaveMinutes = Math.max(0, Math.round(item.leave_minutes || 0));
-      const overtimeMinutes = Math.max(0, Math.round(item.overtime_minutes || 0));
-      const workedMinutes = calcWorkedMinutes(leaveMinutes, overtimeMinutes);
-      return {
-        ...item,
-        employee_id: employee?.id || item.employee_id,
-        employee_code: employee?.code || item.employee_code,
-        employee_name: employee?.name || item.employee_name,
-        leave_minutes: leaveMinutes,
-        overtime_minutes: overtimeMinutes,
-        worked_minutes: workedMinutes,
-        meal_allowance: workedMinutes > 300 ? Boolean(item.meal_allowance && employee?.meal_allowance_eligible !== false) : false,
-      };
-    });
+  return next.map((item) => {
+    if (item.note === "__deleted__") return item;
+    const employee = employeeMap.get(item.employee_id || "") || employees.find((row) => row.name === item.employee_name);
+    const leaveMinutes = Math.max(0, Math.round(item.leave_minutes || 0));
+    const overtimeMinutes = Math.max(0, Math.round(item.overtime_minutes || 0));
+    const workedMinutes = calcWorkedMinutes(leaveMinutes, overtimeMinutes);
+    return {
+      ...item,
+      employee_id: employee?.id || item.employee_id,
+      employee_code: employee?.code || item.employee_code,
+      employee_name: employee?.name || item.employee_name,
+      leave_minutes: leaveMinutes,
+      overtime_minutes: overtimeMinutes,
+      worked_minutes: workedMinutes,
+      meal_allowance: workedMinutes > 300 ? Boolean(item.meal_allowance && employee?.meal_allowance_eligible !== false) : false,
+    };
+  });
 }
 
 function EmployeesSection({ employees, setEmployees, attendances, setAttendances, payrolls, setPayrolls, expenses, setExpenses, settings, setSettings }: { employees: EmployeeRecord[]; setEmployees: React.Dispatch<React.SetStateAction<EmployeeRecord[]>>; attendances: AttendanceRecord[]; setAttendances: React.Dispatch<React.SetStateAction<AttendanceRecord[]>>; payrolls: PayrollRecord[]; setPayrolls: React.Dispatch<React.SetStateAction<PayrollRecord[]>>; expenses: ExpenseRecord[]; setExpenses: React.Dispatch<React.SetStateAction<ExpenseRecord[]>>; settings: BizSettings; setSettings: React.Dispatch<React.SetStateAction<BizSettings>>; }) {
@@ -4932,7 +4931,7 @@ function EmployeesSection({ employees, setEmployees, attendances, setAttendances
         ...item,
         code,
         ethnicity: item.ethnicity || "华人",
-        hourly_rate: item.hourly_rate ?? item.monthly_salary ?? 0,
+        hourly_rate: item.hourly_rate ?? 10,
         workdays: item.workdays?.length ? item.workdays : ["Mon", "Tue", "Wed", "Thu", "Fri"],
         meal_allowance_eligible: item.meal_allowance_eligible ?? true,
       };
@@ -4951,6 +4950,7 @@ function EmployeesSection({ employees, setEmployees, attendances, setAttendances
     .sort((a, b) => String(a.code || a.id).localeCompare(String(b.code || b.id))), [normalizedEmployees, profileEthnicityFilter]);
 
   const attendanceRows = useMemo(() => seededAttendances
+    .filter((item) => item.note !== "__deleted__")
     .filter((item) => item.date >= attendanceRange.start && item.date <= attendanceRange.end)
     .filter((item) => {
       if (attendanceEthnicityFilter === "全部") return true;
@@ -4963,7 +4963,7 @@ function EmployeesSection({ employees, setEmployees, attendances, setAttendances
     .filter((employee) => employee.status === "在职")
     .filter((employee) => payrollEthnicityFilter === "全部" || employee.ethnicity === payrollEthnicityFilter)
     .map((employee) => {
-      const rows = ensureAttendanceRows(normalizedEmployees, attendances, payrollRange, settings).filter((item) => (item.employee_id === employee.id || item.employee_name === employee.name) && item.date >= payrollRange.start && item.date <= payrollRange.end);
+      const rows = ensureAttendanceRows(normalizedEmployees, attendances, payrollRange, settings).filter((item) => item.note !== "__deleted__" && (item.employee_id === employee.id || item.employee_name === employee.name) && item.date >= payrollRange.start && item.date <= payrollRange.end);
       const totalMinutes = rows.reduce((sum, item) => sum + item.worked_minutes, 0);
       const mealCount = rows.filter((item) => item.meal_allowance).length;
       const hourlyRate = employee.hourly_rate || 0;
@@ -5000,7 +5000,7 @@ function EmployeesSection({ employees, setEmployees, attendances, setAttendances
     setEmployeeDraft({
       name: employee.name,
       phone: employee.phone || "",
-      hourly_rate: String(employee.hourly_rate ?? employee.monthly_salary ?? 0),
+      hourly_rate: String(employee.hourly_rate ?? 10),
       workdays: employee.workdays?.length ? employee.workdays : ["Mon", "Tue", "Wed", "Thu", "Fri"],
       meal_allowance_eligible: employee.meal_allowance_eligible ?? true,
       ethnicity: employee.ethnicity || "华人",
@@ -5020,8 +5020,8 @@ function EmployeesSection({ employees, setEmployees, attendances, setAttendances
       name: employeeDraft.name.trim(),
       position: employeeDraft.position || undefined,
       phone: employeeDraft.phone || undefined,
-      monthly_salary: Number(employeeDraft.hourly_rate) || 0,
-      hourly_rate: Number(employeeDraft.hourly_rate) || 0,
+      monthly_salary: current?.monthly_salary ?? 0,
+      hourly_rate: Number(employeeDraft.hourly_rate) || 10,
       workdays: employeeDraft.workdays,
       meal_allowance_eligible: employeeDraft.meal_allowance_eligible,
       ethnicity: employeeDraft.ethnicity,
@@ -5054,7 +5054,7 @@ function EmployeesSection({ employees, setEmployees, attendances, setAttendances
   function saveAttendanceDraft() {
     const employee = normalizedEmployees.find((item) => item.id === attendanceDraft.employee_id) || normalizedEmployees[0];
     if (!employee) return;
-    const duplicateExists = attendances.some((item) => item.date === attendanceDraft.date && (item.employee_id === employee.id || item.employee_name === employee.name));
+    const duplicateExists = attendances.some((item) => item.note !== "__deleted__" && item.date === attendanceDraft.date && (item.employee_id === employee.id || item.employee_name === employee.name));
     if (duplicateExists) {
       setAttendanceDraftError(`{employee.name} 在 ${attendanceDraft.date} 已有考勤，不能重复新增，请直接编辑原记录。`.replace("{employee.name}", employee.name));
       return;
@@ -5082,7 +5082,12 @@ function EmployeesSection({ employees, setEmployees, attendances, setAttendances
   }
 
   function deleteAttendance(id: string) {
-    setAttendances((prev) => prev.filter((item) => item.id !== id));
+    setAttendances((prev) => prev.map((item) => {
+      if (item.id !== id) return item;
+      return item.generated_by?.startsWith("auto-rule:")
+        ? { ...item, note: "__deleted__", meal_allowance: false }
+        : item;
+    }).filter((item) => item.id !== id || item.generated_by?.startsWith("auto-rule:")));
     setEditingAttendanceId((current) => current === id ? null : current);
     setConfirmingAttendanceId(null);
   }
@@ -5321,10 +5326,27 @@ function SettingsTextArea({
   return <div className="flex flex-col gap-1"><label className="text-xs font-semibold text-slate-600">{label}</label><textarea value={value} onChange={(e) => onChange(e.target.value)} rows={rows} className="w-full rounded-lg border border-slate-300 bg-white px-3 py-2 text-xs text-slate-700 focus:border-blue-400 focus:outline-none resize-none" />{note && <p className="text-[11px] text-slate-400">{note}</p>}</div>;
 }
 
-type SettingsTab = "company" | "finance" | "print" | "lists" | "attendance";
+type SettingsPageKey = "company-base" | "company-contact" | "finance" | "print" | "lists" | "attendance";
 
 function SettingsSection({ settings, setSettings, saveState }: { settings: BizSettings; setSettings: React.Dispatch<React.SetStateAction<BizSettings>>; saveState: "idle" | "saving" | "saved" | "error" | "conflict"; }) {
-  const [tab, setTab] = useState<SettingsTab>("company");
+  const pages: Array<{ key: SettingsPageKey; label: string; note: string }> = [
+    { key: "company-base", label: "1. 公司基础", note: "公司名称、地址和展示预览" },
+    { key: "company-contact", label: "2. 联系方式", note: "电话、邮箱、网站和 Logo" },
+    { key: "finance", label: "3. 财务收款", note: "税务默认值和收款方式" },
+    { key: "print", label: "4. 打印模板", note: "发票、领料单和页脚备注" },
+    { key: "lists", label: "5. 分类列表", note: "支出类型和供应商分类" },
+    { key: "attendance", label: "6. 考勤工资", note: "餐补和自动考勤规则" },
+  ];
+  const [page, setPage] = useState<SettingsPageKey>("company-base");
+  const [lastSavedAt, setLastSavedAt] = useState("");
+  const pageIndex = pages.findIndex((item) => item.key === page);
+  const currentPage = pages[pageIndex] ?? pages[0];
+
+  useEffect(() => {
+    if (saveState === "saved") {
+      setLastSavedAt(new Date().toLocaleTimeString("zh-CN", { hour12: false }));
+    }
+  }, [saveState]);
 
   const update = (key: keyof BizSettings, value: string) => {
     setSettings((prev) => ({
@@ -5345,7 +5367,7 @@ function SettingsSection({ settings, setSettings, saveState }: { settings: BizSe
         ? "border-sky-200 bg-sky-50 text-sky-700"
         : "border-slate-200 bg-slate-50 text-slate-600";
   const saveText = saveState === "saved"
-    ? "设置已保存成功"
+    ? `设置已保存成功${lastSavedAt ? ` · ${lastSavedAt}` : ""}`
     : saveState === "saving"
       ? "正在保存设置…"
       : saveState === "conflict"
@@ -5363,57 +5385,74 @@ function SettingsSection({ settings, setSettings, saveState }: { settings: BizSe
       />
 
       <div className={`rounded-xl border px-4 py-3 text-xs font-medium ${saveTone}`}>
-        {saveText}，你改完不用再猜，保存状态会直接在这里告诉你。
+        {saveText}，只要右上角出现“设置已保存成功”，就说明这次改动已经写进存储，不是只改了页面。
       </div>
 
-      <StatStrip
-        items={[
-          { label: "公司名", value: settings.company_name ? "已填" : "未填", accent: settings.company_name ? "text-emerald-600" : "text-amber-600" },
-          { label: "电话", value: settings.phone ? "已填" : "未填", accent: settings.phone ? "text-emerald-600" : "text-amber-600" },
-          { label: "打印标题", value: settings.invoice_title ? "已填" : "未填", accent: settings.invoice_title ? "text-emerald-600" : "text-amber-600" },
-          { label: "支出类型", value: expenseTypeValue.split(/\r?\n|,/).filter(Boolean).length.toString() },
-          { label: "供应商分类", value: supplierCategoryValue.split(/\r?\n|,/).filter(Boolean).length.toString() },
-        ]}
-      />
+      <div className="rounded-xl border border-slate-200 bg-white p-3">
+        <div className="flex flex-wrap items-center justify-between gap-2">
+          <div>
+            <p className="text-[11px] font-semibold text-slate-500">当前分页</p>
+            <p className="mt-1 text-sm font-semibold text-slate-900">{currentPage.label}</p>
+            <p className="mt-1 text-xs text-slate-500">{currentPage.note}</p>
+          </div>
+          <div className="flex items-center gap-2">
+            <ActionBtn onClick={() => setPage(pages[Math.max(0, pageIndex - 1)].key)}>{"← 上一页"}</ActionBtn>
+            <div className="rounded-lg border border-slate-200 px-3 py-1.5 text-xs font-semibold text-slate-600">第 {pageIndex + 1} / {pages.length} 页</div>
+            <ActionBtn onClick={() => setPage(pages[Math.min(pages.length - 1, pageIndex + 1)].key)}>{"下一页 →"}</ActionBtn>
+          </div>
+        </div>
+        <div className="mt-3 flex flex-wrap gap-2">
+          {pages.map((item) => (
+            <button
+              key={item.key}
+              onClick={() => setPage(item.key)}
+              className={`rounded-lg border px-3 py-1.5 text-xs font-semibold transition-colors ${page === item.key ? "border-blue-600 bg-blue-50 text-blue-700" : "border-slate-200 bg-white text-slate-600 hover:border-slate-300 hover:text-slate-900"}`}
+            >
+              {item.label}
+            </button>
+          ))}
+        </div>
+      </div>
 
-      <SegmentedControl
-        options={[
-          { key: "company", label: "公司信息" },
-          { key: "finance", label: "财务收款" },
-          { key: "print", label: "打印模板" },
-          { key: "lists", label: "分类列表" },
-          { key: "attendance", label: "考勤工资" },
-        ]}
-        value={tab}
-        onChange={(value) => setTab(value as SettingsTab)}
-      />
-
-      <div className="xl:max-h-[calc(100vh-18rem)] xl:overflow-y-auto xl:pr-1">
-        {tab === "company" ? (
+      <div className="min-h-[320px]">
+        {page === "company-base" ? (
           <div className="grid gap-3 xl:grid-cols-2">
-            <SettingsGroup title="基础信息">
+            <SettingsGroup title="公司基础">
               <SettingsField label="公司名称" value={settings.company_name} onChange={(value) => update("company_name", value)} />
               <SettingsField label="公司中文名" value={settings.company_name_zh ?? ""} onChange={(value) => update("company_name_zh", value)} />
               <SettingsField label="后台地址" value={settings.address} onChange={(value) => update("address", value)} />
               <SettingsField label="打印地址" value={settings.company_address ?? ""} onChange={(value) => update("company_address", value)} />
-              <SettingsField label="后台电话" value={settings.phone} onChange={(value) => update("phone", value)} />
-              <SettingsField label="打印电话" value={settings.phones ?? ""} onChange={(value) => update("phones", value)} />
-              <SettingsField label="电子邮箱" value={settings.email} onChange={(value) => update("email", value)} />
-              <SettingsField label="网站" value={settings.website} onChange={(value) => update("website", value)} />
             </SettingsGroup>
             <SettingsGroup title="页面预览">
               <div className="space-y-3 text-sm">
                 <div className="flex items-center justify-between"><span className="text-slate-500">公司名称</span><span className="max-w-[220px] text-right font-medium text-slate-900">{settings.company_name || "未填写"}</span></div>
                 <div className="flex items-center justify-between"><span className="text-slate-500">打印名称</span><span className="max-w-[220px] text-right font-medium text-slate-900">{settings.company_name_zh || settings.company_name || "未填写"}</span></div>
-                <div className="flex items-center justify-between"><span className="text-slate-500">联系电话</span><span className="max-w-[220px] text-right font-medium text-slate-900">{settings.phones || settings.phone || "未填写"}</span></div>
                 <div className="flex items-center justify-between"><span className="text-slate-500">展示地址</span><span className="max-w-[220px] text-right text-slate-900">{settings.company_address || settings.address || "未填写"}</span></div>
-                <div className="flex items-center justify-between"><span className="text-slate-500">Logo URL</span><span className="max-w-[220px] truncate text-right text-slate-900">{settings.logo_url || "未填写"}</span></div>
               </div>
             </SettingsGroup>
           </div>
         ) : null}
 
-        {tab === "finance" ? (
+        {page === "company-contact" ? (
+          <div className="grid gap-3 xl:grid-cols-2">
+            <SettingsGroup title="联系方式">
+              <SettingsField label="后台电话" value={settings.phone} onChange={(value) => update("phone", value)} />
+              <SettingsField label="打印电话" value={settings.phones ?? ""} onChange={(value) => update("phones", value)} />
+              <SettingsField label="电子邮箱" value={settings.email} onChange={(value) => update("email", value)} />
+              <SettingsField label="网站" value={settings.website} onChange={(value) => update("website", value)} />
+              <SettingsField label="Logo URL" value={settings.logo_url ?? ""} onChange={(value) => update("logo_url", value)} />
+            </SettingsGroup>
+            <SettingsGroup title="保存确认">
+              <div className="space-y-3 text-sm text-slate-600">
+                <p>你改完后，这一页会自动保存。</p>
+                <p>看到 <span className="font-semibold text-emerald-700">设置已保存成功</span>，表示服务端返回成功，不是本地假提示。</p>
+                <p>如果失败或冲突，这里会直接变成红色提示。</p>
+              </div>
+            </SettingsGroup>
+          </div>
+        ) : null}
+
+        {page === "finance" ? (
           <div className="grid gap-3 xl:grid-cols-2">
             <SettingsGroup title="税务与默认值">
               <SettingsField label="税号 (BN)" value={settings.tax_number} note="Business Number" onChange={(value) => update("tax_number", value)} />
@@ -5432,7 +5471,7 @@ function SettingsSection({ settings, setSettings, saveState }: { settings: BizSe
           </div>
         ) : null}
 
-        {tab === "print" ? (
+        {page === "print" ? (
           <div className="grid gap-3 xl:grid-cols-[0.95fr_1.05fr]">
             <SettingsGroup title="打印标题与素材">
               <SettingsField label="Invoice 标题" value={settings.invoice_title ?? "Invoice"} onChange={(value) => update("invoice_title", value)} />
@@ -5446,7 +5485,7 @@ function SettingsSection({ settings, setSettings, saveState }: { settings: BizSe
           </div>
         ) : null}
 
-        {tab === "lists" ? (
+        {page === "lists" ? (
           <div className="grid gap-3 xl:grid-cols-2">
             <SettingsGroup title="支出类型">
               <SettingsTextArea label="支出类型列表" value={expenseTypeValue} rows={8} onChange={(value) => update("expense_types", value)} note="一行一个，或者用逗号分隔。收支管理会直接读取这里。" />
@@ -5457,7 +5496,7 @@ function SettingsSection({ settings, setSettings, saveState }: { settings: BizSe
           </div>
         ) : null}
 
-        {tab === "attendance" ? (
+        {page === "attendance" ? (
           <div className="grid gap-3 xl:grid-cols-2">
             <SettingsGroup title="工资与餐补">
               <SettingsField label="餐补金额" value={String(settings.meal_allowance_amount ?? 15)} onChange={(value) => update("meal_allowance_amount", value)} type="number" />

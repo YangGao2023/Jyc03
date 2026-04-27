@@ -9,3 +9,8 @@ export function safeRead(filePath: string, fallback = "") {
     return fallback;
   }
 }
+
+export function parseLimit(raw: string | null, fallback = 20, max = 50) {
+  const parsed = Number(raw ?? fallback);
+  return Number.isFinite(parsed) ? Math.max(1, Math.min(max, parsed)) : fallback;
+}

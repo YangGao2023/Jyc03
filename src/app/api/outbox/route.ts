@@ -1,10 +1,6 @@
 import { NextResponse } from "next/server";
 import { consumeQueue, enqueueMessage, parseMessageBody, verifyBridgeRequest } from "@/lib/agent-bridge";
-
-function parseLimit(raw: string | null, fallback = 20) {
-  const parsed = Number(raw ?? fallback);
-  return Number.isFinite(parsed) ? Math.max(1, Math.min(50, parsed)) : fallback;
-}
+import { parseLimit } from "@/lib/fs-utils";
 
 export async function GET(request: Request) {
   try {

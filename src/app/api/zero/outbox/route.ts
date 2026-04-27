@@ -1,14 +1,10 @@
 import { NextResponse } from "next/server";
 import { consumeQueue, verifyBridgeRequest } from "@/lib/agent-bridge";
 import { readDiscussionThread } from "@/lib/discussion-store";
+import { parseLimit } from "@/lib/fs-utils";
 
 export const dynamic = "force-dynamic";
 export const revalidate = 0;
-
-function parseLimit(raw: string | null, fallback = 20) {
-  const parsed = Number(raw ?? fallback);
-  return Number.isFinite(parsed) ? Math.max(1, Math.min(50, parsed)) : fallback;
-}
 
 export async function GET(request: Request) {
   try {

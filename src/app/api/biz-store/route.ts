@@ -2,12 +2,13 @@ import { NextResponse } from "next/server";
 import { readBizStore, writeBizStore, type BizStoreSnapshot } from "@/lib/biz-store";
 
 export async function GET() {
-  return NextResponse.json({ ok: true, data: readBizStore() });
+  const data = await readBizStore();
+  return NextResponse.json({ ok: true, data });
 }
 
 export async function PUT(request: Request) {
   const body = (await request.json()) as Partial<BizStoreSnapshot>;
-  const current = readBizStore();
+  const current = await readBizStore();
 
   const next: BizStoreSnapshot = {
     orders: Array.isArray(body.orders) ? body.orders : current.orders,
@@ -27,6 +28,6 @@ export async function PUT(request: Request) {
     settings: body.settings ?? current.settings,
   };
 
-  writeBizStore(next);
+  await writeBizStore(next);
   return NextResponse.json({ ok: true, data: next });
 }

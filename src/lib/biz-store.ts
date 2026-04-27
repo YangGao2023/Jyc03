@@ -1,5 +1,4 @@
-import { existsSync, mkdirSync, readFileSync, writeFileSync } from "node:fs";
-import path from "node:path";
+import { kv } from "@vercel/kv";
 import seedOrders from "../data/biz-orders.json";
 import seedAssets from "../data/biz-assets.json";
 import type {
@@ -38,9 +37,7 @@ export type BizStoreSnapshot = {
   settings: BizSettings;
 };
 
-const DATA_DIR = process.env.VERCEL ? "/tmp" : process.cwd();
-const STORE_DIR = path.join(DATA_DIR, "state");
-const STORE_PATH = path.join(STORE_DIR, "biz-store.json");
+const KV_KEY = "biz-store";
 
 function buildSeedSnapshot(): BizStoreSnapshot {
   const assets = (seedAssets ?? {}) as Record<string, unknown>;
@@ -64,34 +61,29 @@ function buildSeedSnapshot(): BizStoreSnapshot {
   };
 }
 
-function ensureStoreDir() {
-  if (!existsSync(STORE_DIR)) {
-    mkdirSync(STORE_DIR, { recursive: true });
-  }
-}
+const seed = buildSeedSnapshot();
 
-export function readBizStore(): BizStoreSnapshot {
-  ensureStoreDir();
-
-  if (!existsSync(STORE_PATH)) {
-    const seed = buildSeedSnapshot();
-    writeBizStore(seed);
-    return seed;
-  }
-
+export async function readBizStore(): Promise<BizStoreSnapshot> {
   try {
-    const raw = readFileSync(STORE_PATH, "utf8");
-    return JSON.parse(raw) as BizStoreSnapshot;
+    const stored = await kv.get<BizStoreSnapshot>(KV_KEY);
+    if (stored) return stored;
   } catch {
-    const seed = buildSeedSnapshot();
-    writeBizStore(seed);
-    return seed;
+    // fall through to seed
+  }
+
+  // First time: seed and persist
+  try {
+    await kv.set(KV_KEY, seed);
+  } catch {
+    // best-effort seed persist
+  }
+  return seed;
+}
+
+export async function writeBizStore(snapshot: BizStoreSnapshot): Promise<void> {
+  try {
+    await kv.set(KV_KEY, snapshot);
+  } catch (err) {
+    console.error("[biz-store] redis write failed", err);
   }
 }
-
-export function writeBizStore(snapshot: BizStoreSnapshot) {
-  ensureStoreDir();
-  writeFileSync(STORE_PATH, JSON.stringify(snapshot, null, 2), "utf8");
-}
-
-export { STORE_PATH as BIZ_STORE_PATH };

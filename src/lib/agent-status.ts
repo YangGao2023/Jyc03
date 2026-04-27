@@ -44,6 +44,22 @@ let redisPromise: Promise<ReturnType<typeof createClient>> | null = null;
 
 type StatusStoreMap = Record<string, AgentStatus>;
 
+function parseStatusItem(raw: string): AgentStatus | null {
+  try {
+    return normalizeStatus(JSON.parse(raw) as AgentStatus);
+  } catch {
+    return null;
+  }
+}
+
+function parseHistoryItems(raw: string): AgentStatusHistoryPoint[] {
+  try {
+    return (JSON.parse(raw) as AgentStatusHistoryPoint[]).map((item) => normalizeHistoryPoint(item));
+  } catch {
+    return [];
+  }
+}
+
 function requiredEnv(name: string) {
   const value = process.env[name];
   if (!value) {
@@ -95,12 +111,16 @@ function parseLegacyStatusString(raw: string | null): StatusStoreMap {
     return {};
   }
 
-  const parsed = JSON.parse(raw) as AgentStatus[] | StatusStoreMap;
-  if (Array.isArray(parsed)) {
-    return Object.fromEntries(parsed.map((item) => [item.agent, normalizeStatus(item)]));
-  }
+  try {
+    const parsed = JSON.parse(raw) as AgentStatus[] | StatusStoreMap;
+    if (Array.isArray(parsed)) {
+      return Object.fromEntries(parsed.map((item) => [item.agent, normalizeStatus(item)]));
+    }
 
-  return Object.fromEntries(Object.entries(parsed).map(([key, value]) => [key, normalizeStatus(value)]));
+    return Object.fromEntries(Object.entries(parsed).map(([key, value]) => [key, normalizeStatus(value)]));
+  } catch {
+    return {} as StatusStoreMap;
+  }
 }
 
 async function readStatusMapForKey(client: Awaited<ReturnType<typeof redis>>, key: string) {
@@ -111,7 +131,11 @@ async function readStatusMapForKey(client: Awaited<ReturnType<typeof redis>>, ke
 
   if (keyType === "hash") {
     const raw = await client.hGetAll(key);
-    return Object.fromEntries(Object.entries(raw).map(([entryKey, value]) => [entryKey, normalizeStatus(JSON.parse(value) as AgentStatus)]));
+    return Object.fromEntries(
+      Object.entries(raw)
+        .map(([entryKey, value]) => [entryKey, parseStatusItem(value)] as const)
+        .filter((entry): entry is readonly [string, AgentStatus] => Boolean(entry[1])),
+    );
   }
 
   if (keyType === "string") {
@@ -132,9 +156,7 @@ async function readLegacyStatusMap(client: Awaited<ReturnType<typeof redis>>) {
 async function appendStatusHistory(client: Awaited<ReturnType<typeof redis>>, status: AgentStatus) {
   const capturedAt = status.updatedAt || new Date().toISOString();
   const existingRaw = await client.hGet(STATUS_HISTORY_KEY, status.agent);
-  const existing = existingRaw
-    ? (JSON.parse(existingRaw) as AgentStatusHistoryPoint[]).map((item) => normalizeHistoryPoint(item))
-    : [];
+  const existing = existingRaw ? parseHistoryItems(existingRaw) : [];
 
   const lastPoint = existing.at(-1);
   const capturedAtMs = Date.parse(capturedAt);
@@ -189,8 +211,7 @@ export async function readAgentStatusHistory(options?: { hours?: number; limitPe
 
   return Object.fromEntries(
     Object.entries(raw).map(([agent, value]) => {
-      const items = (JSON.parse(value) as AgentStatusHistoryPoint[])
-        .map((item) => normalizeHistoryPoint(item))
+      const items = parseHistoryItems(value)
         .filter((item) => {
           const ts = Date.parse(item.capturedAt);
           return Number.isFinite(ts) && ts >= cutoff;

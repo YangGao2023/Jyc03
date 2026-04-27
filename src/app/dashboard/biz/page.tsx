@@ -5006,7 +5006,9 @@ export default function DashboardBizPage() {
   const [settings, setSettings] = useState<BizSettings>(bizSettings);
   const [isHydrated, setIsHydrated] = useState(false);
   const [saveState, setSaveState] = useState<"idle" | "saving" | "saved" | "error">("idle");
-  const skipNextPersistRef = useRef(true);
+    const skipNextPersistRef = useRef(true);
+  const hasSavedSettingsRef = useRef(false);
+  const settingsSnapshotRef = useRef(JSON.stringify(bizSettings));
   const orderSummary = useMemo(() => summarizeOrders(orders), [orders]);
 
   useEffect(() => {
@@ -5032,7 +5034,9 @@ export default function DashboardBizPage() {
         setQuotes(payload.data.quotes ?? []);
         setShowcases(payload.data.showcases ?? []);
         setPrintArchives(payload.data.printArchives ?? []);
-        setSettings(payload.data.settings ?? bizSettings);
+                // Don't overwrite if user already made changes (saved)
+        const apiSettings = payload.data.settings ?? bizSettings;
+        setSettings(hasSavedSettingsRef.current ? (prev) => ({ ...apiSettings, ...prev }) : apiSettings);
       } catch {
         setSaveState("error");
         // Fallback: restore from localStorage backup
@@ -5102,6 +5106,7 @@ export default function DashboardBizPage() {
           body: JSON.stringify(snapshot),
         });
         setSaveState("saved");
+        hasSavedSettingsRef.current = true;
       } catch {
         setSaveState("error");
       }

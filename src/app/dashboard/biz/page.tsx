@@ -4701,20 +4701,7 @@ function EmployeesSection({ employees, setEmployees, attendances, setAttendances
   }
 
   function deleteAttendance(id: string) {
-    setAttendances((prev) => {
-      const current = prev.find((item) => item.id === id);
-      if (!current) return prev;
-      return prev.map((item) => item.id === id
-        ? {
-            ...item,
-            leave_minutes: 0,
-            overtime_minutes: 0,
-            worked_minutes: 0,
-            meal_allowance: false,
-            note: "__deleted__",
-          }
-        : item);
-    });
+    setAttendances((prev) => prev.filter((item) => item.id !== id));
     setEditingAttendanceId((current) => current === id ? null : current);
     setConfirmingAttendanceId(null);
   }

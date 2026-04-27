@@ -5248,7 +5248,7 @@ function SettingsTextArea({
   return <div className="flex flex-col gap-1"><label className="text-xs font-semibold text-slate-600">{label}</label><textarea value={value} onChange={(e) => onChange(e.target.value)} rows={rows} className="w-full rounded-lg border border-slate-300 bg-white px-3 py-2 text-xs text-slate-700 focus:border-blue-400 focus:outline-none resize-none" />{note && <p className="text-[11px] text-slate-400">{note}</p>}</div>;
 }
 
-type SettingsTab = "company" | "finance" | "print" | "lists";
+type SettingsTab = "company" | "finance" | "print" | "lists" | "attendance";
 
 function SettingsSection({ settings, setSettings, saveState }: { settings: BizSettings; setSettings: React.Dispatch<React.SetStateAction<BizSettings>>; saveState: "idle" | "saving" | "saved" | "error" | "conflict"; }) {
   const [tab, setTab] = useState<SettingsTab>("company");
@@ -5256,7 +5256,7 @@ function SettingsSection({ settings, setSettings, saveState }: { settings: BizSe
   const update = (key: keyof BizSettings, value: string) => {
     setSettings((prev) => ({
       ...prev,
-      [key]: key === "default_tax_rate" || key === "fiscal_start_month" || key === "quote_valid_days"
+      [key]: key === "default_tax_rate" || key === "fiscal_start_month" || key === "quote_valid_days" || key === "meal_allowance_amount" || key === "auto_attendance_default_minutes"
         ? Number(value) || 0
         : value,
     }));
@@ -5309,6 +5309,7 @@ function SettingsSection({ settings, setSettings, saveState }: { settings: BizSe
           { key: "finance", label: "财务收款" },
           { key: "print", label: "打印模板" },
           { key: "lists", label: "分类列表" },
+          { key: "attendance", label: "考勤工资" },
         ]}
         value={tab}
         onChange={(value) => setTab(value as SettingsTab)}
@@ -5379,6 +5380,20 @@ function SettingsSection({ settings, setSettings, saveState }: { settings: BizSe
             </SettingsGroup>
             <SettingsGroup title="供应商分类">
               <SettingsTextArea label="供应商分类列表" value={supplierCategoryValue} rows={8} onChange={(value) => update("supplier_categories", value)} note="一行一个，或者用逗号分隔。供应商新增/编辑会直接读取这里。" />
+            </SettingsGroup>
+          </div>
+        ) : null}
+
+        {tab === "attendance" ? (
+          <div className="grid gap-3 xl:grid-cols-2">
+            <SettingsGroup title="工资与餐补">
+              <SettingsField label="餐补金额" value={String(settings.meal_allowance_amount ?? 15)} onChange={(value) => update("meal_allowance_amount", value)} type="number" />
+              <SettingsField label="自动默认工时(分钟)" value={String(settings.auto_attendance_default_minutes ?? 600)} onChange={(value) => update("auto_attendance_default_minutes", value)} type="number" />
+            </SettingsGroup>
+            <SettingsGroup title="自动考勤">
+              <SettingsField label="时区" value={settings.auto_attendance_timezone ?? "America/New_York"} onChange={(value) => update("auto_attendance_timezone", value)} />
+              <SettingsField label="执行时间" value={settings.auto_attendance_run_time ?? "01:00"} onChange={(value) => update("auto_attendance_run_time", value)} />
+              <SettingsTextArea label="自动备注" value={settings.auto_attendance_note ?? ""} rows={5} onChange={(value) => update("auto_attendance_note", value)} note="用于自动生成考勤时附带说明，可留空。" />
             </SettingsGroup>
           </div>
         ) : null}

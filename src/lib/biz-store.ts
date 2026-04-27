@@ -783,26 +783,89 @@ async function sqliteWrite(snapshot: BizStoreSnapshot): Promise<void> {
   syncToRedis(snapshot).catch(() => {});
 }
 
-// ─── Redis implementation (Vercel) ────────────────────────────────────────────
+// ─── Redis implementation (Vercel / raw REDIS_URL) ───────────────────────────
 
 const KV_KEY = "biz-store";
+let redisUrlClientPromise: Promise<{
+  get: (key: string) => Promise<string | null>;
+  set: (key: string, value: string) => Promise<unknown>;
+}> | null = null;
 
-async function redisRead(): Promise<BizStoreSnapshot> {
+async function kvRead(): Promise<BizStoreSnapshot> {
   const { kv } = await import("@vercel/kv");
   const stored = await kv.get<Partial<BizStoreSnapshot>>(KV_KEY);
   if (stored) return normalizeSnapshot(stored);
 
-  // First time: seed from static data
   const seed = await buildSeedDefault();
   await kv.set(KV_KEY, seed).catch(() => {});
   return seed;
 }
 
-async function redisWrite(snapshot: BizStoreSnapshot): Promise<void> {
+async function kvWrite(snapshot: BizStoreSnapshot): Promise<void> {
   const { kv } = await import("@vercel/kv");
   await kv.set(KV_KEY, snapshot).catch((err: unknown) =>
     console.error("[biz-store] redis write failed", err)
   );
+}
+
+async function getRedisUrlClient() {
+  if (!process.env.REDIS_URL) {
+    throw new Error("[biz-store] Missing REDIS_URL");
+  }
+
+  if (!redisUrlClientPromise) {
+    redisUrlClientPromise = (async () => {
+      const { createClient } = await import("redis");
+      const client = createClient({ url: process.env.REDIS_URL });
+      client.on("error", (err) => {
+        console.error("[biz-store] raw redis client error", err);
+      });
+      if (!client.isOpen) await client.connect();
+      return client;
+    })().catch((err) => {
+      redisUrlClientPromise = null;
+      throw err;
+    });
+  }
+
+  return redisUrlClientPromise;
+}
+
+async function redisUrlRead(): Promise<BizStoreSnapshot> {
+  const client = await getRedisUrlClient();
+  const raw = await client.get(KV_KEY);
+  if (raw) {
+    return normalizeSnapshot(JSON.parse(raw) as Partial<BizStoreSnapshot>);
+  }
+
+  const seed = await buildSeedDefault();
+  await client.set(KV_KEY, JSON.stringify(seed));
+  return seed;
+}
+
+async function redisUrlWrite(snapshot: BizStoreSnapshot): Promise<void> {
+  const client = await getRedisUrlClient();
+  await client.set(KV_KEY, JSON.stringify(snapshot));
+}
+
+async function redisRead(): Promise<BizStoreSnapshot> {
+  if (process.env.KV_REST_API_URL && process.env.KV_REST_API_TOKEN) {
+    return kvRead();
+  }
+  if (process.env.REDIS_URL) {
+    return redisUrlRead();
+  }
+  throw new Error("[biz-store] Missing Redis environment variables");
+}
+
+async function redisWrite(snapshot: BizStoreSnapshot): Promise<void> {
+  if (process.env.KV_REST_API_URL && process.env.KV_REST_API_TOKEN) {
+    await kvWrite(snapshot);
+  } else if (process.env.REDIS_URL) {
+    await redisUrlWrite(snapshot);
+  } else {
+    throw new Error("[biz-store] Missing Redis environment variables");
+  }
 
   // Local backup: sync to SQLite when running locally with Redis
   if (!process.env.VERCEL) {

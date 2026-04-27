@@ -122,6 +122,8 @@ function migrate(db: Database.Database) {
       expense_date TEXT NOT NULL,
       remark TEXT,
       office INTEGER DEFAULT 0,
+      source_type TEXT,
+      source_id TEXT,
       updated_at TEXT DEFAULT (datetime('now'))
     );
 
@@ -131,6 +133,9 @@ function migrate(db: Database.Database) {
       amount REAL NOT NULL DEFAULT 0,
       date TEXT NOT NULL,
       note TEXT,
+      order_number TEXT,
+      source_type TEXT,
+      source_id TEXT,
       updated_at TEXT DEFAULT (datetime('now'))
     );
 
@@ -271,7 +276,25 @@ function migrate(db: Database.Database) {
       summary TEXT,
       updated_at TEXT DEFAULT (datetime('now'))
     );
+
+    CREATE TABLE IF NOT EXISTS store_meta (
+      id INTEGER PRIMARY KEY CHECK(id = 1),
+      revision TEXT NOT NULL,
+      updated_at TEXT DEFAULT (datetime('now'))
+    );
   `);
+
+  ensureColumn(db, "expenses", "source_type", "TEXT");
+  ensureColumn(db, "expenses", "source_id", "TEXT");
+  ensureColumn(db, "cash_entries", "order_number", "TEXT");
+  ensureColumn(db, "cash_entries", "source_type", "TEXT");
+  ensureColumn(db, "cash_entries", "source_id", "TEXT");
+}
+
+function ensureColumn(db: Database.Database, table: string, column: string, definition: string) {
+  const existing = db.prepare(`PRAGMA table_info(${table})`).all() as Array<{ name: string }>;
+  if (existing.some((item) => item.name === column)) return;
+  db.exec(`ALTER TABLE ${table} ADD COLUMN ${column} ${definition}`);
 }
 
 // ─── Row mapping helpers ─────────────────────────────────────────────────────

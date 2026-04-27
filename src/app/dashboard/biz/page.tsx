@@ -63,6 +63,44 @@ function monthIso() {
   return todayIso().slice(0, 7);
 }
 
+function escapeRegExp(value: string) {
+  return value.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
+}
+
+function textHasExactOrderNumber(value: string | undefined, orderNumber: string) {
+  if (!value?.trim()) return false;
+  const pattern = new RegExp(`(^|[^A-Za-z0-9-])${escapeRegExp(orderNumber)}([^A-Za-z0-9-]|$)`, "i");
+  return pattern.test(value);
+}
+
+function expenseReferencesOrder(item: ExpenseRecord, orderNumber: string) {
+  return [item.target, item.detail, item.remark ?? ""].some((value) => textHasExactOrderNumber(value, orderNumber));
+}
+
+function cashEntryReferencesOrder(item: CashEntry, orderNumber: string) {
+  return item.order_number === orderNumber || textHasExactOrderNumber(item.note, orderNumber);
+}
+
+function nextSequentialId(values: string[], prefix: string, width = 3) {
+  const pattern = new RegExp(`^${escapeRegExp(prefix)}-(\\d+)$`);
+  const max = values.reduce((current, value) => {
+    const match = pattern.exec(value);
+    const next = match ? Number(match[1]) : 0;
+    return Math.max(current, Number.isFinite(next) ? next : 0);
+  }, 0);
+  return `${prefix}-${String(max + 1).padStart(width, "0")}`;
+}
+
+function nextYearScopedId(values: string[], prefix: string, year: number, width = 3, offset = 1) {
+  const pattern = new RegExp(`^${escapeRegExp(prefix)}-${year}-(\\d+)$`);
+  const max = values.reduce((current, value) => {
+    const match = pattern.exec(value);
+    const next = match ? Number(match[1]) : 0;
+    return Math.max(current, Number.isFinite(next) ? next : 0);
+  }, 0);
+  return `${prefix}-${year}-${String(max + offset).padStart(width, "0")}`;
+}
+
 function addDaysIso(base: string, days: number) {
   const value = new Date(`${base}T00:00:00`);
   value.setDate(value.getDate() + days);
@@ -1269,10 +1307,28 @@ function OrderDetailView({
       status,
     });
     if (paymentMode === "payment" && newPayment.office) {
-      onOfficeEntry({ id: `CASH-${new Date().getFullYear()}-${Math.random().toString(36).slice(2, 8).toUpperCase()}`, type: "收入", amount, date: newPayment.date, note: `${order.order_number} 办公室收款` });
+      onOfficeEntry({
+        id: `CASH-${new Date().getFullYear()}-${Math.random().toString(36).slice(2, 8).toUpperCase()}`,
+        type: "收入",
+        amount,
+        date: newPayment.date,
+        note: `${order.order_number} 办公室收款`,
+        order_number: order.order_number,
+        source_type: "order-payment",
+        source_id: `${order.order_number}:${newPayment.date}:${amount}:payment`,
+      });
     }
     if (paymentMode === "refund" && newPayment.office) {
-      onOfficeEntry({ id: `CASH-${new Date().getFullYear()}-${Math.random().toString(36).slice(2, 8).toUpperCase()}`, type: "支出", amount, date: newPayment.date, note: `${order.order_number} 办公室退款` });
+      onOfficeEntry({
+        id: `CASH-${new Date().getFullYear()}-${Math.random().toString(36).slice(2, 8).toUpperCase()}`,
+        type: "支出",
+        amount,
+        date: newPayment.date,
+        note: `${order.order_number} 办公室退款`,
+        order_number: order.order_number,
+        source_type: "order-refund",
+        source_id: `${order.order_number}:${newPayment.date}:${amount}:refund`,
+      });
     }
     setNewPayment({ date: today, amount: "", method: "现金", note: "", office: false });
     setShowAddPayment(false);
@@ -1663,11 +1719,7 @@ function NewOrderModal({
     if (!fields.client_name.trim()) return;
     const prefix = type === "定制单" ? "C" : "W";
     const year = new Date().getFullYear();
-    const existing = existingOrders.filter((o) =>
-      o.order_number.startsWith(`${prefix}-${year}-`)
-    );
-    const nextNum = existing.length + 1;
-    const orderNumber = `${prefix}-${year}-${String(nextNum).padStart(4, "0")}`;
+    const orderNumber = nextYearScopedId(existingOrders.map((item) => item.order_number), prefix, year, 4);
 
     const totalPrice = Number(fields.total_price) || 0;
     const deposit = Number(fields.deposit) || 0;
@@ -1902,14 +1954,23 @@ function OrdersSection({
     setOrders((prev) => [newOrder, ...prev]);
     const depositRecord = newOrder.payment_history?.[0];
     if (depositRecord?.office) {
-      setCashEntries((prev) => [{ id: `CASH-${new Date().getFullYear()}-${String(prev.length + 1).padStart(3, "0")}`, type: "收入", amount: depositRecord.amount, date: depositRecord.date, note: `${newOrder.order_number} 新单定金` }, ...prev]);
+      setCashEntries((prev) => [{
+        id: nextYearScopedId(prev.map((item) => item.id), "CASH", new Date().getFullYear()),
+        type: "收入",
+        amount: depositRecord.amount,
+        date: depositRecord.date,
+        note: `${newOrder.order_number} 新单定金`,
+        order_number: newOrder.order_number,
+        source_type: "order-deposit",
+        source_id: `${newOrder.order_number}:deposit`,
+      }, ...prev]);
     }
   }
 
   function handleDelete(orderNumber: string) {
     setOrders((prev) => prev.filter((o) => o.order_number !== orderNumber));
-    setExpenses((prev) => prev.filter((item) => ![item.target, item.detail, item.remark ?? ""].some((value) => value.includes(orderNumber))));
-    setCashEntries((prev) => prev.filter((item) => !(item.note ?? "").includes(orderNumber)));
+    setExpenses((prev) => prev.filter((item) => !expenseReferencesOrder(item, orderNumber)));
+    setCashEntries((prev) => prev.filter((item) => !cashEntryReferencesOrder(item, orderNumber)));
     setSelectedOrderNumbers((prev) => prev.filter((item) => item !== orderNumber));
     setDeleteConfirm(null);
   }
@@ -2025,8 +2086,8 @@ function OrdersSection({
     }
     setBulkBusy(true);
     setOrders((prev) => prev.filter((order) => !selectedOrderNumbers.includes(order.order_number)));
-    setExpenses((prev) => prev.filter((item) => !selectedOrderNumbers.some((orderNumber) => [item.target, item.detail, item.remark ?? ""].some((value) => value.includes(orderNumber)))));
-    setCashEntries((prev) => prev.filter((item) => !selectedOrderNumbers.some((orderNumber) => (item.note ?? "").includes(orderNumber))));
+    setExpenses((prev) => prev.filter((item) => !selectedOrderNumbers.some((orderNumber) => expenseReferencesOrder(item, orderNumber))));
+    setCashEntries((prev) => prev.filter((item) => !selectedOrderNumbers.some((orderNumber) => cashEntryReferencesOrder(item, orderNumber))));
     setSelectedOrderNumbers([]);
     setBulkBusy(false);
     setBulkAction(null);
@@ -2786,7 +2847,16 @@ function FinanceSection({ orders, setOrders, expenses, setExpenses, cashEntries,
       }),
     );
     if (quickPayFields.office) {
-      setCashEntries((prev) => [{ id: `CASH-${new Date().getFullYear()}-${String(prev.length + 1).padStart(3, "0")}`, type: "收入", amount, date: quickPayFields.date, note: `${orderNumber} 办公室收款` }, ...prev]);
+      setCashEntries((prev) => [{
+        id: nextYearScopedId(prev.map((item) => item.id), "CASH", new Date().getFullYear()),
+        type: "收入",
+        amount,
+        date: quickPayFields.date,
+        note: `${orderNumber} 办公室收款`,
+        order_number: orderNumber,
+        source_type: "order-payment",
+        source_id: `${orderNumber}:${quickPayFields.date}:${amount}:quick-pay`,
+      }, ...prev]);
     }
     setQuickPayTarget(null);
     setQuickPayFields({ date: today, amount: "", method: "现金", note: "", office: false });
@@ -2803,12 +2873,69 @@ function FinanceSection({ orders, setOrders, expenses, setExpenses, cashEntries,
     const amount = Number(draft.amount) || 0;
     if (!draft.target.trim() || !draft.detail.trim() || amount <= 0) return;
     if (editingExpenseId) {
-      setExpenses((prev) => prev.map((item) => item.id === editingExpenseId ? { ...item, target: draft.target.trim(), detail: draft.detail.trim(), amount, expense_type: draft.expense_type, payment_method: draft.payment_method, expense_date: draft.expense_date, remark: draft.remark || undefined, office: expenseFromOffice } : item));
+      const nextExpense: ExpenseRecord = {
+        ...(expenses.find((item) => item.id === editingExpenseId) ?? { id: editingExpenseId }),
+        id: editingExpenseId,
+        target: draft.target.trim(),
+        detail: draft.detail.trim(),
+        amount,
+        expense_type: draft.expense_type,
+        payment_method: draft.payment_method,
+        expense_date: draft.expense_date,
+        remark: draft.remark || undefined,
+        office: expenseFromOffice,
+      };
+      setExpenses((prev) => prev.map((item) => item.id === editingExpenseId ? nextExpense : item));
+      setCashEntries((prev) => {
+        const linked = prev.find((item) => item.source_type === "expense" && item.source_id === editingExpenseId);
+        if (!expenseFromOffice) {
+          return prev.filter((item) => !(item.source_type === "expense" && item.source_id === editingExpenseId));
+        }
+        if (linked) {
+          return prev.map((item) => item.id === linked.id
+            ? {
+                ...item,
+                type: "支出",
+                amount,
+                date: draft.expense_date,
+                note: `${nextExpense.target} · ${nextExpense.detail}`,
+              }
+            : item);
+        }
+        return [{
+          id: nextYearScopedId(prev.map((item) => item.id), "CASH", new Date().getFullYear()),
+          type: "支出",
+          amount,
+          date: draft.expense_date,
+          note: `${nextExpense.target} · ${nextExpense.detail}`,
+          source_type: "expense",
+          source_id: editingExpenseId,
+        }, ...prev];
+      });
     } else {
-      const record: ExpenseRecord = { id: `EXP-${new Date().getFullYear()}-${String(expenses.length + 1).padStart(3, "0")}`, target: draft.target.trim(), detail: draft.detail.trim(), amount, expense_type: draft.expense_type, payment_method: draft.payment_method, expense_date: draft.expense_date, remark: draft.remark || undefined, office: expenseFromOffice };
+      const expenseId = nextYearScopedId(expenses.map((item) => item.id), "EXP", new Date().getFullYear());
+      const record: ExpenseRecord = {
+        id: expenseId,
+        target: draft.target.trim(),
+        detail: draft.detail.trim(),
+        amount,
+        expense_type: draft.expense_type,
+        payment_method: draft.payment_method,
+        expense_date: draft.expense_date,
+        remark: draft.remark || undefined,
+        office: expenseFromOffice,
+      };
       setExpenses((prev) => [record, ...prev]);
       if (expenseFromOffice) {
-        setCashEntries((prev) => [{ id: `CASH-${new Date().getFullYear()}-${String(prev.length + 1).padStart(3, "0")}`, type: "支出", amount, date: draft.expense_date, note: `${record.target} · ${record.detail}` }, ...prev]);
+        setCashEntries((prev) => [{
+          id: nextYearScopedId(prev.map((item) => item.id), "CASH", new Date().getFullYear()),
+          type: "支出",
+          amount,
+          date: draft.expense_date,
+          note: `${record.target} · ${record.detail}`,
+          source_type: "expense",
+          source_id: expenseId,
+        }, ...prev]);
       }
     }
     setEditingExpenseId(null);
@@ -2820,6 +2947,7 @@ function FinanceSection({ orders, setOrders, expenses, setExpenses, cashEntries,
   function deleteExpense(expenseId: string) {
     const removedExpense = expenses.find((item) => item.id === expenseId);
     setExpenses((prev) => prev.filter((item) => item.id !== expenseId));
+    setCashEntries((prev) => prev.filter((item) => !(item.source_type === "expense" && item.source_id === expenseId)));
     if (removedExpense?.expense_type === "工资") {
       setPayrolls((prev) => prev.map((item) => item.expense_id === expenseId
         ? {
@@ -2836,7 +2964,7 @@ function FinanceSection({ orders, setOrders, expenses, setExpenses, cashEntries,
   function addOfficeTransfer() {
     const amount = Number(officeTransferDraft.amount) || 0;
     if (amount <= 0) return;
-    setCashEntries((prev) => [{ id: `CASH-${new Date().getFullYear()}-${String(prev.length + 1).padStart(3, "0")}`, type: officeTransferDraft.type, amount, date: officeTransferDraft.date, note: officeTransferDraft.note || undefined }, ...prev]);
+    setCashEntries((prev) => [{ id: nextYearScopedId(prev.map((item) => item.id), "CASH", new Date().getFullYear()), type: officeTransferDraft.type, amount, date: officeTransferDraft.date, note: officeTransferDraft.note || undefined, source_type: "office-transfer", source_id: `${officeTransferDraft.type}:${officeTransferDraft.date}:${amount}` }, ...prev]);
     setOfficeTransferDraft({ type: "转入", amount: "", date: today, note: "" });
     setShowOfficeTransferModal(false);
   }
@@ -3195,7 +3323,7 @@ function ClientsSection({ clients, setClients, suppliers, setSuppliers, orders, 
       }
       setSelectedClientId(editingClientId);
     } else {
-      const newId = `CL-${String(clients.length + 1).padStart(3, "0")}`;
+      const newId = nextSequentialId(clients.map((item) => item.id), "CL");
       setClients((prev) => [{ id: newId, name: clientDraft.name.trim(), contact: clientDraft.contact || undefined, phone: clientDraft.phone || undefined, wechat: clientDraft.wechat || undefined, address: clientDraft.address || undefined, note: clientDraft.note || undefined, created_at: today, balance: 0, is_vip: false }, ...prev]);
       setSelectedClientId(newId);
     }
@@ -3221,7 +3349,7 @@ function ClientsSection({ clients, setClients, suppliers, setSuppliers, orders, 
     if (editingSupplierId) {
       setSuppliers((prev) => prev.map((item) => item.id === editingSupplierId ? { ...item, name: supplierDraft.name.trim(), category: supplierDraft.category, contact_person: supplierDraft.contact_person || undefined, phone: supplierDraft.phone || undefined, email: supplierDraft.email || undefined, website: supplierDraft.website || undefined, address: supplierDraft.address || undefined, remark: supplierDraft.remark || undefined } : item));
     } else {
-      setSuppliers((prev) => [{ id: `SUP-${String(prev.length + 1).padStart(3, "0")}`, name: supplierDraft.name.trim(), category: supplierDraft.category, contact_person: supplierDraft.contact_person || undefined, phone: supplierDraft.phone || undefined, email: supplierDraft.email || undefined, website: supplierDraft.website || undefined, address: supplierDraft.address || undefined, remark: supplierDraft.remark || undefined, last_purchase_date: today }, ...prev]);
+      setSuppliers((prev) => [{ id: nextSequentialId(prev.map((item) => item.id), "SUP"), name: supplierDraft.name.trim(), category: supplierDraft.category, contact_person: supplierDraft.contact_person || undefined, phone: supplierDraft.phone || undefined, email: supplierDraft.email || undefined, website: supplierDraft.website || undefined, address: supplierDraft.address || undefined, remark: supplierDraft.remark || undefined, last_purchase_date: today }, ...prev]);
     }
     setSupplierDraft({ name: "", category: supplierCategoryOptions[0] ?? "布料", contact_person: "", phone: "", email: "", website: "", address: "", remark: "" });
     setEditingSupplierId(null);
@@ -3247,9 +3375,10 @@ function ClientsSection({ clients, setClients, suppliers, setSuppliers, orders, 
   function addSupplierPurchase() {
     const amount = Number(supplierPurchaseDraft.amount) || 0;
     if (!supplierPurchaseDraft.supplier || amount <= 0) return;
-    setPurchases((prev) => [{ id: `PO-${new Date().getFullYear()}-${String(prev.length + 1).padStart(3, "0")}`, supplier: supplierPurchaseDraft.supplier, item_name: supplierPurchaseDraft.detail.trim() || "采购支出", quantity: 1, unit: "笔", unit_price: amount, total_amount: amount, purchase_date: supplierPurchaseDraft.purchase_date, status: supplierPurchaseDraft.payment_method }, ...prev]);
+    const purchaseId = nextYearScopedId(purchases.map((item) => item.id), "PO", new Date().getFullYear());
+    setPurchases((prev) => [{ id: purchaseId, supplier: supplierPurchaseDraft.supplier, item_name: supplierPurchaseDraft.detail.trim() || "采购支出", quantity: 1, unit: "笔", unit_price: amount, total_amount: amount, purchase_date: supplierPurchaseDraft.purchase_date, status: supplierPurchaseDraft.payment_method }, ...prev]);
     if (supplierPurchaseDraft.office) {
-      setCashEntries((prev) => [{ id: `CASH-${new Date().getFullYear()}-${String(prev.length + 1).padStart(3, "0")}`, type: "转出", amount, date: supplierPurchaseDraft.purchase_date, note: supplierPurchaseDraft.note || `${supplierPurchaseDraft.supplier} 采购支出` }, ...prev]);
+      setCashEntries((prev) => [{ id: nextYearScopedId(prev.map((item) => item.id), "CASH", new Date().getFullYear()), type: "转出", amount, date: supplierPurchaseDraft.purchase_date, note: supplierPurchaseDraft.note || `${supplierPurchaseDraft.supplier} 采购支出`, source_type: "purchase", source_id: purchaseId }, ...prev]);
     }
     setShowSupplierPurchaseModal(false);
   }
@@ -3403,11 +3532,14 @@ function ClientsSection({ clients, setClients, suppliers, setSuppliers, orders, 
     setClients(repaired.fixedClients);
     if (quickCollectDraft.office) {
       setCashEntries((prev) => [{
-        id: `CASH-${new Date().getFullYear()}-${String(prev.length + 1).padStart(3, "0")}`,
+        id: nextYearScopedId(prev.map((item) => item.id), "CASH", new Date().getFullYear()),
         type: "收入",
         amount: Number(amount.toFixed(2)),
         date: quickCollectDraft.date,
         note: `${selectedClient.name} ${selectedCollectOrder.order_number} 收款`,
+        order_number: selectedCollectOrder.order_number,
+        source_type: "order-payment",
+        source_id: `${selectedCollectOrder.order_number}:${quickCollectDraft.date}:${Number(amount.toFixed(2))}:client-center`,
       }, ...prev]);
     }
     setQuickCollectDraft((prev) => ({
@@ -4033,7 +4165,7 @@ function getCommittedMaterialMap(materials: MaterialRecord[], orders: BizOrder[]
   return committed;
 }
 
-function MaterialsSection({ materials, setMaterials, purchases, setPurchases, suppliers, orders, setExpenses }: { materials: MaterialRecord[]; setMaterials: React.Dispatch<React.SetStateAction<MaterialRecord[]>>; purchases: PurchaseRecord[]; setPurchases: React.Dispatch<React.SetStateAction<PurchaseRecord[]>>; suppliers: SupplierRecord[]; orders: BizOrder[]; setExpenses: React.Dispatch<React.SetStateAction<ExpenseRecord[]>>; }) {
+function MaterialsSection({ materials, setMaterials, purchases, setPurchases, suppliers, orders, setExpenses, setCashEntries }: { materials: MaterialRecord[]; setMaterials: React.Dispatch<React.SetStateAction<MaterialRecord[]>>; purchases: PurchaseRecord[]; setPurchases: React.Dispatch<React.SetStateAction<PurchaseRecord[]>>; suppliers: SupplierRecord[]; orders: BizOrder[]; setExpenses: React.Dispatch<React.SetStateAction<ExpenseRecord[]>>; setCashEntries: React.Dispatch<React.SetStateAction<CashEntry[]>>; }) {
   const [sub, setSub] = useState<MaterialSub>("inventory");
   const today = new Date().toISOString().slice(0, 10);
   const [editingMaterialId, setEditingMaterialId] = useState<string | null>(null);
@@ -4070,7 +4202,7 @@ function MaterialsSection({ materials, setMaterials, purchases, setPurchases, su
     const weight = Number(materialDraft.weight) || 1;
     const usdCost = Number(materialDraft.usd_cost) || calcUsdCost(factoryPrice, weight);
     const salePrice = Number(materialDraft.sale_price_usd) || 0;
-    const nextItem = { id: editingMaterialId || `MAT-${String(materials.length + 1).padStart(3, "0")}`, code: materialDraft.code.trim(), name: materialDraft.name.trim(), specification: materialDraft.specification || undefined, size: materialDraft.size || undefined, unit: materialDraft.unit, stock_quantity: Number(materialDraft.stock_quantity) || 0, min_stock: 0, factory_price_rmb: factoryPrice, usd_cost: usdCost, sale_price_usd: salePrice, weight, purchase_price: usdCost, supplier: materialDraft.supplier || undefined, image: materialDraft.image || undefined, last_stock_date: today, remark: materialDraft.remark || undefined } satisfies MaterialRecord;
+    const nextItem = { id: editingMaterialId || nextSequentialId(materials.map((item) => item.id), "MAT"), code: materialDraft.code.trim(), name: materialDraft.name.trim(), specification: materialDraft.specification || undefined, size: materialDraft.size || undefined, unit: materialDraft.unit, stock_quantity: Number(materialDraft.stock_quantity) || 0, min_stock: 0, factory_price_rmb: factoryPrice, usd_cost: usdCost, sale_price_usd: salePrice, weight, purchase_price: usdCost, supplier: materialDraft.supplier || undefined, image: materialDraft.image || undefined, last_stock_date: today, remark: materialDraft.remark || undefined } satisfies MaterialRecord;
     if (editingMaterialId) {
       setMaterials((prev) => prev.map((item) => item.id === editingMaterialId ? nextItem : item));
       setInventoryHint(`已更新物料 ${nextItem.name}。`);
@@ -4096,6 +4228,7 @@ function MaterialsSection({ materials, setMaterials, purchases, setPurchases, su
   function deletePurchase(id: string) {
     const removed = purchases.find((item) => item.id === id);
     setPurchases((prev) => prev.filter((item) => item.id !== id));
+    setCashEntries((prev) => prev.filter((item) => !(item.source_type === "purchase" && item.source_id === id)));
     if (removed?.expense_id) {
       setExpenses((prev) => prev.filter((item) => item.id !== removed.expense_id));
     } else if (removed) {
@@ -4358,7 +4491,7 @@ function AppointmentsSection({ appointments, setAppointments, clients, prefillCl
   function addAppointment() {
     if (!draft.client_name.trim() || !draft.appointment_date) return;
     setAppointments((prev) => [{
-      id: `APT-${new Date().getFullYear()}-${String(prev.length + 1).padStart(3, "0")}`,
+      id: nextYearScopedId(prev.map((item) => item.id), "APT", new Date().getFullYear()),
       client_id: draft.client_id || undefined,
       client_name: draft.client_name.trim(),
       phone: draft.phone || undefined,
@@ -4710,7 +4843,7 @@ function EmployeesSection({ employees, setEmployees, attendances, setAttendances
     const visible = payrollRows.filter((item) => !item.paid && item.wage > 0);
     if (!visible.length) return;
     const paidAt = todayIso();
-    const expenseStart = expenses.length;
+    const expenseIds = visible.map((_, index) => nextYearScopedId(expenses.map((item) => item.id), "EXP", new Date().getFullYear(), 3, index + 1));
     setPayrolls((prev) => {
       const rest = prev.filter((item) => !visible.some((row) => row.payrollId === item.id));
       const next = visible.map((row, index) => ({
@@ -4729,13 +4862,13 @@ function EmployeesSection({ employees, setEmployees, attendances, setAttendances
         net_salary: row.wage,
         payment_status: "已发放",
         paid_at: paidAt,
-        expense_id: `EXP-${new Date().getFullYear()}-${String(expenseStart + index + 1).padStart(3, "0")}`,
+        expense_id: expenseIds[index],
       } satisfies PayrollRecord));
       return [...next, ...rest];
     });
     setExpenses((prev) => [
       ...visible.map((row, index) => ({
-        id: `EXP-${new Date().getFullYear()}-${String(expenseStart + index + 1).padStart(3, "0")}`,
+        id: expenseIds[index],
         target: row.employee.name,
         detail: `${payrollRange.label}工资发放`,
         amount: row.wage,
@@ -4743,6 +4876,8 @@ function EmployeesSection({ employees, setEmployees, attendances, setAttendances
         payment_method: "转账",
         expense_date: paidAt,
         remark: `${payrollRange.start} ~ ${payrollRange.end}`,
+        source_type: "payroll",
+        source_id: row.payrollId,
       } satisfies ExpenseRecord)),
       ...prev,
     ]);
@@ -4855,8 +4990,8 @@ function QuotesSection({ quotes, setQuotes, showcases, setShowcases, settings }:
   const today = new Date().toISOString().slice(0, 10);
   const [quoteDraft, setQuoteDraft] = useState({ client_name: "", title: "", amount: "", valid_until: today, status: "草稿" });
   const [showcaseDraft, setShowcaseDraft] = useState({ name: "", category: "窗帘", image_count: "", description: "", status: "待整理" });
-  function addQuote() { if (!quoteDraft.client_name.trim() || !quoteDraft.title.trim()) return; setQuotes((prev) => [{ id: `QT-${new Date().getFullYear()}-${String(prev.length + 1).padStart(3, "0")}`, client_name: quoteDraft.client_name.trim(), title: quoteDraft.title.trim(), amount: Number(quoteDraft.amount) || 0, created_at: today, valid_until: quoteDraft.valid_until || today, status: quoteDraft.status }, ...prev]); setQuoteDraft({ client_name: "", title: "", amount: "", valid_until: today, status: "草稿" }); }
-  function addShowcase() { if (!showcaseDraft.name.trim()) return; setShowcases((prev) => [{ id: `GAL-${String(prev.length + 1).padStart(3, "0")}`, name: showcaseDraft.name.trim(), category: showcaseDraft.category, image_count: Number(showcaseDraft.image_count) || 0, description: showcaseDraft.description || undefined, created_at: today, status: showcaseDraft.status }, ...prev]); setShowcaseDraft({ name: "", category: "窗帘", image_count: "", description: "", status: "待整理" }); }
+  function addQuote() { if (!quoteDraft.client_name.trim() || !quoteDraft.title.trim()) return; setQuotes((prev) => [{ id: nextYearScopedId(prev.map((item) => item.id), "QT", new Date().getFullYear()), client_name: quoteDraft.client_name.trim(), title: quoteDraft.title.trim(), amount: Number(quoteDraft.amount) || 0, created_at: today, valid_until: quoteDraft.valid_until || today, status: quoteDraft.status }, ...prev]); setQuoteDraft({ client_name: "", title: "", amount: "", valid_until: today, status: "草稿" }); }
+  function addShowcase() { if (!showcaseDraft.name.trim()) return; setShowcases((prev) => [{ id: nextSequentialId(prev.map((item) => item.id), "GAL"), name: showcaseDraft.name.trim(), category: showcaseDraft.category, image_count: Number(showcaseDraft.image_count) || 0, description: showcaseDraft.description || undefined, created_at: today, status: showcaseDraft.status }, ...prev]); setShowcaseDraft({ name: "", category: "窗帘", image_count: "", description: "", status: "待整理" }); }
   const quoteConfigs: Record<QuoteSub, SplitTabularSchemaConfig> = {
     quotes: {
       title: "报价单列表",
@@ -5004,11 +5139,11 @@ export default function DashboardBizPage() {
   const [showcases, setShowcases] = useState<ShowcaseRecord[]>(bizShowcases);
   const [printArchives, setPrintArchives] = useState<PrintArchiveRecord[]>(bizPrintArchives);
   const [settings, setSettings] = useState<BizSettings>(bizSettings);
+  const [storeRevision, setStoreRevision] = useState("");
   const [isHydrated, setIsHydrated] = useState(false);
-  const [saveState, setSaveState] = useState<"idle" | "saving" | "saved" | "error">("idle");
-    const skipNextPersistRef = useRef(true);
+  const [saveState, setSaveState] = useState<"idle" | "saving" | "saved" | "error" | "conflict">("idle");
+  const skipNextPersistRef = useRef(true);
   const hasSavedSettingsRef = useRef(false);
-  const settingsSnapshotRef = useRef(JSON.stringify(bizSettings));
   const orderSummary = useMemo(() => summarizeOrders(orders), [orders]);
 
   useEffect(() => {
@@ -5020,6 +5155,7 @@ export default function DashboardBizPage() {
         if (!response.ok) throw new Error("load failed");
         const payload = (await response.json()) as { ok: boolean; data: BizStoreSnapshot };
         if (cancelled || !payload?.data) return;
+        setStoreRevision(payload.data.revision ?? "");
         setOrders(payload.data.orders ?? []);
         setClients(payload.data.clients ?? []);
         setSuppliers(payload.data.suppliers ?? []);
@@ -5034,7 +5170,7 @@ export default function DashboardBizPage() {
         setQuotes(payload.data.quotes ?? []);
         setShowcases(payload.data.showcases ?? []);
         setPrintArchives(payload.data.printArchives ?? []);
-                // Don't overwrite if user already made changes (saved)
+        // Don't overwrite if user already made changes (saved)
         const apiSettings = payload.data.settings ?? bizSettings;
         setSettings(hasSavedSettingsRef.current ? (prev) => ({ ...apiSettings, ...prev }) : apiSettings);
       } catch {
@@ -5044,6 +5180,7 @@ export default function DashboardBizPage() {
           const backup = localStorage.getItem("biz-store-backup");
           if (backup) {
             const parsed = JSON.parse(backup);
+            if (parsed.revision) setStoreRevision(parsed.revision);
             if (parsed.orders) setOrders(parsed.orders);
             if (parsed.clients) setClients(parsed.clients);
             if (parsed.suppliers) setSuppliers(parsed.suppliers);
@@ -5083,6 +5220,7 @@ export default function DashboardBizPage() {
       try {
         setSaveState("saving");
         const snapshot = {
+          revision: storeRevision,
           orders,
           clients,
           suppliers,
@@ -5100,11 +5238,18 @@ export default function DashboardBizPage() {
           settings,
         } satisfies BizStoreSnapshot;
         try { localStorage.setItem("biz-store-backup", JSON.stringify(snapshot)); } catch {}
-        await fetch("/api/biz-store", {
+        const response = await fetch("/api/biz-store", {
           method: "PUT",
           headers: { "Content-Type": "application/json" },
           body: JSON.stringify(snapshot),
         });
+        if (response.status === 409) {
+          setSaveState("conflict");
+          return;
+        }
+        if (!response.ok) throw new Error("save failed");
+        const payload = (await response.json()) as { ok: boolean; data: BizStoreSnapshot };
+        setStoreRevision(payload.data.revision ?? storeRevision);
         setSaveState("saved");
         hasSavedSettingsRef.current = true;
       } catch {
@@ -5113,14 +5258,14 @@ export default function DashboardBizPage() {
     }, 250);
 
     return () => window.clearTimeout(timer);
-  }, [isHydrated, orders, clients, suppliers, expenses, cashEntries, materials, purchases, employees, attendances, appointments, payrolls, quotes, showcases, printArchives, settings]);
+  }, [isHydrated, storeRevision, orders, clients, suppliers, expenses, cashEntries, materials, purchases, employees, attendances, appointments, payrolls, quotes, showcases, printArchives, settings]);
 
   return (
     <PageSection>
       <DashboardPageHeader
         eyebrow="Owner Backend · Business"
         title="业务管理"
-        description={`订单、财务、客户、物料、员工与设置的统一操作界面。${saveState === "saving" ? " 正在保存…" : saveState === "saved" ? " 已持久化保存" : saveState === "error" ? " 保存异常" : ""}`}
+        description={`订单、财务、客户、物料、员工与设置的统一操作界面。${saveState === "saving" ? " 正在保存…" : saveState === "saved" ? " 已持久化保存" : saveState === "conflict" ? " 检测到其他页面已改动，请刷新后再继续" : saveState === "error" ? " 保存异常" : ""}`}
       />
 
       <div className="mt-4 flex min-h-[600px] overflow-hidden rounded-[20px] bg-white shadow-sm">
@@ -5227,6 +5372,7 @@ export default function DashboardBizPage() {
               suppliers={suppliers}
               orders={orders}
               setExpenses={setExpenses}
+              setCashEntries={setCashEntries}
             />
           )}
           {section === "employees" && (

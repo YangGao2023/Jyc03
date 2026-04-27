@@ -1,5 +1,5 @@
 import { NextResponse } from "next/server";
-import { readBizStore, writeBizStore, type BizStoreSnapshot } from "@/lib/biz-store";
+import { createStoreRevision, readBizStore, writeBizStore, type BizStoreSnapshot } from "@/lib/biz-store";
 
 export async function GET() {
   const data = await readBizStore();
@@ -10,7 +10,15 @@ export async function PUT(request: Request) {
   const body = (await request.json()) as Partial<BizStoreSnapshot>;
   const current = await readBizStore();
 
+  if (typeof body.revision !== "string" || body.revision !== current.revision) {
+    return NextResponse.json(
+      { ok: false, code: "REVISION_CONFLICT", currentRevision: current.revision },
+      { status: 409 },
+    );
+  }
+
   const next: BizStoreSnapshot = {
+    revision: createStoreRevision(),
     orders: Array.isArray(body.orders) ? body.orders : current.orders,
     clients: Array.isArray(body.clients) ? body.clients : current.clients,
     suppliers: Array.isArray(body.suppliers) ? body.suppliers : current.suppliers,

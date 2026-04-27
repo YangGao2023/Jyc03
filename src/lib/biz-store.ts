@@ -17,6 +17,7 @@ import type {
 } from "@/lib/biz-data";
 
 export type BizStoreSnapshot = {
+  revision: string;
   orders: BizOrder[];
   clients: ContactRecord[];
   suppliers: SupplierRecord[];
@@ -112,11 +113,50 @@ function nullStr(v: unknown): string | null {
   return v == null || v === "" ? null : String(v);
 }
 
-const SQLITE_TABLES = [
-  "orders", "clients", "suppliers", "expenses", "cash_entries",
-  "materials", "purchases", "employees", "attendances", "appointments",
-  "payrolls", "quotes", "showcases", "print_archives",
-] as const;
+export function createStoreRevision() {
+  return `${Date.now()}-${Math.random().toString(36).slice(2, 10)}`;
+}
+
+function normalizeSnapshot(snapshot: Partial<BizStoreSnapshot>): BizStoreSnapshot {
+  const settings = snapshot.settings;
+  return {
+    revision: typeof snapshot.revision === "string" && snapshot.revision.trim() ? snapshot.revision : createStoreRevision(),
+    orders: Array.isArray(snapshot.orders) ? snapshot.orders : [],
+    clients: Array.isArray(snapshot.clients) ? snapshot.clients : [],
+    suppliers: Array.isArray(snapshot.suppliers) ? snapshot.suppliers : [],
+    expenses: Array.isArray(snapshot.expenses) ? snapshot.expenses : [],
+    cashEntries: Array.isArray(snapshot.cashEntries) ? snapshot.cashEntries : [],
+    materials: Array.isArray(snapshot.materials) ? snapshot.materials : [],
+    purchases: Array.isArray(snapshot.purchases) ? snapshot.purchases : [],
+    employees: Array.isArray(snapshot.employees) ? snapshot.employees : [],
+    attendances: Array.isArray(snapshot.attendances) ? snapshot.attendances : [],
+    appointments: Array.isArray(snapshot.appointments) ? snapshot.appointments : [],
+    payrolls: Array.isArray(snapshot.payrolls) ? snapshot.payrolls : [],
+    quotes: Array.isArray(snapshot.quotes) ? snapshot.quotes : [],
+    showcases: Array.isArray(snapshot.showcases) ? snapshot.showcases : [],
+    printArchives: Array.isArray(snapshot.printArchives) ? snapshot.printArchives : [],
+    settings: settings && typeof settings === "object"
+      ? settings
+      : {
+          company_name: "",
+          address: "",
+          phone: "",
+          email: "",
+          website: "",
+          tax_number: "",
+          default_tax_rate: 0,
+          default_currency: "USD",
+          fiscal_start_month: 1,
+          bank_account: "",
+          alipay: "",
+          wechat_pay: "",
+          other_payment: "",
+          quote_valid_days: 30,
+          quote_footer: "",
+          logo_url: "",
+        },
+  };
+}
 
 async function sqliteRead(): Promise<BizStoreSnapshot> {
   const { getDb, rowToSettings } = await import("@/lib/db");
@@ -160,6 +200,8 @@ async function sqliteRead(): Promise<BizStoreSnapshot> {
     expense_date: String(r.expense_date),
     remark: nullStr(r.remark) ?? undefined,
     office: Boolean(r.office),
+    source_type: nullStr(r.source_type) ?? undefined,
+    source_id: nullStr(r.source_id) ?? undefined,
   }));
 
   const cashEntries = db.prepare("SELECT * FROM cash_entries").all().map((r: any) => ({
@@ -168,6 +210,9 @@ async function sqliteRead(): Promise<BizStoreSnapshot> {
     amount: Number(r.amount ?? 0),
     date: String(r.date),
     note: nullStr(r.note) ?? undefined,
+    order_number: nullStr(r.order_number) ?? undefined,
+    source_type: nullStr(r.source_type) ?? undefined,
+    source_id: nullStr(r.source_id) ?? undefined,
   }));
 
   const materials = db.prepare("SELECT * FROM materials").all().map((r: any) => ({
@@ -300,6 +345,7 @@ async function sqliteRead(): Promise<BizStoreSnapshot> {
   }));
 
   const settingsRow = db.prepare("SELECT * FROM settings WHERE id = 1").get();
+  const metaRow = db.prepare("SELECT revision FROM store_meta WHERE id = 1").get() as { revision?: string } | undefined;
   const settings: BizSettings = rowToSettings(settingsRow as Record<string, unknown> | undefined) ?? {
     company_name: "", address: "", phone: "", email: "", website: "",
     tax_number: "", default_tax_rate: 0, default_currency: "USD",
@@ -314,11 +360,12 @@ async function sqliteRead(): Promise<BizStoreSnapshot> {
     return sqliteRead(); // recurse once
   }
 
-  return {
+  return normalizeSnapshot({
+    revision: metaRow?.revision,
     orders, clients, suppliers, expenses, cashEntries,
     materials, purchases, employees, attendances, appointments,
     payrolls, quotes, showcases, printArchives, settings,
-  };
+  });
 }
 
 async function sqliteWrite(snapshot: BizStoreSnapshot): Promise<void> {
@@ -394,6 +441,17 @@ async function sqliteWrite(snapshot: BizStoreSnapshot): Promise<void> {
       auto_attendance_note: s.auto_attendance_note ?? "",
     });
 
+    db.prepare(`
+      INSERT INTO store_meta (id, revision, updated_at)
+      VALUES (1, @revision, @updated_at)
+      ON CONFLICT(id) DO UPDATE SET
+        revision=@revision,
+        updated_at=@updated_at
+    `).run({
+      revision: snapshot.revision,
+      updated_at: new Date().toISOString(),
+    });
+
     // Orders: delete + insert
     db.prepare("DELETE FROM orders").run();
     const insertOrder = db.prepare(`
@@ -437,24 +495,32 @@ async function sqliteWrite(snapshot: BizStoreSnapshot): Promise<void> {
     // Expenses
     db.prepare("DELETE FROM expenses").run();
     const insertExpense = db.prepare(`
-      INSERT INTO expenses (id, target, detail, amount, expense_type, payment_method, expense_date, remark, office, updated_at)
-      VALUES (@id, @target, @detail, @amount, @expense_type, @payment_method, @expense_date, @remark, @office, @updated_at)
+      INSERT INTO expenses (id, target, detail, amount, expense_type, payment_method, expense_date, remark, office, source_type, source_id, updated_at)
+      VALUES (@id, @target, @detail, @amount, @expense_type, @payment_method, @expense_date, @remark, @office, @source_type, @source_id, @updated_at)
     `);
     for (const e of snapshot.expenses) insertExpense.run({
       id: e.id, target: e.target, detail: e.detail, amount: e.amount,
       expense_type: e.expense_type, payment_method: e.payment_method,
       expense_date: e.expense_date, remark: e.remark ?? null, office: e.office ? 1 : 0,
+      source_type: e.source_type ?? null, source_id: e.source_id ?? null,
       updated_at: new Date().toISOString(),
     });
 
     // Cash entries
     db.prepare("DELETE FROM cash_entries").run();
     const insertCash = db.prepare(`
-      INSERT INTO cash_entries (id, type, amount, date, note, updated_at)
-      VALUES (@id, @type, @amount, @date, @note, @updated_at)
+      INSERT INTO cash_entries (id, type, amount, date, note, order_number, source_type, source_id, updated_at)
+      VALUES (@id, @type, @amount, @date, @note, @order_number, @source_type, @source_id, @updated_at)
     `);
     for (const c of snapshot.cashEntries) insertCash.run({
-      id: c.id, type: c.type, amount: c.amount, date: c.date, note: c.note ?? null,
+      id: c.id,
+      type: c.type,
+      amount: c.amount,
+      date: c.date,
+      note: c.note ?? null,
+      order_number: c.order_number ?? null,
+      source_type: c.source_type ?? null,
+      source_id: c.source_id ?? null,
       updated_at: new Date().toISOString(),
     });
 
@@ -615,8 +681,8 @@ const KV_KEY = "biz-store";
 
 async function redisRead(): Promise<BizStoreSnapshot> {
   const { kv } = await import("@vercel/kv");
-  const stored = await kv.get<BizStoreSnapshot>(KV_KEY);
-  if (stored) return stored;
+  const stored = await kv.get<Partial<BizStoreSnapshot>>(KV_KEY);
+  if (stored) return normalizeSnapshot(stored);
 
   // First time: seed from static data
   const seed = await buildSeedDefault();
@@ -654,14 +720,24 @@ async function buildSeedDefault(): Promise<BizStoreSnapshot> {
     bizPayrolls, bizQuotes, bizShowcases, bizPrintArchives, bizSettings } =
     await import("@/lib/biz-data");
 
-  return {
-    orders: bizOrders, clients: bizClients, suppliers: bizSuppliers,
-    expenses: bizExpenses, cashEntries: bizCashEntries, materials: bizMaterials,
-    purchases: bizPurchases, employees: bizEmployees, attendances: bizAttendances,
-    appointments: bizAppointments, payrolls: bizPayrolls, quotes: bizQuotes,
-    showcases: bizShowcases, printArchives: bizPrintArchives,
+  return normalizeSnapshot({
+    revision: createStoreRevision(),
+    orders: bizOrders,
+    clients: bizClients,
+    suppliers: bizSuppliers,
+    expenses: bizExpenses,
+    cashEntries: bizCashEntries,
+    materials: bizMaterials,
+    purchases: bizPurchases,
+    employees: bizEmployees,
+    attendances: bizAttendances,
+    appointments: bizAppointments,
+    payrolls: bizPayrolls,
+    quotes: bizQuotes,
+    showcases: bizShowcases,
+    printArchives: bizPrintArchives,
     settings: bizSettings,
-  };
+  });
 }
 
 // ─── Public API ────────────────────────────────────────────────────────────────

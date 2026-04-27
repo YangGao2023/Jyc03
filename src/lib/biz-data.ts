@@ -79,6 +79,8 @@ export type ExpenseRecord = {
   expense_date: string;
   remark?: string;
   office?: boolean;
+  source_type?: string;
+  source_id?: string;
 };
 
 export type CashEntry = {
@@ -87,6 +89,9 @@ export type CashEntry = {
   amount: number;
   date: string;
   note?: string;
+  order_number?: string;
+  source_type?: string;
+  source_id?: string;
 };
 
 export type MaterialRecord = {

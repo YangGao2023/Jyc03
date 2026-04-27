@@ -81,6 +81,79 @@ function cashEntryReferencesOrder(item: CashEntry, orderNumber: string) {
   return item.order_number === orderNumber || textHasExactOrderNumber(item.note, orderNumber);
 }
 
+function formatCashLinkAmount(amount: number) {
+  return Number(amount || 0).toFixed(2);
+}
+
+function buildOrderCashMatchKey(orderNumber: string, type: "payment" | "refund", date: string, amount: number) {
+  return `${orderNumber}|${type}|${date}|${formatCashLinkAmount(amount)}`;
+}
+
+function reconcileCashEntries(
+  cashEntries: CashEntry[],
+  orders: BizOrder[],
+  expenses: ExpenseRecord[],
+  purchases: PurchaseRecord[],
+) {
+  const officeExpenseIds = new Set(
+    expenses.filter((item) => item.office).map((item) => item.id),
+  );
+  const purchaseIds = new Set(purchases.map((item) => item.id));
+  const orderPaymentCounts = new Map<string, number>();
+
+  for (const order of orders) {
+    for (const record of order.payment_history ?? []) {
+      if (!record.office) continue;
+      const key = buildOrderCashMatchKey(
+        order.order_number,
+        record.type === "refund" ? "refund" : "payment",
+        record.date,
+        record.amount,
+      );
+      orderPaymentCounts.set(key, (orderPaymentCounts.get(key) ?? 0) + 1);
+    }
+  }
+
+  return cashEntries.filter((entry) => {
+    if (entry.source_type === "expense") {
+      return Boolean(entry.source_id && officeExpenseIds.has(entry.source_id));
+    }
+
+    if (entry.source_type === "purchase") {
+      return Boolean(entry.source_id && purchaseIds.has(entry.source_id));
+    }
+
+    if (entry.source_type === "order-payment" || entry.source_type === "order-refund" || entry.source_type === "order-deposit") {
+      const orderNumber = entry.order_number?.trim();
+      if (!orderNumber) return false;
+      const expectedType = entry.source_type === "order-refund" ? "refund" : "payment";
+      const key = buildOrderCashMatchKey(orderNumber, expectedType, entry.date, entry.amount);
+      const remaining = orderPaymentCounts.get(key) ?? 0;
+      if (remaining <= 0) return false;
+      orderPaymentCounts.set(key, remaining - 1);
+      return true;
+    }
+
+    return true;
+  });
+}
+
+function sameCashEntryList(left: CashEntry[], right: CashEntry[]) {
+  if (left.length !== right.length) return false;
+  return left.every((item, index) => {
+    const other = right[index];
+    return !!other
+      && item.id === other.id
+      && item.type === other.type
+      && item.amount === other.amount
+      && item.date === other.date
+      && item.note === other.note
+      && item.order_number === other.order_number
+      && item.source_type === other.source_type
+      && item.source_id === other.source_id;
+  });
+}
+
 function normalizeEntityText(value?: string | null) {
   return value?.trim().toLowerCase() ?? "";
 }
@@ -5469,6 +5542,14 @@ export default function DashboardBizPage() {
   const skipNextPersistRef = useRef(true);
   const hasSavedSettingsRef = useRef(false);
   const orderSummary = useMemo(() => summarizeOrders(orders), [orders]);
+
+  useEffect(() => {
+    if (!isHydrated) return;
+    setCashEntries((prev) => {
+      const reconciled = reconcileCashEntries(prev, orders, expenses, purchases);
+      return sameCashEntryList(prev, reconciled) ? prev : reconciled;
+    });
+  }, [isHydrated, orders, expenses, purchases]);
 
   useEffect(() => {
     let cancelled = false;

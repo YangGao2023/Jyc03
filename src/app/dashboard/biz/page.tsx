@@ -379,13 +379,13 @@ function StatStrip({
   items: Array<{ label: string; value: string; accent?: string }>;
 }) {
   return (
-    <div className="mb-4 flex flex-wrap divide-x divide-slate-100 overflow-hidden rounded-xl border border-slate-200 bg-white">
+    <div className="mb-3 flex flex-wrap divide-x divide-slate-100 overflow-hidden rounded-xl border border-slate-200 bg-white">
       {items.map((item) => (
-        <div key={item.label} className="flex min-w-[110px] flex-col px-5 py-3">
-          <span className={`text-xl font-bold ${item.accent ?? "text-slate-800"}`}>
+        <div key={item.label} className="flex min-w-[96px] flex-col px-4 py-2.5">
+          <span className={`text-lg font-bold ${item.accent ?? "text-slate-800"}`}>
             {item.value}
           </span>
-          <span className="mt-0.5 text-[11px] text-slate-500">{item.label}</span>
+          <span className="mt-0.5 text-[10px] text-slate-500">{item.label}</span>
         </div>
       ))}
     </div>
@@ -3374,6 +3374,7 @@ function FinanceSection({ orders, setOrders, expenses, setExpenses, cashEntries,
 // ─── Clients ─────────────────────────────────────────────────────────────────
 
 type ContactSub = "clients" | "suppliers";
+type ClientDetailTab = "overview" | "orders" | "activity";
 
 function ClientsSection({ clients, setClients, suppliers, setSuppliers, orders, setOrders, appointments, setAppointments, quotes, setQuotes, setCashEntries, materials, setMaterials, purchases, setPurchases, settings, onCreateAppointment }: { clients: ContactRecord[]; setClients: React.Dispatch<React.SetStateAction<ContactRecord[]>>; suppliers: SupplierRecord[]; setSuppliers: React.Dispatch<React.SetStateAction<SupplierRecord[]>>; orders: BizOrder[]; setOrders: React.Dispatch<React.SetStateAction<BizOrder[]>>; appointments: MeasurementAppointmentRecord[]; setAppointments: React.Dispatch<React.SetStateAction<MeasurementAppointmentRecord[]>>; quotes: QuoteRecord[]; setQuotes: React.Dispatch<React.SetStateAction<QuoteRecord[]>>; setCashEntries: React.Dispatch<React.SetStateAction<CashEntry[]>>; materials: MaterialRecord[]; setMaterials: React.Dispatch<React.SetStateAction<MaterialRecord[]>>; purchases: PurchaseRecord[]; setPurchases: React.Dispatch<React.SetStateAction<PurchaseRecord[]>>; settings: BizSettings; onCreateAppointment: (client: ContactRecord) => void; }) {
   const [sub, setSub] = useState<ContactSub>("clients");
@@ -3390,6 +3391,7 @@ function ClientsSection({ clients, setClients, suppliers, setSuppliers, orders, 
   const [confirmingSupplierId, setConfirmingSupplierId] = useState<string | null>(null);
   const [showSupplierPurchaseModal, setShowSupplierPurchaseModal] = useState(false);
   const [directoryHint, setDirectoryHint] = useState("");
+  const [clientDetailTab, setClientDetailTab] = useState<ClientDetailTab>("overview");
   const [clientSearch, setClientSearch] = useState("");
   const [clientPage, setClientPage] = useState(1);
   const [selectedClientId, setSelectedClientId] = useState<string>(clients[0]?.id ?? "");
@@ -3601,6 +3603,7 @@ function ClientsSection({ clients, setClients, suppliers, setSuppliers, orders, 
 
   function selectClient(clientId: string) {
     setSelectedClientId(clientId);
+    setClientDetailTab("overview");
   }
 
   function toggleVip(clientId: string) {
@@ -3811,15 +3814,15 @@ function ClientsSection({ clients, setClients, suppliers, setSuppliers, orders, 
       )}
 
       {sub === "clients" ? (
-        <div className="space-y-4">
-          <div className="grid gap-4 xl:grid-cols-[0.95fr_1.45fr]">
+        <div className="space-y-3 xl:space-y-2">
+          <div className="grid gap-3 xl:grid-cols-[320px_minmax(0,1fr)] xl:items-stretch">
             <PanelCard title="客户列表" note="点开一个客户后，就能在这里直接看订单、预约、收款情况、联系人和地址。">
               <div className="space-y-3">
                 <div className="relative">
                   <span className="absolute left-3 top-1/2 -translate-y-1/2 text-sm text-slate-400">⌕</span>
                   <input value={clientSearch} onChange={(e) => setClientSearch(e.target.value)} placeholder="搜索客户 / 电话 / 地址" className="h-9 w-full rounded-lg border border-slate-300 bg-white pl-8 pr-3 text-xs text-slate-700" />
                 </div>
-                <div className="max-h-[560px] space-y-2 overflow-y-auto pr-1">
+                <div className="max-h-[420px] space-y-2 overflow-y-auto pr-1 xl:max-h-[calc(100vh-22rem)]">
                   {pagedClients.length ? pagedClients.map((item) => {
                     const itemOrders = orders.filter((order) => orderBelongsToClient(order, item));
                     const itemAppointments = appointments.filter((entry) => appointmentBelongsToClient(entry, item));
@@ -3859,7 +3862,7 @@ function ClientsSection({ clients, setClients, suppliers, setSuppliers, orders, 
 
             <PanelCard title={selectedClient ? `客户详情 · ${selectedClient.name}` : "客户详情"} note="客户相关的业务状态、应收款、预约和联系资料，都直接在这里联动查看。">
               {selectedClient ? (
-                <div className="space-y-4">
+                <div className="flex flex-col gap-3 xl:h-[calc(100vh-22rem)]">
                   <div className="flex flex-wrap items-start justify-between gap-3 rounded-xl border border-slate-200 bg-slate-50 p-4">
                     <div>
                       <div className="flex items-center gap-2">
@@ -3896,7 +3899,19 @@ function ClientsSection({ clients, setClients, suppliers, setSuppliers, orders, 
                     ]}
                   />
 
-                  <div className="grid gap-4 lg:grid-cols-3">
+                  <SegmentedControl
+                    options={[
+                      { key: "overview", label: "总览" },
+                      { key: "orders", label: "订单与收款" },
+                      { key: "activity", label: "预约与动态" },
+                    ]}
+                    value={clientDetailTab}
+                    onChange={(value) => setClientDetailTab(value as ClientDetailTab)}
+                  />
+
+                  <div className="min-h-0 flex-1 overflow-y-auto pr-1">
+                    {clientDetailTab === "overview" ? (
+                      <div className="grid gap-3 lg:grid-cols-3">
                     <div className="rounded-xl border border-slate-200 bg-white p-4">
                       <p className="text-[11px] uppercase tracking-[0.2em] text-slate-400">联系资料</p>
                       <div className="mt-3 space-y-3 text-sm">
@@ -3927,8 +3942,10 @@ function ClientsSection({ clients, setClients, suppliers, setSuppliers, orders, 
                       </div>
                     </div>
                   </div>
+                    ) : null}
 
-                  <div className="grid gap-4 xl:grid-cols-[1.15fr_0.85fr]">
+                    {clientDetailTab === "orders" ? (
+                      <div className="grid gap-3 xl:grid-cols-[1.15fr_0.85fr]">
                     <div className="space-y-4">
                       <div className="rounded-xl border border-slate-200 bg-white p-4">
                         <div className="mb-3 flex items-center justify-between">
@@ -4065,8 +4082,10 @@ function ClientsSection({ clients, setClients, suppliers, setSuppliers, orders, 
                       ) : <div className="rounded-xl border border-dashed border-slate-200 py-10 text-center text-sm text-slate-400">暂时还没有收款记录</div>}
                     </div>
                   </div>
+                    ) : null}
 
-                  <div className="grid gap-4 lg:grid-cols-2">
+                    {clientDetailTab === "activity" ? (
+                      <div className="grid gap-3 lg:grid-cols-2">
                     <div className="rounded-xl border border-slate-200 bg-white p-4">
                       <div className="mb-3 flex items-center justify-between">
                         <p className="text-sm font-semibold text-slate-900">预约记录</p>
@@ -4110,6 +4129,8 @@ function ClientsSection({ clients, setClients, suppliers, setSuppliers, orders, 
                         </div>
                       ) : <div className="rounded-xl border border-dashed border-slate-200 py-10 text-center text-sm text-slate-400">暂时还没有关联动态</div>}
                     </div>
+                      </div>
+                    ) : null}
                   </div>
                 </div>
               ) : <div className="rounded-xl border border-dashed border-slate-200 py-16 text-center text-sm text-slate-400">请先在左侧选择一个客户，再看详情</div>}
@@ -4117,8 +4138,8 @@ function ClientsSection({ clients, setClients, suppliers, setSuppliers, orders, 
           </div>
         </div>
       ) : (
-        <div className="space-y-4">
-          <div className="overflow-x-auto rounded-xl border border-slate-200 bg-white">
+        <div className="space-y-3 xl:space-y-2">
+          <div className="overflow-x-auto rounded-xl border border-slate-200 bg-white xl:max-h-[calc(100vh-18rem)] xl:overflow-y-auto">
             <table className="w-full text-left text-xs">
               <thead>
                 <tr className="border-b border-slate-200 bg-slate-50">

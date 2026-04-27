@@ -31,7 +31,16 @@ async function redis() {
 export async function readProofs() {
   const client = await redis();
   const raw = await client.get(PROOF_KEY);
-  const items = raw ? (JSON.parse(raw) as ProofItem[]) : [];
+
+  let items: ProofItem[] = [];
+  if (raw) {
+    try {
+      items = JSON.parse(raw) as ProofItem[];
+    } catch {
+      items = [];
+    }
+  }
+
   return items.sort((a, b) => Date.parse(b.createdAt) - Date.parse(a.createdAt));
 }
 

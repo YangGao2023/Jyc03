@@ -40,7 +40,8 @@ export type BizStoreSnapshot = {
 async function getStore(): Promise<"sqlite" | "redis"> {
   if (typeof window !== "undefined") return "redis"; // client side, never call
   if (process.env.VERCEL) return "redis";
-  return "sqlite";
+  if (process.env.REDIS_URL) return "redis"; // local dev with cloud data
+  return "sqlite"; // pure offline fallback
 }
 
 // ─── SQLite implementation ─────────────────────────────────────────────────────
@@ -628,6 +629,11 @@ async function redisWrite(snapshot: BizStoreSnapshot): Promise<void> {
   await kv.set(KV_KEY, snapshot).catch((err: unknown) =>
     console.error("[biz-store] redis write failed", err)
   );
+
+  // Local backup: sync to SQLite when running locally with Redis
+  if (!process.env.VERCEL) {
+    sqliteWrite(snapshot).catch(() => {});
+  }
 }
 
 // ─── Seed data (first-time initialisation) ────────────────────────────────────

@@ -46,3 +46,6 @@ next-env.d.ts
 # Local SQLite database
 /data/biz-store.db
 /data/
+
+# Legacy materials (user has these locally, not tracked in repo)
+/public/legacy-materials

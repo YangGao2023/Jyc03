@@ -103,82 +103,82 @@ export default async function DashboardPage() {
   const offlineCount = liveAgents.length - onlineCount;
 
   return (
-    <div className="rounded-[30px] border border-white/10 bg-[linear-gradient(180deg,_rgba(15,23,42,0.98),_rgba(3,7,18,0.98))] p-4 shadow-2xl">
-          <div className="rounded-[24px] border border-white/10 bg-white/5 p-4">
+    <div className="rounded-[30px] border border-blue-800/40 bg-[linear-gradient(180deg,_rgba(30,64,175,0.98),_rgba(23,37,84,0.98))] p-4 shadow-2xl">
+          <div className="rounded-[24px] border border-blue-800/40 bg-blue-900/20 p-4">
             <div className="flex flex-wrap items-center justify-between gap-3">
               <div>
-                <p className="text-[11px] uppercase tracking-[0.28em] text-sky-300">Owner Backend</p>
+                <p className="text-[11px] uppercase tracking-[0.28em] text-blue-200">Owner Backend</p>
                 <h1 className="mt-2 text-2xl font-semibold text-white">后台首页</h1>
-                <p className="mt-2 max-w-3xl text-sm leading-6 text-slate-300">这里不再承担所有细节，只做老板入口。真正的工作去 biz / overview / tasks / memory / system 五个页面里看。</p>
+                <p className="mt-2 max-w-3xl text-sm leading-6 text-blue-200">这里不再承担所有细节，只做老板入口。真正的工作去 biz / overview / tasks / memory / system 五个页面里看。</p>
               </div>
               <form action="/api/logout" method="POST">
-                <button className="rounded-2xl border border-white/10 bg-white px-4 py-2 text-sm font-semibold text-slate-950">退出登录</button>
+                <button className="rounded-2xl border border-blue-700 bg-blue-600 px-4 py-2 text-sm font-semibold text-white">退出登录</button>
               </form>
             </div>
 
             <div className="mt-4 grid gap-3 md:grid-cols-2 xl:grid-cols-6">
-              <div className="rounded-2xl border border-white/10 bg-white/5 p-4">
-                <p className="text-[11px] uppercase tracking-[0.2em] text-slate-400">TODO</p>
+              <div className="rounded-2xl border border-blue-800/40 bg-blue-900/20 p-4">
+                <p className="text-[11px] uppercase tracking-[0.2em] text-blue-300/70">TODO</p>
                 <p className="mt-2 text-2xl font-semibold text-white">{todoCount}</p>
               </div>
-              <div className="rounded-2xl border border-white/10 bg-white/5 p-4">
-                <p className="text-[11px] uppercase tracking-[0.2em] text-slate-400">正式任务</p>
+              <div className="rounded-2xl border border-blue-800/40 bg-blue-900/20 p-4">
+                <p className="text-[11px] uppercase tracking-[0.2em] text-blue-300/70">正式任务</p>
                 <p className="mt-2 text-2xl font-semibold text-white">{taskCount}</p>
               </div>
-              <div className="rounded-2xl border border-white/10 bg-white/5 p-4">
-                <p className="text-[11px] uppercase tracking-[0.2em] text-slate-400">阻塞</p>
+              <div className="rounded-2xl border border-blue-800/40 bg-blue-900/20 p-4">
+                <p className="text-[11px] uppercase tracking-[0.2em] text-blue-300/70">阻塞</p>
                 <p className="mt-2 text-2xl font-semibold text-white">{blockedCount} / {taskCount}</p>
               </div>
-              <div className="rounded-2xl border border-white/10 bg-white/5 p-4">
-                <p className="text-[11px] uppercase tracking-[0.2em] text-slate-400">最近事件</p>
+              <div className="rounded-2xl border border-blue-800/40 bg-blue-900/20 p-4">
+                <p className="text-[11px] uppercase tracking-[0.2em] text-blue-300/70">最近事件</p>
                 <p className="mt-2 text-2xl font-semibold text-white">{recentEventCount} / {eventCount}</p>
               </div>
-              <div className="rounded-2xl border border-white/10 bg-white/5 p-4">
-                <p className="text-[11px] uppercase tracking-[0.2em] text-slate-400">待消费 Wake</p>
+              <div className="rounded-2xl border border-blue-800/40 bg-blue-900/20 p-4">
+                <p className="text-[11px] uppercase tracking-[0.2em] text-blue-300/70">待消费 Wake</p>
                 <p className="mt-2 text-2xl font-semibold text-white">{pendingWakeCount}</p>
               </div>
-              <div className="rounded-2xl border border-white/10 bg-white/5 p-4">
-                <p className="text-[11px] uppercase tracking-[0.2em] text-slate-400">Watchdog 告警</p>
+              <div className="rounded-2xl border border-blue-800/40 bg-blue-900/20 p-4">
+                <p className="text-[11px] uppercase tracking-[0.2em] text-blue-300/70">Watchdog 告警</p>
                 <p className="mt-2 text-2xl font-semibold text-white">{watchdogAlerts.length}</p>
               </div>
             </div>
           </div>
 
           <div className="mt-4 grid gap-4 xl:grid-cols-[1.15fr_0.85fr]">
-            <section className="rounded-[24px] bg-white p-4 text-slate-900 shadow-sm">
+            <section className="rounded-[24px] bg-blue-900/20 p-4 text-blue-100 shadow-sm">
               <div className="flex items-center justify-between gap-3">
                 <div>
-                  <p className="text-sm font-medium text-sky-700">工作区入口</p>
-                  <p className="mt-1 text-sm text-slate-500">从首页分流，不再把 {workspaceLinks.length} 个区堆在同一页里。业务、总览、任务、记忆、系统都在这里直接进。</p>
+                  <p className="text-sm font-medium text-blue-200">工作区入口</p>
+                  <p className="mt-1 text-sm text-blue-300">从首页分流，不再把 {workspaceLinks.length} 个区堆在同一页里。业务、总览、任务、记忆、系统都在这里直接进。</p>
                 </div>
-                <span className="rounded-full bg-slate-900 px-3 py-1 text-xs font-semibold text-white">{workspaceLinks.length} 区</span>
+                <span className="rounded-full bg-blue-950 px-3 py-1 text-xs font-semibold text-white">{workspaceLinks.length} 区</span>
               </div>
               <div className="mt-4 grid gap-3 sm:grid-cols-2">
                 {workspaceLinks.map(([title, href, desc]) => (
-                  <a key={href} href={href} className="rounded-2xl border border-slate-200 bg-slate-50 p-4 transition hover:bg-slate-100">
-                    <p className="text-sm font-semibold text-slate-900">{title}</p>
-                    <p className="mt-2 text-sm leading-6 text-slate-600">{desc}</p>
-                    <p className="mt-3 text-xs font-semibold text-sky-700">{href}</p>
+                  <a key={href} href={href} className="rounded-2xl border border-blue-800/40 bg-blue-900/30 p-4 transition hover:bg-blue-700">
+                    <p className="text-sm font-semibold text-blue-100">{title}</p>
+                    <p className="mt-2 text-sm leading-6 text-blue-300">{desc}</p>
+                    <p className="mt-3 text-xs font-semibold text-blue-200">{href}</p>
                   </a>
                 ))}
               </div>
             </section>
 
-            <section className="rounded-[24px] bg-white p-4 text-slate-900 shadow-sm">
+            <section className="rounded-[24px] bg-blue-900/20 p-4 text-blue-100 shadow-sm">
               <div className="flex items-center justify-between gap-3">
-                <p className="text-sm font-medium text-sky-700">代理在线状态</p>
-                <span className="rounded-full bg-slate-900 px-3 py-1 text-xs font-semibold text-white">{onlineCount} 在线 · {offlineCount} 离线</span>
+                <p className="text-sm font-medium text-blue-200">代理在线状态</p>
+                <span className="rounded-full bg-blue-950 px-3 py-1 text-xs font-semibold text-white">{onlineCount} 在线 · {offlineCount} 离线</span>
               </div>
               <div className="mt-4 grid gap-3">
                 {liveAgents.map((agent) => (
-                  <div key={agent.key} className="rounded-2xl border border-slate-200 bg-slate-50 p-4">
+                  <div key={agent.key} className="rounded-2xl border border-blue-800/40 bg-blue-900/30 p-4">
                     <div className="flex items-center justify-between gap-3">
                       <div>
-                        <p className="text-sm font-semibold text-slate-900">{agent.name}</p>
-                        <p className="mt-1 text-xs text-slate-500">{agent.role}</p>
-                        <p className="mt-1 text-xs text-slate-500">配置档案：{agent.profile} · 端口：{agent.port}</p>
+                        <p className="text-sm font-semibold text-blue-100">{agent.name}</p>
+                        <p className="mt-1 text-xs text-blue-300">{agent.role}</p>
+                        <p className="mt-1 text-xs text-blue-300">配置档案：{agent.profile} · 端口：{agent.port}</p>
                       </div>
-                      <span className={`rounded-full px-3 py-1 text-xs font-semibold ${agent.online ? "bg-emerald-100 text-emerald-800" : "bg-slate-200 text-slate-700"}`}>
+                      <span className={`rounded-full px-3 py-1 text-xs font-semibold ${agent.online ? "bg-emerald-100 text-emerald-800" : "bg-blue-800/40 text-blue-200"}`}>
                         {agent.online ? "在线" : "离线"}
                       </span>
                     </div>

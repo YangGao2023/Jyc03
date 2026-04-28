@@ -27,30 +27,30 @@ const agents = [
 
 export default function Home() {
   return (
-    <main className="min-h-screen bg-slate-950 text-white">
+    <main className="min-h-screen bg-blue-950 text-white">
       <div className="mx-auto flex min-h-screen max-w-7xl flex-col gap-6 px-4 py-4 sm:px-6 lg:px-8 lg:py-6">
-        <section className="rounded-[32px] border border-white/10 bg-[radial-gradient(circle_at_top_left,_rgba(56,189,248,0.28),_transparent_35%),linear-gradient(135deg,_#0f172a_0%,_#111827_58%,_#020617_100%)] p-6 shadow-2xl lg:p-10">
+        <section className="rounded-[32px] border border-blue-800/40 bg-[radial-gradient(circle_at_top_left,_rgba(37,99,235,0.28),_transparent_35%),linear-gradient(135deg,_#1e3a5f_0%,_#1a2d4a_58%,_#0f1d3d_100%)] p-6 shadow-2xl lg:p-10">
           <div className="grid gap-8 lg:grid-cols-[1.2fr_0.8fr] lg:items-end">
             <div>
-              <p className="text-xs uppercase tracking-[0.35em] text-sky-300">JYC NYC · Frontstage</p>
+              <p className="text-xs uppercase tracking-[0.35em] text-blue-200">JYC NYC · Frontstage</p>
               <h1 className="mt-3 max-w-4xl text-4xl font-bold tracking-tight text-white lg:text-6xl">
                 给客户看的前台，和给老板看的后台，从今天开始正式分路。
               </h1>
-              <p className="mt-5 max-w-2xl text-sm leading-7 text-slate-300 lg:text-base">
+              <p className="mt-5 max-w-2xl text-sm leading-7 text-blue-200 lg:text-base">
                 这里是前台主页原型。以后放真实产品照片、公司介绍、轻互动 AI 接待。控制权限不在这里暴露，老板通过独立登录入口进入后台。
               </p>
-              <div className="mt-6 flex flex-wrap gap-3 text-xs text-slate-200">
+              <div className="mt-6 flex flex-wrap gap-3 text-xs text-blue-200">
                 {highlights.map((item) => (
-                  <span key={item} className="rounded-full border border-white/10 bg-white/5 px-3 py-2">
+                  <span key={item} className="rounded-full border border-blue-800/40 bg-blue-900/20 px-3 py-2">
                     {item}
                   </span>
                 ))}
               </div>
               <div className="mt-8 flex flex-wrap gap-3">
-                <Link href="/login" className="rounded-2xl bg-white px-5 py-3 text-sm font-semibold text-slate-950 transition hover:bg-slate-100">
+                <Link href="/login" className="rounded-2xl bg-blue-600 px-5 py-3 text-sm font-semibold text-white transition hover:bg-blue-700">
                   老板登录入口
                 </Link>
-                <Link href="/dashboard" className="rounded-2xl border border-white/15 bg-white/5 px-5 py-3 text-sm font-semibold text-white transition hover:bg-white/10">
+                <Link href="/dashboard" className="rounded-2xl border border-blue-800/40 bg-blue-900/20 px-5 py-3 text-sm font-semibold text-blue-200 transition hover:bg-blue-800/30">
                   查看当前后台原型
                 </Link>
               </div>
@@ -58,10 +58,10 @@ export default function Home() {
 
             <div className="grid gap-3">
               {agents.map((agent) => (
-                <div key={agent.name} className="rounded-3xl border border-white/10 bg-white/5 p-4 backdrop-blur-sm">
+                <div key={agent.name} className="rounded-3xl border border-blue-800/40 bg-blue-900/20 p-4 backdrop-blur-sm">
                   <p className="text-lg font-semibold text-white">{agent.name}</p>
-                  <p className="mt-1 text-sm text-sky-200">{agent.role}</p>
-                  <p className="mt-3 text-sm leading-6 text-slate-300">{agent.desc}</p>
+                  <p className="mt-1 text-sm text-blue-200">{agent.role}</p>
+                  <p className="mt-3 text-sm leading-6 text-blue-200">{agent.desc}</p>
                 </div>
               ))}
             </div>
@@ -69,24 +69,24 @@ export default function Home() {
         </section>
 
         <section className="grid gap-4 lg:grid-cols-3">
-          <div className="rounded-[28px] bg-white p-5 text-slate-900 shadow-sm">
-            <p className="text-sm font-medium text-sky-700">前台定位</p>
+          <div className="rounded-[28px] bg-blue-900/20 p-5 text-blue-100 shadow-sm">
+            <p className="text-sm font-medium text-blue-200">前台定位</p>
             <h2 className="mt-1 text-xl font-semibold">客户先看到空间和产品</h2>
-            <p className="mt-3 text-sm leading-7 text-slate-600">
+            <p className="mt-3 text-sm leading-7 text-blue-300">
               先展示 JYC 的产品、案例和品牌感，AI 在前台做轻接待，而不是一上来暴露指令面板。
             </p>
           </div>
-          <div className="rounded-[28px] bg-white p-5 text-slate-900 shadow-sm">
-            <p className="text-sm font-medium text-sky-700">登录定位</p>
+          <div className="rounded-[28px] bg-blue-900/20 p-5 text-blue-100 shadow-sm">
+            <p className="text-sm font-medium text-blue-200">登录定位</p>
             <h2 className="mt-1 text-xl font-semibold">老板走单独入口</h2>
-            <p className="mt-3 text-sm leading-7 text-slate-600">
+            <p className="mt-3 text-sm leading-7 text-blue-300">
               老板通过独立登录页进入后台，后面再接账号密码、权限和真实受保护路由。
             </p>
           </div>
-          <div className="rounded-[28px] bg-white p-5 text-slate-900 shadow-sm">
-            <p className="text-sm font-medium text-sky-700">后台定位</p>
+          <div className="rounded-[28px] bg-blue-900/20 p-5 text-blue-100 shadow-sm">
+            <p className="text-sm font-medium text-blue-200">后台定位</p>
             <h2 className="mt-1 text-xl font-semibold">任务、记忆、状态、指令</h2>
-            <p className="mt-3 text-sm leading-7 text-slate-600">
+            <p className="mt-3 text-sm leading-7 text-blue-300">
               后台继续承接真实状态、ToDo、错峰会议、待接手任务和老板指令入口，慢慢长成真正可用的控制台。
             </p>
           </div>

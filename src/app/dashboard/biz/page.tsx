@@ -5702,7 +5702,7 @@ export default function DashboardBizPage() {
     }, 250);
 
     return () => window.clearTimeout(timer);
-  }, [isHydrated, storeRevision, orders, clients, suppliers, expenses, cashEntries, materials, purchases, employees, attendances, appointments, payrolls, quotes, showcases, printArchives, settings]);
+  }, [isHydrated, orders, clients, suppliers, expenses, cashEntries, materials, purchases, employees, attendances, appointments, payrolls, quotes, showcases, printArchives, settings]);
 
   return (
     <PageSection>

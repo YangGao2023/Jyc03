@@ -449,7 +449,7 @@ function StatStrip({
   return (
     <div className="mb-3 flex flex-wrap divide-x divide-blue-800 overflow-hidden rounded-xl border border-gray-200 bg-gray-50">
       {items.map((item) => (
-        <div key={item.label} className="flex min-w-[96px] flex-col px-4 py-2">
+        <div key={item.label} className="flex min-w-[96px] flex-col px-4 py-2.5">
           <span className={`text-lg font-bold ${item.accent ?? "text-slate-800"}`}>
             {item.value}
           </span>
@@ -4120,19 +4120,22 @@ function ClientsSection({ clients, setClients, suppliers, setSuppliers, orders, 
 
             <PanelCard title={selectedClient ? `客户详情 · ${selectedClient.name}` : "客户详情"} note="客户相关的业务状态、应收款、预约和联系资料,都直接在这里联动查看。">
               {selectedClient ? (
-                <div className="flex flex-col gap-3 xl:h-[calc(100vh-22rem)]">
-                  <div className="flex flex-wrap items-start justify-between gap-3 rounded-xl border border-slate-200 bg-slate-50 p-3">
-                    <div>
-                      <div className="flex items-center gap-2">
-                        <h3 className="text-base font-semibold text-slate-700">{selectedClient.name}</h3>
+                <div className="flex flex-col gap-4 xl:h-[calc(100vh-22rem)]">
+                  <div className="flex flex-wrap items-start justify-between gap-4 rounded-xl border border-slate-200 bg-slate-50 p-4">
+                    <div className="flex-1 min-w-0">
+                      <div className="flex items-center gap-2 mb-3">
+                        <h3 className="text-base font-semibold text-slate-800">{selectedClient.name}</h3>
                         {selectedClient.is_vip ? <span className="rounded-full bg-sky-100 px-2 py-0.5 text-[11px] font-semibold text-sky-700">VIP客户</span> : null}
                         {clientBalance > 0 ? <span className="rounded-full bg-amber-50 px-2 py-0.5 text-[11px] font-semibold text-amber-700">待跟进</span> : null}
                       </div>
-                      <p className="mt-1 text-xs text-slate-700">联系人 {selectedClient.contact ?? "-"},电话 {selectedClient.phone ?? "-"}</p>
-                      <p className="mt-1 text-xs text-slate-700">地址 {selectedClient.address ?? "未填写"}</p>
-                      <p className="mt-1 text-xs text-slate-700">微信/邮箱 {selectedClient.wechat ?? selectedClient.email ?? "未填写"}</p>
+                      <div className="grid grid-cols-2 gap-x-6 gap-y-1.5 text-xs text-slate-600">
+                        <span>联系人 {selectedClient.contact ?? "-"}</span>
+                        <span>电话 {selectedClient.phone ?? "-"}</span>
+                        <span>微信/邮箱 {selectedClient.wechat ?? selectedClient.email ?? "未填写"}</span>
+                        <span>地址 {selectedClient.address ?? "未填写"}</span>
+                      </div>
                     </div>
-                    <div className="flex flex-wrap gap-2">
+                    <div className="flex flex-wrap gap-2 self-start">
                       <ActionBtn onClick={() => toggleVip(selectedClient.id)}>{selectedClient.is_vip ? "取消VIP" : "设为VIP"}</ActionBtn>
                       <ActionBtn onClick={() => openEditClient(selectedClient)}>编辑客户</ActionBtn>
                       {confirmingClientId === selectedClient.id ? (
@@ -4168,32 +4171,32 @@ function ClientsSection({ clients, setClients, suppliers, setSuppliers, orders, 
 
                   <div className="min-h-0 flex-1 overflow-y-auto pr-1">
                     {clientDetailTab === "overview" ? (
-                      <div className="grid gap-3 lg:grid-cols-3">
-                    <div className="rounded-xl border border-gray-200 bg-gray-50 p-3">
+                      <div className="grid gap-4 lg:grid-cols-3">
+                    <div className="rounded-xl border border-gray-200 bg-gray-50 p-4">
                       <p className="text-[11px] uppercase tracking-[0.2em] text-slate-700">联系资料</p>
-                      <div className="mt-3 space-y-2 text-xs">
-                        <div className="flex items-start justify-between gap-3"><span className="text-slate-700">主要联系人</span><span className="max-w-[190px] text-right font-medium text-slate-700">{selectedClient.contact ?? selectedClient.name}</span></div>
-                        <div className="flex items-start justify-between gap-3"><span className="text-slate-700">电话</span><span className="max-w-[190px] text-right font-medium text-slate-700">{selectedClient.phone ?? "-"}</span></div>
-                        <div className="flex items-start justify-between gap-3"><span className="text-slate-700">微信 / 邮箱</span><span className="max-w-[190px] text-right font-medium text-slate-700">{selectedClient.wechat ?? selectedClient.email ?? "-"}</span></div>
-                        <div className="flex items-start justify-between gap-3"><span className="text-slate-700">地址</span><span className="max-w-[190px] text-right text-slate-700">{selectedClient.address ?? "未填写"}</span></div>
+                      <div className="mt-3 space-y-2.5 text-xs">
+                        <div className="flex items-start justify-between"><span className="text-slate-500">主要联系人</span><span className="text-right font-medium text-slate-700">{selectedClient.contact ?? selectedClient.name}</span></div>
+                        <div className="flex items-start justify-between"><span className="text-slate-500">电话</span><span className="text-right font-medium text-slate-700">{selectedClient.phone ?? "-"}</span></div>
+                        <div className="flex items-start justify-between"><span className="text-slate-500">微信 / 邮箱</span><span className="text-right font-medium text-slate-700">{selectedClient.wechat ?? selectedClient.email ?? "-"}</span></div>
+                        <div className="flex items-start justify-between"><span className="text-slate-500">地址</span><span className="text-right text-slate-600">{selectedClient.address ?? "未填写"}</span></div>
                       </div>
                     </div>
 
-                    <div className="rounded-xl border border-gray-200 bg-gray-50 p-3">
+                    <div className="rounded-xl border border-gray-200 bg-gray-50 p-4">
                       <p className="text-[11px] uppercase tracking-[0.2em] text-slate-700">业务状态</p>
-                      <div className="mt-3 space-y-2 text-xs">
-                        <div className="flex items-center justify-between"><span className="text-slate-700">最近下单</span><span className="font-medium text-slate-700">{clientLastOrder}</span></div>
-                        <div className="flex items-center justify-between"><span className="text-slate-700">备注</span><span className="max-w-[180px] text-right text-slate-700">{selectedClient.note ?? "-"}</span></div>
+                      <div className="mt-3 space-y-2.5 text-xs">
+                        <div className="flex items-center justify-between"><span className="text-slate-500">最近下单</span><span className="font-medium text-slate-700">{clientLastOrder}</span></div>
+                        <div className="flex items-start justify-between"><span className="text-slate-500">备注</span><span className="max-w-[200px] text-right text-slate-600">{selectedClient.note ?? "-"}</span></div>
                       </div>
                     </div>
 
-                    <div className="rounded-xl border border-gray-200 bg-gray-50 p-3">
+                    <div className="rounded-xl border border-gray-200 bg-gray-50 p-4">
                       <p className="text-[11px] uppercase tracking-[0.2em] text-slate-700">收款情况</p>
-                      <div className="mt-3 space-y-2 text-xs">
-                        <div className="flex items-center justify-between"><span className="text-slate-700">未收余款</span><span className={`font-semibold ${clientBalance > 0 ? "text-amber-600" : "text-emerald-600"}`}>{formatMoney(clientBalance)}</span></div>
-                        <div className="flex items-center justify-between"><span className="text-slate-700">未结清订单</span><span className="font-medium text-slate-700">{clientOrderCountWithBalance}</span></div>
-                        <div className="flex items-center justify-between"><span className="text-slate-700">最近收款</span><span className="max-w-[180px] text-right font-medium text-slate-700">{clientLastPayment ? `${clientLastPayment.date} · ${formatMoney(clientLastPayment.amount)}` : "暂无收款"}</span></div>
-                        <div className="flex items-center justify-between"><span className="text-slate-700">客户档案余额</span><span className="font-medium text-slate-700">{formatMoney(selectedClient.balance ?? clientBalance)}</span></div>
+                      <div className="mt-3 space-y-2.5 text-xs">
+                        <div className="flex items-center justify-between"><span className="text-slate-500">未收余款</span><span className={`font-semibold ${clientBalance > 0 ? "text-amber-600" : "text-emerald-600"}`}>{formatMoney(clientBalance)}</span></div>
+                        <div className="flex items-center justify-between"><span className="text-slate-500">未结清订单</span><span className="font-medium text-slate-700">{clientOrderCountWithBalance}</span></div>
+                        <div className="flex items-start justify-between"><span className="text-slate-500">最近收款</span><span className="max-w-[200px] text-right font-medium text-slate-700">{clientLastPayment ? `${clientLastPayment.date} · ${formatMoney(clientLastPayment.amount)}` : "暂无收款"}</span></div>
+                        <div className="flex items-center justify-between"><span className="text-slate-500">档案余额</span><span className="font-medium text-slate-700">{formatMoney(selectedClient.balance ?? clientBalance)}</span></div>
                       </div>
                     </div>
                   </div>
@@ -4213,9 +4216,9 @@ function ClientsSection({ clients, setClients, suppliers, setSuppliers, orders, 
                     )}
 
                     {clientDetailTab === "orders" ? (
-                      <div className="grid gap-3 xl:grid-cols-[1.15fr_0.85fr]">
+                      <div className="grid gap-4 xl:grid-cols-[1.15fr_0.85fr]">
                     <div className="space-y-4">
-                      <div className="rounded-xl border border-gray-200 bg-gray-50 p-3">
+                      <div className="rounded-xl border border-gray-200 bg-gray-50 p-4">
                         <div className="mb-3 flex items-center justify-between">
                           <div>
                             <p className="text-xs font-semibold text-slate-700">快速收款</p>
@@ -4298,7 +4301,7 @@ function ClientsSection({ clients, setClients, suppliers, setSuppliers, orders, 
                         ) : <div className="rounded-xl border border-dashed border-slate-200 py-10 text-center text-xs text-emerald-600">这个客户当前没有未收款订单</div>}
                       </div>
 
-                      <div className="rounded-xl border border-gray-200 bg-gray-50 p-3">
+                      <div className="rounded-xl border border-gray-200 bg-gray-50 p-4">
                         <div className="mb-3 flex items-center justify-between gap-2">
                           <p className="text-xs font-semibold text-slate-700">关联订单</p>
                           <div className="flex items-center gap-2">
@@ -4400,7 +4403,7 @@ function ClientsSection({ clients, setClients, suppliers, setSuppliers, orders, 
                     ) : null}
 
                     {clientDetailTab === "appointments" ? (
-                      <div className="space-y-3">
+                      <div className="space-y-4">
                         <div className="flex items-center justify-between">
                           <p className="text-xs font-semibold text-slate-700">量衣预约</p>
                           <button onClick={() => { setEditingAppointment(null); setAppointmentDraft({ appointment_date: new Date().toISOString().slice(0, 10), address: '', description: '' }); setShowAppointmentModal(true); }} className="rounded-md border border-slate-300 bg-white px-2 py-1 text-[11px] font-semibold text-slate-600 hover:border-slate-400 hover:text-slate-700 transition-colors">+ 新建预约</button>

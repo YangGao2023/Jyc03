@@ -1,6 +1,6 @@
 ﻿"use client";
 
-import { Fragment, useEffect, useMemo, useRef, useState } from "react";
+import { Fragment, useEffect, useMemo, useState } from "react";
 import { DashboardPageHeader } from "../components";
 import {
   bizOrders,
@@ -357,6 +357,31 @@ function printTabularSchema(config: TabularSchemaConfig | SplitTabularSchemaConf
   openPrintWindow(buildSimpleTablePrintHTML(config.title, subtitle, columns, config.printRows()));
 }
 
+function buildBizSnapshot(input: Partial<BizStoreSnapshot>): BizStoreSnapshot {
+  return {
+    revision: input.revision ?? "",
+    orders: input.orders ?? [],
+    clients: input.clients ?? [],
+    suppliers: input.suppliers ?? [],
+    expenses: input.expenses ?? [],
+    cashEntries: input.cashEntries ?? [],
+    materials: input.materials ?? [],
+    purchases: input.purchases ?? [],
+    employees: input.employees ?? [],
+    attendances: input.attendances ?? [],
+    appointments: input.appointments ?? [],
+    payrolls: input.payrolls ?? [],
+    quotes: input.quotes ?? [],
+    showcases: input.showcases ?? [],
+    printArchives: input.printArchives ?? [],
+    settings: input.settings ?? bizSettings,
+  };
+}
+
+function serializeBizSnapshot(snapshot: BizStoreSnapshot) {
+  return JSON.stringify(snapshot);
+}
+
 async function copyPlainText(text: string) {
   if (typeof navigator === "undefined" || !navigator.clipboard?.writeText) return false;
   await navigator.clipboard.writeText(text);
@@ -423,10 +448,12 @@ function ActionBtn({
   children,
   onClick,
   tone = "default",
+  disabled = false,
 }: {
   children: React.ReactNode;
   onClick?: () => void;
   tone?: "default" | "primary" | "danger" | "success";
+  disabled?: boolean;
 }) {
   const tones = {
     default: "border-slate-300 bg-white text-slate-600 hover:border-slate-400 hover:text-slate-900",
@@ -437,8 +464,9 @@ function ActionBtn({
 
   return (
     <button
-      onClick={onClick}
-      className={`flex items-center gap-1.5 rounded-lg border px-3 py-1.5 text-xs font-semibold transition-colors ${tones[tone]}`}
+      onClick={disabled ? undefined : onClick}
+      disabled={disabled}
+      className={`flex items-center gap-1.5 rounded-lg border px-3 py-1.5 text-xs font-semibold transition-colors ${disabled ? "cursor-not-allowed border-slate-200 bg-slate-100 text-slate-400" : tones[tone]}`}
     >
       {children}
     </button>
@@ -5230,14 +5258,15 @@ function EmployeesSection({ employees, setEmployees, attendances, setAttendances
 
       {sub === "rules" ? (
         <div className="space-y-4">
-          <PanelCard title="员工系统规则" note="员工系统规则独立成页，只保留规则配置，不再混入员工档案。">
+          <PanelCard title="员工系统规则" note="考勤工资规则只保留在这里配置，改完后请点页面上方保存。">
             <div className="grid gap-3 md:grid-cols-2 xl:grid-cols-4">
               <div><p className="mb-1 text-[11px] font-semibold text-slate-500">饭补金额</p><SmallInput value={String(mealAllowanceAmount)} onChange={(v) => setSettings((prev) => ({ ...prev, meal_allowance_amount: Number(v) || 0 }))} type="number" /></div>
               <div><p className="mb-1 text-[11px] font-semibold text-slate-500">自动考勤时区</p><SmallInput value={settings.auto_attendance_timezone ?? "America/New_York"} onChange={(v) => setSettings((prev) => ({ ...prev, auto_attendance_timezone: v }))} /></div>
               <div><p className="mb-1 text-[11px] font-semibold text-slate-500">执行时间</p><SmallInput value={settings.auto_attendance_run_time ?? "01:00"} onChange={(v) => setSettings((prev) => ({ ...prev, auto_attendance_run_time: v }))} /></div>
-              <div><p className="mb-1 text-[11px] font-semibold text-slate-500">自动默认工时</p><div className="rounded-lg border border-slate-200 bg-slate-50 px-3 py-2 text-xs text-slate-600">{formatMinutes(settings.auto_attendance_default_minutes || 600)}</div></div>
+              <div><p className="mb-1 text-[11px] font-semibold text-slate-500">自动默认工时(分钟)</p><SmallInput value={String(settings.auto_attendance_default_minutes ?? 600)} onChange={(v) => setSettings((prev) => ({ ...prev, auto_attendance_default_minutes: Number(v) || 0 }))} type="number" /></div>
             </div>
-            <div className="mt-3 rounded-lg border border-slate-200 bg-slate-50 px-3 py-2 text-xs text-slate-600">自动考勤规则：{settings.auto_attendance_timezone || "America/New_York"} 每天 {settings.auto_attendance_run_time || "01:00"} 为在职员工按工作日自动生成 {formatMinutes(settings.auto_attendance_default_minutes || 600)} 考勤，再叠加请假 / 加班修正。</div>
+            <div className="mt-3"><SettingsTextArea label="自动备注" value={settings.auto_attendance_note ?? ""} rows={4} onChange={(value) => setSettings((prev) => ({ ...prev, auto_attendance_note: value }))} note="自动生成考勤时附带说明，可留空。" /></div>
+            <div className="mt-3 rounded-lg border border-slate-200 bg-slate-50 px-3 py-2 text-xs text-slate-600">自动考勤规则：{settings.auto_attendance_timezone || "America/New_York"} 每天 {settings.auto_attendance_run_time || "01:00"} 为在职员工按工作日自动生成 {formatMinutes(settings.auto_attendance_default_minutes || 600)} 考勤，再叠加请假 / 加班修正。{settings.auto_attendance_note?.trim() ? ` 备注：${settings.auto_attendance_note.trim()}` : ""}</div>
           </PanelCard>
         </div>
       ) : null}
@@ -5339,32 +5368,24 @@ function SettingsTextArea({
   return <div className="flex flex-col gap-1"><label className="text-xs font-semibold text-slate-600">{label}</label><textarea value={value} onChange={(e) => onChange(e.target.value)} rows={rows} className="w-full rounded-lg border border-slate-300 bg-white px-3 py-2 text-xs text-slate-700 focus:border-blue-400 focus:outline-none resize-none" />{note && <p className="text-[11px] text-slate-400">{note}</p>}</div>;
 }
 
-type SettingsPageKey = "company-base" | "company-contact" | "finance" | "print" | "lists" | "attendance";
+type SettingsPageKey = "company-base" | "company-contact" | "finance" | "print" | "lists";
 
-function SettingsSection({ settings, setSettings, saveState }: { settings: BizSettings; setSettings: React.Dispatch<React.SetStateAction<BizSettings>>; saveState: "idle" | "saving" | "saved" | "error" | "conflict"; }) {
+function SettingsSection({ settings, setSettings, saveState, isDirty, lastSavedAt }: { settings: BizSettings; setSettings: React.Dispatch<React.SetStateAction<BizSettings>>; saveState: "idle" | "saving" | "saved" | "error" | "conflict"; isDirty: boolean; lastSavedAt: string; }) {
   const pages: Array<{ key: SettingsPageKey; label: string; note: string }> = [
     { key: "company-base", label: "1. 公司基础", note: "公司名称、地址和展示预览" },
     { key: "company-contact", label: "2. 联系方式", note: "电话、邮箱、网站和 Logo" },
     { key: "finance", label: "3. 财务收款", note: "税务默认值和收款方式" },
     { key: "print", label: "4. 打印模板", note: "发票、领料单和页脚备注" },
     { key: "lists", label: "5. 分类列表", note: "支出类型和供应商分类" },
-    { key: "attendance", label: "6. 考勤工资", note: "餐补和自动考勤规则" },
   ];
   const [page, setPage] = useState<SettingsPageKey>("company-base");
-  const [lastSavedAt, setLastSavedAt] = useState("");
   const pageIndex = pages.findIndex((item) => item.key === page);
   const currentPage = pages[pageIndex] ?? pages[0];
-
-  useEffect(() => {
-    if (saveState === "saved") {
-      setLastSavedAt(new Date().toLocaleTimeString("zh-CN", { hour12: false }));
-    }
-  }, [saveState]);
 
   const update = (key: keyof BizSettings, value: string) => {
     setSettings((prev) => ({
       ...prev,
-      [key]: key === "default_tax_rate" || key === "fiscal_start_month" || key === "quote_valid_days" || key === "meal_allowance_amount" || key === "auto_attendance_default_minutes"
+      [key]: key === "default_tax_rate" || key === "fiscal_start_month" || key === "quote_valid_days"
         ? Number(value) || 0
         : value,
     }));
@@ -5374,20 +5395,22 @@ function SettingsSection({ settings, setSettings, saveState }: { settings: BizSe
   const supplierCategoryValue = settings.supplier_categories || "布料\n五金\n玻璃\n物流\n其他";
   const saveTone = saveState === "error" || saveState === "conflict"
     ? "border-rose-200 bg-rose-50 text-rose-700"
-    : saveState === "saved"
-      ? "border-emerald-200 bg-emerald-50 text-emerald-700"
-      : saveState === "saving"
-        ? "border-sky-200 bg-sky-50 text-sky-700"
-        : "border-slate-200 bg-slate-50 text-slate-600";
-  const saveText = saveState === "saved"
-    ? `设置已保存成功${lastSavedAt ? ` · ${lastSavedAt}` : ""}`
     : saveState === "saving"
-      ? "正在保存设置…"
-      : saveState === "conflict"
-        ? "设置保存冲突，请刷新后重试"
-        : saveState === "error"
-          ? "设置保存失败"
-          : "设置会自动保存";
+      ? "border-sky-200 bg-sky-50 text-sky-700"
+      : isDirty
+        ? "border-amber-200 bg-amber-50 text-amber-700"
+        : "border-emerald-200 bg-emerald-50 text-emerald-700";
+  const saveText = saveState === "saving"
+    ? "正在保存设置…"
+    : saveState === "conflict"
+      ? "设置保存冲突，请刷新后重试"
+      : saveState === "error"
+        ? "设置保存失败"
+        : isDirty
+          ? "当前有未保存更改"
+          : lastSavedAt
+            ? `设置已保存成功 · ${lastSavedAt}`
+            : "当前设置已同步";
 
   return (
     <div className="space-y-3 xl:space-y-2">
@@ -5398,7 +5421,11 @@ function SettingsSection({ settings, setSettings, saveState }: { settings: BizSe
       />
 
       <div className={`rounded-xl border px-4 py-3 text-xs font-medium ${saveTone}`}>
-        {saveText}，只要右上角出现“设置已保存成功”，就说明这次改动已经写进存储，不是只改了页面。
+        {saveState === "error" || saveState === "conflict"
+          ? `${saveText}，先处理完再继续保存。`
+          : isDirty
+            ? "系统设置不再自动保存，改完后请点页面上方的“保存更改”。"
+            : `${saveText}，考勤工资规则已经只保留在员工管理里维护。`}
       </div>
 
       <div className="rounded-xl border border-slate-200 bg-white p-3">
@@ -5409,9 +5436,9 @@ function SettingsSection({ settings, setSettings, saveState }: { settings: BizSe
             <p className="mt-1 text-xs text-slate-500">{currentPage.note}</p>
           </div>
           <div className="flex items-center gap-2">
-            <ActionBtn onClick={() => setPage(pages[Math.max(0, pageIndex - 1)].key)}>{"← 上一页"}</ActionBtn>
+            <ActionBtn disabled={pageIndex === 0} onClick={() => setPage(pages[Math.max(0, pageIndex - 1)].key)}>{"← 上一页"}</ActionBtn>
             <div className="rounded-lg border border-slate-200 px-3 py-1.5 text-xs font-semibold text-slate-600">第 {pageIndex + 1} / {pages.length} 页</div>
-            <ActionBtn onClick={() => setPage(pages[Math.min(pages.length - 1, pageIndex + 1)].key)}>{"下一页 →"}</ActionBtn>
+            <ActionBtn disabled={pageIndex === pages.length - 1} onClick={() => setPage(pages[Math.min(pages.length - 1, pageIndex + 1)].key)}>{"下一页 →"}</ActionBtn>
           </div>
         </div>
         <div className="mt-3 flex flex-wrap gap-2">
@@ -5457,9 +5484,9 @@ function SettingsSection({ settings, setSettings, saveState }: { settings: BizSe
             </SettingsGroup>
             <SettingsGroup title="保存确认">
               <div className="space-y-3 text-sm text-slate-600">
-                <p>你改完后，这一页会自动保存。</p>
-                <p>看到 <span className="font-semibold text-emerald-700">设置已保存成功</span>，表示服务端返回成功，不是本地假提示。</p>
-                <p>如果失败或冲突，这里会直接变成红色提示。</p>
+                <p>这里不再自动保存，改完后请点页面上方的“保存更改”。</p>
+                <p>看到 <span className="font-semibold text-emerald-700">设置已保存成功</span>，才表示服务端真的写入成功。</p>
+                <p>考勤工资规则已经从系统设置移走，只在员工管理里维护。</p>
               </div>
             </SettingsGroup>
           </div>
@@ -5505,20 +5532,6 @@ function SettingsSection({ settings, setSettings, saveState }: { settings: BizSe
             </SettingsGroup>
             <SettingsGroup title="供应商分类">
               <SettingsTextArea label="供应商分类列表" value={supplierCategoryValue} rows={8} onChange={(value) => update("supplier_categories", value)} note="一行一个，或者用逗号分隔。供应商新增/编辑会直接读取这里。" />
-            </SettingsGroup>
-          </div>
-        ) : null}
-
-        {page === "attendance" ? (
-          <div className="grid gap-3 xl:grid-cols-2">
-            <SettingsGroup title="工资与餐补">
-              <SettingsField label="餐补金额" value={String(settings.meal_allowance_amount ?? 15)} onChange={(value) => update("meal_allowance_amount", value)} type="number" />
-              <SettingsField label="自动默认工时(分钟)" value={String(settings.auto_attendance_default_minutes ?? 600)} onChange={(value) => update("auto_attendance_default_minutes", value)} type="number" />
-            </SettingsGroup>
-            <SettingsGroup title="自动考勤">
-              <SettingsField label="时区" value={settings.auto_attendance_timezone ?? "America/New_York"} onChange={(value) => update("auto_attendance_timezone", value)} />
-              <SettingsField label="执行时间" value={settings.auto_attendance_run_time ?? "01:00"} onChange={(value) => update("auto_attendance_run_time", value)} />
-              <SettingsTextArea label="自动备注" value={settings.auto_attendance_note ?? ""} rows={5} onChange={(value) => update("auto_attendance_note", value)} note="用于自动生成考勤时附带说明，可留空。" />
             </SettingsGroup>
           </div>
         ) : null}
@@ -5589,11 +5602,31 @@ export default function DashboardBizPage() {
   const [printArchives, setPrintArchives] = useState<PrintArchiveRecord[]>(bizPrintArchives);
   const [settings, setSettings] = useState<BizSettings>(bizSettings);
   const [storeRevision, setStoreRevision] = useState("");
+  const [savedSnapshotJson, setSavedSnapshotJson] = useState("");
+  const [lastSavedAt, setLastSavedAt] = useState("");
   const [isHydrated, setIsHydrated] = useState(false);
   const [saveState, setSaveState] = useState<"idle" | "saving" | "saved" | "error" | "conflict">("idle");
-  const skipNextPersistRef = useRef(true);
-  const hasSavedSettingsRef = useRef(false);
   const orderSummary = useMemo(() => summarizeOrders(orders), [orders]);
+  const snapshot = useMemo(() => buildBizSnapshot({
+    revision: storeRevision,
+    orders,
+    clients,
+    suppliers,
+    expenses,
+    cashEntries,
+    materials,
+    purchases,
+    employees,
+    attendances,
+    appointments,
+    payrolls,
+    quotes,
+    showcases,
+    printArchives,
+    settings,
+  }), [storeRevision, orders, clients, suppliers, expenses, cashEntries, materials, purchases, employees, attendances, appointments, payrolls, quotes, showcases, printArchives, settings]);
+  const snapshotJson = useMemo(() => serializeBizSnapshot(snapshot), [snapshot]);
+  const isDirty = isHydrated && snapshotJson !== savedSnapshotJson;
 
   useEffect(() => {
     if (!isHydrated) return;
@@ -5612,47 +5645,68 @@ export default function DashboardBizPage() {
         if (!response.ok) throw new Error("load failed");
         const payload = (await response.json()) as { ok: boolean; data: BizStoreSnapshot };
         if (cancelled || !payload?.data) return;
-        setStoreRevision(payload.data.revision ?? "");
-        setOrders(payload.data.orders ?? []);
-        setClients(payload.data.clients ?? []);
-        setSuppliers(payload.data.suppliers ?? []);
-        setExpenses(payload.data.expenses ?? []);
-        setCashEntries(payload.data.cashEntries ?? []);
-        setMaterials(payload.data.materials ?? []);
-        setPurchases(payload.data.purchases ?? []);
-        setEmployees(payload.data.employees ?? []);
-        setAttendances(payload.data.attendances ?? []);
-        setAppointments(payload.data.appointments ?? []);
-        setPayrolls(payload.data.payrolls ?? []);
-        setQuotes(payload.data.quotes ?? []);
-        setShowcases(payload.data.showcases ?? []);
-        setPrintArchives(payload.data.printArchives ?? []);
-        // Don't overwrite if user already made changes (saved)
-        const apiSettings = payload.data.settings ?? bizSettings;
-        setSettings(hasSavedSettingsRef.current ? (prev) => ({ ...apiSettings, ...prev }) : apiSettings);
+        const loadedSnapshot = buildBizSnapshot(payload.data);
+        setStoreRevision(loadedSnapshot.revision);
+        setOrders(loadedSnapshot.orders);
+        setClients(loadedSnapshot.clients);
+        setSuppliers(loadedSnapshot.suppliers);
+        setExpenses(loadedSnapshot.expenses);
+        setCashEntries(loadedSnapshot.cashEntries);
+        setMaterials(loadedSnapshot.materials);
+        setPurchases(loadedSnapshot.purchases);
+        setEmployees(loadedSnapshot.employees);
+        setAttendances(loadedSnapshot.attendances);
+        setAppointments(loadedSnapshot.appointments);
+        setPayrolls(loadedSnapshot.payrolls);
+        setQuotes(loadedSnapshot.quotes);
+        setShowcases(loadedSnapshot.showcases);
+        setPrintArchives(loadedSnapshot.printArchives);
+        setSettings(loadedSnapshot.settings);
+        setSavedSnapshotJson(serializeBizSnapshot(loadedSnapshot));
+        try { localStorage.setItem("biz-store-backup", serializeBizSnapshot(loadedSnapshot)); } catch {}
       } catch {
         setSaveState("error");
-        // Fallback: restore from localStorage backup
         try {
           const backup = localStorage.getItem("biz-store-backup");
           if (backup) {
-            const parsed = JSON.parse(backup);
-            if (parsed.revision) setStoreRevision(parsed.revision);
-            if (parsed.orders) setOrders(parsed.orders);
-            if (parsed.clients) setClients(parsed.clients);
-            if (parsed.suppliers) setSuppliers(parsed.suppliers);
-            if (parsed.expenses) setExpenses(parsed.expenses);
-            if (parsed.cashEntries) setCashEntries(parsed.cashEntries);
-            if (parsed.materials) setMaterials(parsed.materials);
-            if (parsed.purchases) setPurchases(parsed.purchases);
-            if (parsed.employees) setEmployees(parsed.employees);
-            if (parsed.attendances) setAttendances(parsed.attendances);
-            if (parsed.appointments) setAppointments(parsed.appointments);
-            if (parsed.payrolls) setPayrolls(parsed.payrolls);
-            if (parsed.quotes) setQuotes(parsed.quotes);
-            if (parsed.showcases) setShowcases(parsed.showcases);
-            if (parsed.printArchives) setPrintArchives(parsed.printArchives);
-            if (parsed.settings) setSettings(parsed.settings);
+            const parsed = JSON.parse(backup) as Partial<BizStoreSnapshot>;
+            const backupSnapshot = buildBizSnapshot(parsed);
+            setStoreRevision(backupSnapshot.revision);
+            setOrders(backupSnapshot.orders);
+            setClients(backupSnapshot.clients);
+            setSuppliers(backupSnapshot.suppliers);
+            setExpenses(backupSnapshot.expenses);
+            setCashEntries(backupSnapshot.cashEntries);
+            setMaterials(backupSnapshot.materials);
+            setPurchases(backupSnapshot.purchases);
+            setEmployees(backupSnapshot.employees);
+            setAttendances(backupSnapshot.attendances);
+            setAppointments(backupSnapshot.appointments);
+            setPayrolls(backupSnapshot.payrolls);
+            setQuotes(backupSnapshot.quotes);
+            setShowcases(backupSnapshot.showcases);
+            setPrintArchives(backupSnapshot.printArchives);
+            setSettings(backupSnapshot.settings);
+            setSavedSnapshotJson(serializeBizSnapshot(backupSnapshot));
+          } else {
+            const initialSnapshot = buildBizSnapshot({
+              orders: bizOrders,
+              clients: bizClients,
+              suppliers: bizSuppliers,
+              expenses: bizExpenses,
+              cashEntries: bizCashEntries,
+              materials: bizMaterials,
+              purchases: bizPurchases,
+              employees: bizEmployees,
+              attendances: bizAttendances,
+              appointments: bizAppointments,
+              payrolls: bizPayrolls,
+              quotes: bizQuotes,
+              showcases: bizShowcases,
+              printArchives: bizPrintArchives,
+              settings: bizSettings,
+            });
+            setSavedSnapshotJson(serializeBizSnapshot(initialSnapshot));
           }
         } catch {}
       } finally {
@@ -5667,63 +5721,81 @@ export default function DashboardBizPage() {
   }, []);
 
   useEffect(() => {
-    if (!isHydrated) return;
-    if (skipNextPersistRef.current) {
-      skipNextPersistRef.current = false;
-      return;
+    if (!isHydrated || saveState === "saving") return;
+    if (snapshotJson !== savedSnapshotJson && saveState !== "idle") {
+      setSaveState("idle");
     }
+  }, [isHydrated, saveState, savedSnapshotJson, snapshotJson]);
 
-    const timer = window.setTimeout(async () => {
-      try {
-        setSaveState("saving");
-        const snapshot = {
-          revision: storeRevision,
-          orders,
-          clients,
-          suppliers,
-          expenses,
-          cashEntries,
-          materials,
-          purchases,
-          employees,
-          attendances,
-          appointments,
-          payrolls,
-          quotes,
-          showcases,
-          printArchives,
-          settings,
-        } satisfies BizStoreSnapshot;
-        try { localStorage.setItem("biz-store-backup", JSON.stringify(snapshot)); } catch {}
-        const response = await fetch("/api/biz-store", {
-          method: "PUT",
-          headers: { "Content-Type": "application/json" },
-          body: JSON.stringify(snapshot),
-        });
-        if (response.status === 409) {
-          setSaveState("conflict");
-          return;
-        }
-        if (!response.ok) throw new Error("save failed");
-        const payload = (await response.json()) as { ok: boolean; data: BizStoreSnapshot };
-        setStoreRevision(payload.data.revision ?? storeRevision);
-        setSaveState("saved");
-        hasSavedSettingsRef.current = true;
-      } catch {
-        setSaveState("error");
+  async function persistSnapshot() {
+    if (!isHydrated || saveState === "saving" || !isDirty) return;
+
+    try {
+      setSaveState("saving");
+      const response = await fetch("/api/biz-store", {
+        method: "PUT",
+        headers: { "Content-Type": "application/json" },
+        body: snapshotJson,
+      });
+      if (response.status === 409) {
+        setSaveState("conflict");
+        return;
       }
-    }, 250);
+      if (!response.ok) throw new Error("save failed");
+      const payload = (await response.json()) as { ok: boolean; data: BizStoreSnapshot };
+      const nextSnapshot = buildBizSnapshot({ ...snapshot, revision: payload.data.revision ?? snapshot.revision });
+      setStoreRevision(nextSnapshot.revision);
+      setSavedSnapshotJson(serializeBizSnapshot(nextSnapshot));
+      setLastSavedAt(new Date().toLocaleTimeString("zh-CN", { hour12: false }));
+      try { localStorage.setItem("biz-store-backup", serializeBizSnapshot(nextSnapshot)); } catch {}
+      setSaveState("saved");
+    } catch {
+      setSaveState("error");
+    }
+  }
 
-    return () => window.clearTimeout(timer);
-  }, [isHydrated, orders, clients, suppliers, expenses, cashEntries, materials, purchases, employees, attendances, appointments, payrolls, quotes, showcases, printArchives, settings]);
+  const saveTone = saveState === "error" || saveState === "conflict"
+    ? "border-rose-200 bg-rose-50 text-rose-700"
+    : saveState === "saving"
+      ? "border-sky-200 bg-sky-50 text-sky-700"
+      : isDirty
+        ? "border-amber-200 bg-amber-50 text-amber-700"
+        : "border-emerald-200 bg-emerald-50 text-emerald-700";
+  const saveText = saveState === "saving"
+    ? "正在保存更改…"
+    : saveState === "conflict"
+      ? "保存冲突，请刷新后重试"
+      : saveState === "error"
+        ? "保存失败"
+        : isDirty
+          ? "当前有未保存更改"
+          : lastSavedAt
+            ? `已保存 · ${lastSavedAt}`
+            : "当前数据已同步";
+  const saveHint = saveState === "error" || saveState === "conflict"
+    ? saveText
+    : isDirty
+      ? "改完后需要手动点保存，不再自动写入。"
+      : "当前页面没有未保存更改。";
 
   return (
     <PageSection>
       <DashboardPageHeader
         eyebrow="Owner Backend · Business"
         title="业务管理"
-        description={`订单、财务、客户、物料、员工与设置的统一操作界面。${saveState === "saving" ? " 正在保存…" : saveState === "saved" ? " 已持久化保存" : saveState === "conflict" ? " 检测到其他页面已改动，请刷新后再继续" : saveState === "error" ? " 保存异常" : ""}`}
+        description={`订单、财务、客户、物料、员工与设置的统一操作界面。${saveState === "saving" ? " 正在保存…" : saveState === "conflict" ? " 检测到其他页面已改动，请刷新后再继续" : saveState === "error" ? " 保存异常" : isDirty ? " 当前有未保存更改" : lastSavedAt ? ` 已保存 ${lastSavedAt}` : ""}`}
       />
+
+      <div className="mt-3 flex flex-wrap items-center justify-between gap-3 rounded-[18px] border border-slate-200 bg-white px-4 py-3 shadow-sm">
+        <div>
+          <p className="text-xs font-semibold text-slate-700">手动保存</p>
+          <p className="mt-1 text-xs text-slate-500">{saveHint}</p>
+        </div>
+        <div className="flex items-center gap-2">
+          <div className={`rounded-lg border px-3 py-1.5 text-xs font-semibold ${saveTone}`}>{saveText}</div>
+          <ActionBtn tone={isDirty ? "primary" : "success"} disabled={!isDirty || saveState === "saving"} onClick={persistSnapshot}>{saveState === "saving" ? "保存中…" : "保存更改"}</ActionBtn>
+        </div>
+      </div>
 
       <div className="mt-4 flex min-h-[600px] overflow-hidden rounded-[20px] bg-white shadow-sm">
         <nav className="w-40 shrink-0 border-r border-slate-100 bg-slate-50 py-4">
@@ -5851,7 +5923,7 @@ export default function DashboardBizPage() {
               setSettings={setSettings}
             />
           )}
-          {section === "settings" && <SettingsSection settings={settings} setSettings={setSettings} saveState={saveState} />}
+          {section === "settings" && <SettingsSection settings={settings} setSettings={setSettings} saveState={saveState} isDirty={isDirty} lastSavedAt={lastSavedAt} />}
         </div>
       </div>
     </PageSection>

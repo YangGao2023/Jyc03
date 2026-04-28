@@ -3062,10 +3062,19 @@ function FinanceSection({ orders, setOrders, expenses, setExpenses, cashEntries,
   const filteredPaymentRows = paymentRows.filter(({ record }) => isDateInRange(record.date, financeDateStart, financeDateEnd));
   const filteredExpenses = expenses.filter((item) => isDateInRange(item.expense_date, financeDateStart, financeDateEnd));
   const filteredCashEntries = cashEntries.filter((item) => isDateInRange(item.date, financeDateStart, financeDateEnd));
+  const payrollOverlapsFinanceRange = (month: string) => {
+    if (!month) return false;
+    const monthStart = `${month}-01`;
+    const monthEnd = `${month}-31`;
+    if (financeDateStart && monthEnd < financeDateStart) return false;
+    if (financeDateEnd && monthStart > financeDateEnd) return false;
+    return true;
+  };
+  const filteredPayrolls = payrolls.filter((item) => payrollOverlapsFinanceRange(item.month));
   const totalIncome = filteredPaymentRows.reduce((sum, { record }) => sum + (record.type === "refund" ? -record.amount : record.amount), 0);
   const totalExpense = filteredExpenses.reduce((s, item) => s + item.amount, 0);
   const totalBalance = orders.reduce((s, o) => s + (o.balance ?? 0), 0);
-  const payrollAmount = payrolls.reduce((s, item) => s + item.net_salary, 0);
+  const payrollAmount = filteredPayrolls.reduce((s, item) => s + item.net_salary, 0);
   const cashBalance = filteredCashEntries.reduce((s, item) => s + (["收入", "转入"].includes(item.type) ? item.amount : -item.amount), 0);
   const receivableOrders = orders.filter((o) => (o.balance ?? 0) > 0 && o.status !== "已关闭");
   const filteredReceivableOrders = receivableOrders.filter((o) => isDateInRange(o.order_date, financeDateStart, financeDateEnd));
@@ -3084,10 +3093,10 @@ function FinanceSection({ orders, setOrders, expenses, setExpenses, cashEntries,
   useEffect(() => { setPaymentPage(1); setExpensesPage(1); setCashPage(1); setReceivablesPage(1); }, [financeDateStart, financeDateEnd]);
   const financeAuditPreview = useMemo(() => buildFinanceAuditReport(orders, clients), [orders, clients]);
   const activeAudit = auditReport ?? financeAuditPreview;
-  const ledgerRows = Array.from(new Set([...filteredPaymentRows.map(({ record }) => (record.date ?? "").slice(0, 7)), ...filteredExpenses.map((e) => e.expense_date.slice(0, 7)), ...payrolls.filter((p) => (!financeDateStart || `${p.month}-01` >= financeDateStart) && (!financeDateEnd || `${p.month}-31` <= financeDateEnd)).map((p) => p.month)])).filter(Boolean).sort().reverse().map((month) => {
+  const ledgerRows = Array.from(new Set([...filteredPaymentRows.map(({ record }) => (record.date ?? "").slice(0, 7)), ...filteredExpenses.map((e) => e.expense_date.slice(0, 7)), ...filteredPayrolls.map((p) => p.month)])).filter(Boolean).sort().reverse().map((month) => {
     const income = filteredPaymentRows.filter(({ record }) => (record.date ?? "").startsWith(month)).reduce((sum, { record }) => sum + (record.type === "refund" ? -record.amount : record.amount), 0);
     const expense = filteredExpenses.filter((item) => item.expense_date.startsWith(month)).reduce((sum, item) => sum + item.amount, 0);
-    const wage = payrolls.filter((item) => item.month === month).reduce((sum, item) => sum + item.net_salary, 0);
+    const wage = filteredPayrolls.filter((item) => item.month === month).reduce((sum, item) => sum + item.net_salary, 0);
     return { month, income, expense, net: income - expense, wage, profit: income - expense - wage };
   });
   const financeConfigs: Record<FinanceSub, TabularSchemaConfig> = {

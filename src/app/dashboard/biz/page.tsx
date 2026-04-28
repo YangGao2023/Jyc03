@@ -68,11 +68,11 @@ function textHasExactOrderNumber(value: string | undefined, orderNumber: string)
 }
 
 function expenseReferencesOrder(item: ExpenseRecord, orderNumber: string) {
-  return [item.target, item.detail, item.remark ?? ""].some((value) => textHasExactOrderNumber(value, orderNumber));
+  return item.order_id === orderNumber || [item.target, item.detail, item.remark ?? ""].some((value) => textHasExactOrderNumber(value, orderNumber));
 }
 
 function cashEntryReferencesOrder(item: CashEntry, orderNumber: string) {
-  return item.order_number === orderNumber || textHasExactOrderNumber(item.note, orderNumber);
+  return item.order_number === orderNumber || item.order_id === orderNumber || textHasExactOrderNumber(item.note, orderNumber);
 }
 
 function formatCashLinkAmount(amount: number) {

@@ -1,0 +1,10 @@
+[
+  {"id":"order-delete-cascade","severity":"high","area":"orders,finance","title":"订单删除不清理关联cash条目","fixed":true,"verified":true},
+  {"id":"order-delete-expense-cascade","severity":"medium","area":"orders,finance","title":"订单删除不清理关联expense","fixed":true,"verified":true},
+  {"id":"order-id-unused","severity":"medium","area":"finance","title":"ExpenseRecord/CashEntry的order_id字段定义了但未使用","fixed":true,"verified":true},
+  {"id":"independent-income-crud","severity":"medium","area":"finance","title":"独立收入有视图无CRUD入口","fixed":true,"verified":true},
+  {"id":"office-payment-sync","severity":"low","area":"finance","title":"修改/删除订单收款记录时不同步cash条目","fixed":true,"verified":true,"note":"UI无单独编辑/删除付款记录入口，订单整体删除已有级联"},
+  {"id":"payroll-expense-cascade","severity":"low","area":"payroll,finance","title":"删除工资单不清理关联expense","fixed":true,"verified":true,"note":"deleteExpense已处理反向(删expense→重置payroll)，正向无单独删除工资单UI"},
+  {"id":"material-total-mismatch","severity":"low","area":"orders","title":"订单物料金额与总价不一致","fixed":true,"verified":true,"note":"非bug — 材料成本$3,410，最终价$4,490含人工/安装加价"},
+  {"id":"attendance-rename-cascade","severity":"low","area":"employees","title":"员工改名不更新考勤/工资单记录","fixed":true,"verified":true}
+]

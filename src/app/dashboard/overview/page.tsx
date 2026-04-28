@@ -17,12 +17,12 @@ function countMatches(raw: string, pattern: RegExp) {
 
 function promiseTone(value: string) {
   const normalized = value.trim().toLowerCase();
-  if (["in_progress", "acknowledged"].includes(normalized)) return "bg-sky-100 text-blue-200";
+  if (["in_progress", "acknowledged"].includes(normalized)) return "bg-sky-100 text-slate-600";
   if (["completed"].includes(normalized)) return "bg-emerald-100 text-emerald-800";
   if (["blocked", "expired"].includes(normalized)) return "bg-rose-100 text-rose-800";
   if (["promised"].includes(normalized)) return "bg-amber-100 text-amber-800";
   if (["handed_off"].includes(normalized)) return "bg-violet-100 text-violet-800";
-  return "bg-blue-800/40 text-blue-200";
+  return "bg-gray-100 text-slate-600";
 }
 
 function alertTone(value: string) {
@@ -201,60 +201,60 @@ export default async function DashboardOverviewPage() {
   const recentEventChain = events.slice(0, 8);
 
   return (
-    <div className="rounded-[30px] border border-blue-800/40 bg-[linear-gradient(180deg,_rgba(30,64,175,0.98),_rgba(23,37,84,0.98))] p-4 shadow-2xl">
-      <div className="rounded-[24px] border border-blue-800/40 bg-blue-900/20 p-4">
+    <div className="rounded-[30px] border border-gray-200 bg-white shadow-sm p-4 shadow-2xl">
+      <div className="rounded-[24px] border border-gray-200 bg-gray-50 p-4">
         <DashboardPageHeader
           eyebrow="Owner Backend · Overview"
           title="总览页"
           description="这一页开始把承诺、证据、醒来必读、督战告警都正式写进网站。"
-          right={<a href="/dashboard" className="rounded-2xl border border-blue-700 bg-blue-600 px-4 py-2 text-sm font-semibold text-white">返回后台</a>}
+          right={<a href="/dashboard" className="rounded-2xl border border-gray-200 bg-gray-100 px-4 py-2 text-sm font-semibold text-slate-700">返回后台</a>}
         />
 
         <div className="mt-4 grid gap-3 md:grid-cols-2 xl:grid-cols-6">
-          <div className="rounded-2xl border border-blue-800/40 bg-blue-900/20 p-4"><p className="text-[11px] uppercase tracking-[0.2em] text-blue-300/70">TODO</p><p className="mt-2 text-2xl font-semibold text-white">{todoCount}</p></div>
-          <div className="rounded-2xl border border-blue-800/40 bg-blue-900/20 p-4"><p className="text-[11px] uppercase tracking-[0.2em] text-blue-300/70">正式任务</p><p className="mt-2 text-2xl font-semibold text-white">{taskCount}</p></div>
-          <div className="rounded-2xl border border-blue-800/40 bg-blue-900/20 p-4"><p className="text-[11px] uppercase tracking-[0.2em] text-blue-300/70">进行中 Promise</p><p className="mt-2 text-2xl font-semibold text-white">{activePromises}</p></div>
-          <div className="rounded-2xl border border-blue-800/40 bg-blue-900/20 p-4"><p className="text-[11px] uppercase tracking-[0.2em] text-blue-300/70">已移交 Promise</p><p className="mt-2 text-2xl font-semibold text-white">{handedOffPromises}</p><p className="mt-1 text-xs text-blue-300/70">watchdog 或老板手动移交</p></div>
-          <div className="rounded-2xl border border-blue-800/40 bg-blue-900/20 p-4"><p className="text-[11px] uppercase tracking-[0.2em] text-blue-300/70">待消费 Wake</p><p className="mt-2 text-2xl font-semibold text-white">{pendingWakeCount}</p><p className="mt-1 text-xs text-blue-300/70">等待 agent 拿走</p></div>
-          <div className="rounded-2xl border border-blue-800/40 bg-blue-900/20 p-4"><p className="text-[11px] uppercase tracking-[0.2em] text-blue-300/70">Watchdog 告警</p><p className="mt-2 text-2xl font-semibold text-white">{alerts.length}</p><p className="mt-1 text-xs text-blue-300/70">超时/阻塞 {overduePromises + blockedPromises}</p></div>
+          <div className="rounded-2xl border border-gray-100 bg-white p-4"><p className="text-[11px] uppercase tracking-[0.2em] text-slate-500">TODO</p><p className="mt-2 text-2xl font-semibold text-slate-800">{todoCount}</p></div>
+          <div className="rounded-2xl border border-gray-100 bg-white p-4"><p className="text-[11px] uppercase tracking-[0.2em] text-slate-500">正式任务</p><p className="mt-2 text-2xl font-semibold text-slate-800">{taskCount}</p></div>
+          <div className="rounded-2xl border border-gray-100 bg-white p-4"><p className="text-[11px] uppercase tracking-[0.2em] text-slate-500">进行中 Promise</p><p className="mt-2 text-2xl font-semibold text-slate-800">{activePromises}</p></div>
+          <div className="rounded-2xl border border-gray-100 bg-white p-4"><p className="text-[11px] uppercase tracking-[0.2em] text-slate-500">已移交 Promise</p><p className="mt-2 text-2xl font-semibold text-slate-800">{handedOffPromises}</p><p className="mt-1 text-xs text-slate-500">watchdog 或老板手动移交</p></div>
+          <div className="rounded-2xl border border-gray-100 bg-white p-4"><p className="text-[11px] uppercase tracking-[0.2em] text-slate-500">待消费 Wake</p><p className="mt-2 text-2xl font-semibold text-slate-800">{pendingWakeCount}</p><p className="mt-1 text-xs text-slate-500">等待 agent 拿走</p></div>
+          <div className="rounded-2xl border border-gray-100 bg-white p-4"><p className="text-[11px] uppercase tracking-[0.2em] text-slate-500">Watchdog 告警</p><p className="mt-2 text-2xl font-semibold text-slate-800">{alerts.length}</p><p className="mt-1 text-xs text-slate-500">超时/阻塞 {overduePromises + blockedPromises}</p></div>
         </div>
 
         <div className="mt-4 flex flex-wrap gap-2">
-          <a href="/dashboard/tasks" className="rounded-full border border-blue-800/40 px-3 py-1.5 text-xs font-semibold text-blue-200 hover:bg-blue-800/30">去任务页处理</a>
-          <a href="/dashboard/system" className="rounded-full border border-blue-800/40 px-3 py-1.5 text-xs font-semibold text-blue-200 hover:bg-blue-800/30">去系统页排查</a>
+          <a href="/dashboard/tasks" className="rounded-full border border-gray-200 px-3 py-1.5 text-xs font-semibold text-slate-600 hover:bg-gray-100">去任务页处理</a>
+          <a href="/dashboard/system" className="rounded-full border border-gray-200 px-3 py-1.5 text-xs font-semibold text-slate-600 hover:bg-gray-100">去系统页排查</a>
         </div>
       </div>
 
       <div className="mt-4 grid gap-4 xl:grid-cols-[1.1fr_0.9fr]">
         <section className="space-y-4">
           <DashboardCard>
-            <DashboardCardTitle title="Promise 可操作化" desc="先把老板最常用的两刀落地：创建 Promise、标记完成。" right={<span className="rounded-full bg-blue-950 px-3 py-1 text-xs font-semibold text-white">{promises.length} 条</span>} />
-            <form action={createPromiseAction} className="mt-4 grid gap-3 rounded-2xl border border-blue-800/40 bg-blue-900/30 p-4 md:grid-cols-2">
-              <input name="title" placeholder="Promise 标题" className="rounded-xl border border-blue-800/40 bg-blue-900/20 px-3 py-2 text-sm outline-none" required />
-              <input name="owner" placeholder="Owner，例如 阿三 / 零号" className="rounded-xl border border-blue-800/40 bg-blue-900/20 px-3 py-2 text-sm outline-none" required />
-              <input name="backup" placeholder="Backup，可选" className="rounded-xl border border-blue-800/40 bg-blue-900/20 px-3 py-2 text-sm outline-none" />
-              <input name="description" placeholder="备注，可选" className="rounded-xl border border-blue-800/40 bg-blue-900/20 px-3 py-2 text-sm outline-none" />
+            <DashboardCardTitle title="Promise 可操作化" desc="先把老板最常用的两刀落地：创建 Promise、标记完成。" right={<span className="rounded-full bg-gray-100 px-3 py-1 text-xs font-semibold text-slate-700">{promises.length} 条</span>} />
+            <form action={createPromiseAction} className="mt-4 grid gap-3 rounded-2xl border border-gray-100 bg-gray-50 p-4 md:grid-cols-2">
+              <input name="title" placeholder="Promise 标题" className="rounded-xl border border-gray-200 bg-white px-3 py-2 text-sm outline-none" required />
+              <input name="owner" placeholder="Owner，例如 阿三 / 零号" className="rounded-xl border border-gray-200 bg-white px-3 py-2 text-sm outline-none" required />
+              <input name="backup" placeholder="Backup，可选" className="rounded-xl border border-gray-200 bg-white px-3 py-2 text-sm outline-none" />
+              <input name="description" placeholder="备注，可选" className="rounded-xl border border-gray-200 bg-white px-3 py-2 text-sm outline-none" />
               <div className="md:col-span-2 flex justify-end">
-                <button type="submit" className="rounded-2xl bg-blue-950 px-4 py-2 text-sm font-semibold text-white">创建 Promise</button>
+                <button type="submit" className="rounded-2xl bg-gray-100 px-4 py-2 text-sm font-semibold text-slate-700">创建 Promise</button>
               </div>
             </form>
             <div className="mt-4 grid gap-3">
               {openPromises.length > 0 ? openPromises.slice(0, 6).map((item) => (
-                <div key={item.id} className="rounded-2xl border border-blue-800/40 bg-blue-900/20 p-4">
+                <div key={item.id} className="rounded-2xl border border-gray-100 bg-white p-4">
                   <div className="flex flex-wrap items-center justify-between gap-2">
                     <div>
-                      <p className="text-sm font-semibold text-blue-100">{item.title}</p>
-                      <p className="mt-1 text-xs text-blue-300">{item.id} · owner: {item.owner} · backup: {item.backup || "-"}</p>
+                      <p className="text-sm font-semibold text-slate-700">{item.title}</p>
+                      <p className="mt-1 text-xs text-slate-700">{item.id} · owner: {item.owner} · backup: {item.backup || "-"}</p>
                     </div>
                     <span className={`rounded-full px-2.5 py-0.5 text-[11px] font-semibold ${promiseTone(item.status)}`}>{item.status}</span>
                   </div>
-                  {item.description ? <p className="mt-2 text-sm leading-6 text-blue-300">{item.description}</p> : null}
+                  {item.description ? <p className="mt-2 text-sm leading-6 text-slate-700">{item.description}</p> : null}
                   <div className="mt-3 flex flex-wrap items-center justify-between gap-3">
-                    <p className="text-xs text-blue-300">创建时间：{formatEasternTime(item.createdAt)}</p>
+                    <p className="text-xs text-slate-700">创建时间：{formatEasternTime(item.createdAt)}</p>
                     <div className="flex flex-wrap items-center gap-2">
                       <form action={handoffPromiseAction} className="flex items-center gap-2">
                         <input type="hidden" name="promiseId" value={item.id} />
-                        <input name="nextOwner" defaultValue={item.backup || ""} placeholder="移交给谁" className="w-32 rounded-xl border border-blue-800/40 bg-blue-900/20 px-3 py-2 text-sm outline-none" />
+                        <input name="nextOwner" defaultValue={item.backup || ""} placeholder="移交给谁" className="w-32 rounded-xl border border-gray-200 bg-white px-3 py-2 text-sm outline-none" />
                         <button type="submit" className="rounded-2xl border border-violet-200 bg-violet-50 px-3 py-2 text-sm font-semibold text-violet-700">强制移交</button>
                       </form>
                       <form action={completePromiseAction}>
@@ -264,74 +264,74 @@ export default async function DashboardOverviewPage() {
                     </div>
                   </div>
                 </div>
-              )) : <div className="rounded-2xl border border-dashed border-blue-800/40 bg-blue-900/30 px-4 py-6 text-sm text-blue-300">当前没有打开中的 Promise。</div>}
+              )) : <div className="rounded-2xl border border-dashed border-gray-200 bg-gray-50 px-4 py-6 text-sm text-slate-700">当前没有打开中的 Promise。</div>}
             </div>
           </DashboardCard>
 
           <DashboardCard>
-            <DashboardCardTitle title="事件链" desc="老板能直接看到谁触发了谁、挂在哪个 Promise、结果是什么。" right={<span className="rounded-full bg-blue-950 px-3 py-1 text-xs font-semibold text-white">{events.length} 条</span>} />
+            <DashboardCardTitle title="事件链" desc="老板能直接看到谁触发了谁、挂在哪个 Promise、结果是什么。" right={<span className="rounded-full bg-gray-100 px-3 py-1 text-xs font-semibold text-slate-700">{events.length} 条</span>} />
             <div className="mt-4 grid gap-3">
               {recentEventChain.length > 0 ? recentEventChain.map((item) => (
-                <div key={item.id} className="rounded-2xl border border-blue-800/40 bg-blue-900/30 p-4">
+                <div key={item.id} className="rounded-2xl border border-gray-100 bg-gray-50 p-4">
                   <div className="flex flex-wrap items-center justify-between gap-2">
-                    <p className="text-sm font-semibold text-blue-100">{item.type}</p>
+                    <p className="text-sm font-semibold text-slate-700">{item.type}</p>
                     <span className={`rounded-full px-2.5 py-0.5 text-[11px] font-semibold ${item.result === "ok" ? "bg-emerald-100 text-emerald-800" : item.result === "failed" ? "bg-rose-100 text-rose-800" : "bg-amber-100 text-amber-800"}`}>{item.result}</span>
                   </div>
-                  <p className="mt-2 text-xs text-blue-300">{formatEasternTime(item.timestamp)} · actor: {item.actor} · target: {item.target || "-"} · promise: {item.promiseId || "-"}</p>
-                  {item.summary ? <p className="mt-2 text-sm leading-6 text-blue-300">{item.summary}</p> : null}
+                  <p className="mt-2 text-xs text-slate-700">{formatEasternTime(item.timestamp)} · actor: {item.actor} · target: {item.target || "-"} · promise: {item.promiseId || "-"}</p>
+                  {item.summary ? <p className="mt-2 text-sm leading-6 text-slate-700">{item.summary}</p> : null}
                   {item.needsOwnerAttention ? <p className="mt-2 text-xs font-semibold text-rose-700">需要老板介入</p> : null}
                 </div>
-              )) : <div className="rounded-2xl border border-dashed border-blue-800/40 bg-blue-900/30 px-4 py-6 text-sm text-blue-300">当前还没有事件链记录。</div>}
+              )) : <div className="rounded-2xl border border-dashed border-gray-200 bg-gray-50 px-4 py-6 text-sm text-slate-700">当前还没有事件链记录。</div>}
             </div>
           </DashboardCard>
 
           <DashboardCard>
-            <DashboardCardTitle title="Watchdog 告警" desc="第一版督战层，开始自动找出 stale / overdue / missing proof。" right={<span className="rounded-full bg-blue-950 px-3 py-1 text-xs font-semibold text-white">{alerts.length} 条</span>} />
+            <DashboardCardTitle title="Watchdog 告警" desc="第一版督战层，开始自动找出 stale / overdue / missing proof。" right={<span className="rounded-full bg-gray-100 px-3 py-1 text-xs font-semibold text-slate-700">{alerts.length} 条</span>} />
             <div className="mt-4 grid gap-3">
               {recentAlerts.length > 0 ? recentAlerts.map((item, index) => (
-                <div key={`${item.kind}-${item.relatedId || index}`} className="rounded-2xl border border-blue-800/40 bg-blue-900/30 p-4">
+                <div key={`${item.kind}-${item.relatedId || index}`} className="rounded-2xl border border-gray-100 bg-gray-50 p-4">
                   <div className="flex flex-wrap items-center justify-between gap-2">
-                    <p className="text-sm font-semibold text-blue-100">{item.title}</p>
+                    <p className="text-sm font-semibold text-slate-700">{item.title}</p>
                     <span className={`rounded-full px-2.5 py-0.5 text-[11px] font-semibold ${alertTone(item.level)}`}>{item.level}</span>
                   </div>
-                  <p className="mt-2 text-sm leading-6 text-blue-300">{item.detail}</p>
-                  <p className="mt-1 text-xs text-blue-300">target: {item.target || "-"} · related: {item.relatedId || "-"}</p>
+                  <p className="mt-2 text-sm leading-6 text-slate-700">{item.detail}</p>
+                  <p className="mt-1 text-xs text-slate-700">target: {item.target || "-"} · related: {item.relatedId || "-"}</p>
                 </div>
-              )) : <div className="rounded-2xl border border-dashed border-blue-800/40 bg-blue-900/30 px-4 py-6 text-sm text-blue-300">当前没有 watchdog 告警。</div>}
+              )) : <div className="rounded-2xl border border-dashed border-gray-200 bg-gray-50 px-4 py-6 text-sm text-slate-700">当前没有 watchdog 告警。</div>}
             </div>
           </DashboardCard>
         </section>
 
         <section className="space-y-4">
           <DashboardCard>
-            <DashboardCardTitle title="Wake 队列" desc="开始把醒来必读的事项独立落层。" right={<span className="rounded-full bg-blue-950 px-3 py-1 text-xs font-semibold text-white">{wakeItems.length} 条</span>} />
+            <DashboardCardTitle title="Wake 队列" desc="开始把醒来必读的事项独立落层。" right={<span className="rounded-full bg-gray-100 px-3 py-1 text-xs font-semibold text-slate-700">{wakeItems.length} 条</span>} />
             <div className="mt-4 grid gap-3">
               {recentWakeItems.length > 0 ? recentWakeItems.map((item) => (
-                <div key={item.id} className="rounded-2xl border border-blue-800/40 bg-blue-900/30 p-4">
+                <div key={item.id} className="rounded-2xl border border-gray-100 bg-gray-50 p-4">
                   <div className="flex flex-wrap items-center justify-between gap-2">
-                    <p className="text-sm font-semibold text-blue-100">{item.kind}</p>
+                    <p className="text-sm font-semibold text-slate-700">{item.kind}</p>
                     <span className="rounded-full bg-violet-100 px-2.5 py-0.5 text-[11px] font-semibold text-violet-800">{item.targetAgent}</span>
                   </div>
-                  <p className="mt-2 text-xs text-blue-300">{item.id} · priority: {item.priority || "-"} · related: {item.relatedId || "-"}</p>
-                  {item.note ? <p className="mt-2 text-sm leading-6 text-blue-300">{item.note}</p> : null}
+                  <p className="mt-2 text-xs text-slate-700">{item.id} · priority: {item.priority || "-"} · related: {item.relatedId || "-"}</p>
+                  {item.note ? <p className="mt-2 text-sm leading-6 text-slate-700">{item.note}</p> : null}
                 </div>
-              )) : <div className="rounded-2xl border border-dashed border-blue-800/40 bg-blue-900/30 px-4 py-6 text-sm text-blue-300">还没有 wake queue 记录。</div>}
+              )) : <div className="rounded-2xl border border-dashed border-gray-200 bg-gray-50 px-4 py-6 text-sm text-slate-700">还没有 wake queue 记录。</div>}
             </div>
           </DashboardCard>
 
           <DashboardCard>
-            <DashboardCardTitle title="Proof / 证据" desc="开始把完成证据单独落层。" right={<span className="rounded-full bg-blue-950 px-3 py-1 text-xs font-semibold text-white">{proofs.length} 条</span>} />
+            <DashboardCardTitle title="Proof / 证据" desc="开始把完成证据单独落层。" right={<span className="rounded-full bg-gray-100 px-3 py-1 text-xs font-semibold text-slate-700">{proofs.length} 条</span>} />
             <div className="mt-4 grid gap-3">
               {recentProofs.length > 0 ? recentProofs.map((item) => (
-                <div key={item.id} className="rounded-2xl border border-blue-800/40 bg-blue-900/30 p-4">
+                <div key={item.id} className="rounded-2xl border border-gray-100 bg-gray-50 p-4">
                   <div className="flex flex-wrap items-center justify-between gap-2">
-                    <p className="text-sm font-semibold text-blue-100">{item.proofType}</p>
+                    <p className="text-sm font-semibold text-slate-700">{item.proofType}</p>
                     <span className="rounded-full bg-emerald-100 px-2.5 py-0.5 text-[11px] font-semibold text-emerald-800">{item.promiseId}</span>
                   </div>
-                  <p className="mt-2 text-xs text-blue-300">created_by: {item.createdBy || "-"} · created_at: {formatEasternTime(item.createdAt)}</p>
-                  {item.summary ? <p className="mt-2 text-sm leading-6 text-blue-300">{item.summary}</p> : null}
+                  <p className="mt-2 text-xs text-slate-700">created_by: {item.createdBy || "-"} · created_at: {formatEasternTime(item.createdAt)}</p>
+                  {item.summary ? <p className="mt-2 text-sm leading-6 text-slate-700">{item.summary}</p> : null}
                 </div>
-              )) : <div className="rounded-2xl border border-dashed border-blue-800/40 bg-blue-900/30 px-4 py-6 text-sm text-blue-300">还没有 proof 记录。</div>}
+              )) : <div className="rounded-2xl border border-dashed border-gray-200 bg-gray-50 px-4 py-6 text-sm text-slate-700">还没有 proof 记录。</div>}
             </div>
           </DashboardCard>
         </section>

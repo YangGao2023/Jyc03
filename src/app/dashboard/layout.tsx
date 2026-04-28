@@ -12,20 +12,20 @@ const navItems = [
 
 export default function DashboardLayout({ children }: { children: ReactNode }) {
   return (
-    <main className="min-h-screen bg-blue-950 text-white">
+    <main className="min-h-screen bg-white text-slate-800">
       <div className="mx-auto max-w-7xl px-3 py-3 sm:px-4">
-        <div className="rounded-[24px] border border-blue-800/40 bg-[linear-gradient(180deg,_rgba(30,64,175,0.98),_rgba(23,37,84,0.98))] p-4 shadow-2xl">
+        <div className="rounded-2xl border border-gray-200 bg-white p-4 shadow-sm">
           <div className="flex flex-col gap-3 lg:flex-row lg:items-center lg:justify-between">
             <div>
-              <p className="text-[11px] uppercase tracking-[0.28em] text-blue-200">JYC AI Control Center</p>
-              <p className="mt-1 text-sm text-blue-200">首页、总览、业务、任务、记忆、系统六个区的统一导航壳</p>
+              <p className="text-[11px] uppercase tracking-[0.28em] text-slate-600">JYC AI Control Center</p>
+              <p className="mt-1 text-sm text-slate-600">首页、总览、业务、任务、记忆、系统六个区的统一导航壳</p>
             </div>
             <nav className="flex flex-wrap gap-2">
               {navItems.map(([href, label]) => (
                 <Link
                   key={href}
                   href={href}
-                  className="rounded-full border border-blue-800/40 bg-blue-900/20 px-3 py-1.5 text-sm text-blue-200 transition hover:bg-blue-800/30"
+                  className="rounded-full border border-gray-200 bg-white px-3 py-1.5 text-sm text-slate-600 transition hover:bg-gray-50"
                 >
                   {label}
                 </Link>

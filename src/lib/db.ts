@@ -292,6 +292,8 @@ function migrate(db: Database.Database) {
   ensureColumn(db, "expenses", "source_type", "TEXT");
   ensureColumn(db, "expenses", "source_id", "TEXT");
   ensureColumn(db, "cash_entries", "order_number", "TEXT");
+  ensureColumn(db, "expenses", "voided", "INTEGER DEFAULT 0");
+  ensureColumn(db, "cash_entries", "voided", "INTEGER DEFAULT 0");
   ensureColumn(db, "cash_entries", "source_type", "TEXT");
   ensureColumn(db, "cash_entries", "source_id", "TEXT");
   ensureColumn(db, "materials", "supplier_id", "TEXT");

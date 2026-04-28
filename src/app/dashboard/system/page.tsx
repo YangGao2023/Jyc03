@@ -265,9 +265,9 @@ function bridgeKindBadge(value: string) {
   if (normalized === "receipt") return "bg-amber-100 text-amber-800";
   if (normalized === "error") return "bg-rose-100 text-rose-800";
   if (normalized === "voice") return "bg-fuchsia-100 text-fuchsia-800";
-  if (normalized === "command") return "bg-sky-100 text-blue-200";
-  if (normalized === "text") return "bg-blue-800/40 text-blue-200";
-  return "bg-blue-800/40 text-blue-200";
+  if (normalized === "command") return "bg-sky-100 text-slate-600";
+  if (normalized === "text") return "bg-white/40 text-slate-600";
+  return "bg-white/40 text-slate-600";
 }
 
 function bridgeCardTone(value: string, fallback: string) {
@@ -282,7 +282,7 @@ function statusBadge(status: string) {
   const normalized = status.trim().toLowerCase();
   if (normalized === "busy") return "bg-amber-100 text-amber-800";
   if (normalized === "blocked") return "bg-rose-100 text-rose-800";
-  if (normalized === "offline") return "bg-blue-800/40 text-blue-200";
+  if (normalized === "offline") return "bg-white/40 text-slate-600";
   return "bg-emerald-100 text-emerald-800";
 }
 
@@ -308,10 +308,10 @@ function typingDurationSeconds(item: AgentStatus) {
 function normalizeAgentState(item: AgentStatus) {
   const normalized = String(item.systemState || item.status || "standby").trim().toLowerCase();
   if (isStale(heartbeatTime(item))) {
-    return { label: "offline", tone: "bg-blue-800/40 text-blue-200" };
+    return { label: "offline", tone: "bg-white/40 text-slate-600" };
   }
   if (normalized === "typing") return { label: "typing", tone: "bg-indigo-100 text-indigo-800" };
-  if (normalized === "thinking") return { label: "thinking", tone: "bg-sky-100 text-blue-200" };
+  if (normalized === "thinking") return { label: "thinking", tone: "bg-sky-100 text-slate-600" };
   if (normalized === "busy") return { label: "busy", tone: "bg-amber-100 text-amber-800" };
   if (["blocked", "error"].includes(normalized)) return { label: normalized === "error" ? "error" : "blocked", tone: "bg-rose-100 text-rose-800" };
   return { label: "idle", tone: "bg-emerald-100 text-emerald-800" };
@@ -390,7 +390,7 @@ function summarizeDiscussionStatus(status: DiscussionStatus) {
 }
 
 function discussionStatusBadge(status: DiscussionStatus) {
-  if (status === "open") return "bg-sky-100 text-blue-200";
+  if (status === "open") return "bg-sky-100 text-slate-600";
   if (status === "deciding") return "bg-amber-100 text-amber-800";
   return "bg-emerald-100 text-emerald-800";
 }
@@ -401,7 +401,7 @@ function discussionClosureSource(thread: DiscussionThread) {
     return { label: "自动收口", tone: "bg-emerald-100 text-emerald-800" };
   }
   if (thread.status === "closed") {
-    return { label: "手动收口", tone: "bg-blue-800/40 text-blue-200" };
+    return { label: "手动收口", tone: "bg-white/40 text-slate-600" };
   }
   return null;
 }
@@ -409,15 +409,15 @@ function discussionClosureSource(thread: DiscussionThread) {
 function identityChip(name: string) {
   const normalized = String(name || "").trim();
   if (normalized === "阿三") {
-    return { avatar: "三", tone: "bg-sky-100 text-blue-200", avatarTone: "bg-sky-600 text-white" };
+    return { avatar: "三", tone: "bg-sky-100 text-slate-600", avatarTone: "bg-sky-600 text-white" };
   }
   if (normalized === "零号") {
     return { avatar: "零", tone: "bg-emerald-100 text-emerald-800", avatarTone: "bg-emerald-600 text-white" };
   }
   if (normalized === "YANG") {
-    return { avatar: "Y", tone: "bg-blue-800/40 text-blue-200", avatarTone: "bg-blue-800 text-white" };
+    return { avatar: "Y", tone: "bg-gray-100 text-slate-600", avatarTone: "bg-gray-200 text-slate-700" };
   }
-  return { avatar: normalized.slice(0, 1) || "?", tone: "bg-blue-800/40 text-blue-200", avatarTone: "bg-blue-900/300 text-white" };
+  return { avatar: normalized.slice(0, 1) || "?", tone: "bg-gray-100 text-slate-600", avatarTone: "bg-gray-200 text-slate-700" };
 }
 
 function summarizeMessageTitle(text: string) {
@@ -543,122 +543,122 @@ export default async function DashboardSystemPage() {
   const offlineCount = agents.length - onlineCount;
 
   return (
-    <div className="rounded-[30px] border border-blue-800/40 bg-[linear-gradient(180deg,_rgba(30,64,175,0.98),_rgba(23,37,84,0.98))] p-4 shadow-2xl">
-      <div className="rounded-[24px] border border-blue-800/40 bg-blue-900/20 p-4">
+    <div className="rounded-[30px] border border-gray-200 bg-gradient-to-br from-slate-50 to-white p-4 shadow-2xl">
+      <div className="rounded-[24px] border border-gray-200 bg-white p-4">
         <DashboardPageHeader
           eyebrow="Owner Backend · System"
           title="系统页"
           description="这一页先服务新的主目标，不是先派命令，而是先让阿三和零号围绕同一问题共享讨论、看到彼此、并能及时收口。"
-          right={<a href="/dashboard" className="rounded-2xl border border-blue-700 bg-blue-600 px-4 py-2 text-sm font-semibold text-white">返回后台</a>}
+          right={<a href="/dashboard" className="rounded-2xl border border-gray-200 bg-gray-100 px-4 py-2 text-sm font-semibold text-slate-700">返回后台</a>}
         />
 
         <div className="mt-4 flex flex-wrap gap-2">
-          <a href="/dashboard/overview" className="rounded-full border border-blue-800/40 px-3 py-1.5 text-xs font-semibold text-blue-200 hover:bg-blue-800/30">回总览页</a>
-          <a href="/dashboard/tasks" className="rounded-full border border-blue-800/40 px-3 py-1.5 text-xs font-semibold text-blue-200 hover:bg-blue-800/30">去任务页处理</a>
+          <a href="/dashboard/overview" className="rounded-full border border-gray-200 px-3 py-1.5 text-xs font-semibold text-slate-600 hover:bg-white/30">回总览页</a>
+          <a href="/dashboard/tasks" className="rounded-full border border-gray-200 px-3 py-1.5 text-xs font-semibold text-slate-600 hover:bg-white/30">去任务页处理</a>
         </div>
 
-        <form action={createDiscussionAction} className="mt-4 grid gap-3 rounded-[24px] border border-blue-800/40 bg-blue-900/20 p-4 md:grid-cols-[220px_1fr_auto]">
+        <form action={createDiscussionAction} className="mt-4 grid gap-3 rounded-[24px] border border-gray-200 bg-white p-4 md:grid-cols-[220px_1fr_auto]">
           <div className="grid gap-2">
-            <input name="title" placeholder="讨论主题，例如：Zero 与阿三如何分工" className="rounded-xl border border-blue-800/40 bg-blue-950/60 px-3 py-2 text-sm text-white outline-none placeholder:text-blue-300/70" required />
-            <p className="text-[11px] text-blue-300/70">先发起共享讨论，不直接默认成命令。</p>
+            <input name="title" placeholder="讨论主题，例如：Zero 与阿三如何分工" className="rounded-xl border border-gray-200 bg-white/60 px-3 py-2 text-sm text-slate-700 outline-none placeholder:text-slate-500/70" required />
+            <p className="text-[11px] text-slate-500/70">先发起共享讨论，不直接默认成命令。</p>
           </div>
           <div className="grid gap-2">
-            <input name="prompt" placeholder="输入要让阿三与零号围绕同题讨论的问题" className="rounded-xl border border-blue-800/40 bg-blue-950/60 px-3 py-2 text-sm text-white outline-none placeholder:text-blue-300/70" required />
-            <p className="text-[11px] text-blue-300/70">默认同时推给阿三和零号，topic 状态从 open 开始。</p>
+            <input name="prompt" placeholder="输入要让阿三与零号围绕同题讨论的问题" className="rounded-xl border border-gray-200 bg-white/60 px-3 py-2 text-sm text-slate-700 outline-none placeholder:text-slate-500/70" required />
+            <p className="text-[11px] text-slate-500/70">默认同时推给阿三和零号，topic 状态从 open 开始。</p>
           </div>
-          <button type="submit" className="rounded-2xl bg-blue-600 px-4 py-2 text-sm font-semibold text-white">发起共享讨论</button>
+          <button type="submit" className="rounded-2xl bg-gray-100 px-4 py-2 text-sm font-semibold text-slate-700">发起共享讨论</button>
         </form>
 
-        <form action={sendCommandAction} className="mt-3 grid gap-3 rounded-[24px] border border-blue-800/40 bg-blue-900/20 p-4 md:grid-cols-[220px_1fr_auto]">
+        <form action={sendCommandAction} className="mt-3 grid gap-3 rounded-[24px] border border-gray-200 bg-white p-4 md:grid-cols-[220px_1fr_auto]">
           <div className="grid gap-2">
-            <select name="to" defaultValue="阿三" className="rounded-xl border border-blue-800/40 bg-blue-950/60 px-3 py-2 text-sm text-white outline-none" required>
+            <select name="to" defaultValue="阿三" className="rounded-xl border border-gray-200 bg-white/60 px-3 py-2 text-sm text-slate-700 outline-none" required>
               {COMMAND_RECIPIENT_OPTIONS.map((item) => (
                 <option key={item.value} value={item.value}>{item.label}</option>
               ))}
             </select>
-            <p className="text-[11px] text-blue-300/70">当前前台只保留可直接发命令的目标。消息类型已固定为 command。</p>
+            <p className="text-[11px] text-slate-500/70">当前前台只保留可直接发命令的目标。消息类型已固定为 command。</p>
           </div>
           <div className="grid gap-2">
-            <input name="text" placeholder="直接给 Agent 的命令内容" className="rounded-xl border border-blue-800/40 bg-blue-950/60 px-3 py-2 text-sm text-white outline-none placeholder:text-blue-300/70" required />
-            <p className="text-[11px] text-blue-300/70">`text` 和 `voice` 暂不单独开放，避免误导。</p>
+            <input name="text" placeholder="直接给 Agent 的命令内容" className="rounded-xl border border-gray-200 bg-white/60 px-3 py-2 text-sm text-slate-700 outline-none placeholder:text-slate-500/70" required />
+            <p className="text-[11px] text-slate-500/70">`text` 和 `voice` 暂不单独开放，避免误导。</p>
           </div>
           <>
             <input type="hidden" name="kind" value="command" />
-            <button type="submit" className="rounded-2xl bg-blue-600 px-4 py-2 text-sm font-semibold text-white">网站直接发命令</button>
+            <button type="submit" className="rounded-2xl bg-gray-100 px-4 py-2 text-sm font-semibold text-slate-700">网站直接发命令</button>
           </>
         </form>
 
         <div className="mt-4 grid gap-2 xl:grid-cols-6">
-          <div className="rounded-xl border border-blue-800/40 bg-blue-900/20 px-3 py-2">
+          <div className="rounded-xl border border-gray-200 bg-white px-3 py-2">
             <div className="flex items-center justify-between gap-2">
               <div>
-                <p className="text-[10px] text-blue-300/70">在线代理</p>
-                <p className="mt-0.5 text-base font-semibold text-white">{onlineCount} / {agents.length}</p>
+                <p className="text-[10px] text-slate-500/70">在线代理</p>
+                <p className="mt-0.5 text-base font-semibold text-slate-800">{onlineCount} / {agents.length}</p>
               </div>
-              <span className="rounded-full bg-blue-500/15 px-2 py-0.5 text-[10px] font-semibold text-blue-200">本地</span>
+              <span className="rounded-full bg-gray-500/15 px-2 py-0.5 text-[10px] font-semibold text-slate-600">本地</span>
             </div>
           </div>
-          <div className="rounded-xl border border-blue-800/40 bg-blue-900/20 px-3 py-2">
+          <div className="rounded-xl border border-gray-200 bg-white px-3 py-2">
             <div className="flex items-center justify-between gap-2">
               <div>
-                <p className="text-[10px] text-blue-300/70">事件记录</p>
-                <p className="mt-0.5 text-base font-semibold text-white">{events.length} / {allEvents.length}</p>
+                <p className="text-[10px] text-slate-500/70">事件记录</p>
+                <p className="mt-0.5 text-base font-semibold text-slate-800">{events.length} / {allEvents.length}</p>
               </div>
-              <span className="rounded-full bg-blue-500/15 px-2 py-0.5 text-[10px] font-semibold text-blue-200">可见</span>
+              <span className="rounded-full bg-gray-500/15 px-2 py-0.5 text-[10px] font-semibold text-slate-600">可见</span>
             </div>
           </div>
-          <div className="rounded-xl border border-blue-800/40 bg-blue-900/20 px-3 py-2">
+          <div className="rounded-xl border border-gray-200 bg-white px-3 py-2">
             <div className="flex items-center justify-between gap-2">
               <div>
-                <p className="text-[10px] text-blue-300/70">讨论主题</p>
-                <p className="mt-0.5 text-base font-semibold text-white">{discussionThreads.length}</p>
+                <p className="text-[10px] text-slate-500/70">讨论主题</p>
+                <p className="mt-0.5 text-base font-semibold text-slate-800">{discussionThreads.length}</p>
               </div>
-              <span className="rounded-full bg-blue-500/15 px-2 py-0.5 text-[10px] font-semibold text-blue-200">网站</span>
+              <span className="rounded-full bg-gray-500/15 px-2 py-0.5 text-[10px] font-semibold text-slate-600">网站</span>
             </div>
           </div>
-          <div className="rounded-xl border border-blue-800/40 bg-blue-900/20 px-3 py-2">
+          <div className="rounded-xl border border-gray-200 bg-white px-3 py-2">
             <div className="flex items-center justify-between gap-2">
               <div>
-                <p className="text-[10px] text-blue-300/70">Agent 心跳</p>
-                <p className="mt-0.5 text-base font-semibold text-white">{agentStatuses.length}</p>
+                <p className="text-[10px] text-slate-500/70">Agent 心跳</p>
+                <p className="mt-0.5 text-base font-semibold text-slate-800">{agentStatuses.length}</p>
               </div>
-              <span className={`rounded-full px-2 py-0.5 text-[10px] font-semibold ${staleAgentCount > 0 ? "bg-blue-500/15 text-blue-200" : "bg-blue-500/15 text-blue-200"}`}>超时 {staleAgentCount}</span>
+              <span className={`rounded-full px-2 py-0.5 text-[10px] font-semibold ${staleAgentCount > 0 ? "bg-gray-500/15 text-slate-600" : "bg-gray-500/15 text-slate-600"}`}>超时 {staleAgentCount}</span>
             </div>
           </div>
-          <div className="rounded-xl border border-blue-800/40 bg-blue-900/20 px-3 py-2">
+          <div className="rounded-xl border border-gray-200 bg-white px-3 py-2">
             <div className="flex items-center justify-between gap-2">
               <div>
-                <p className="text-[10px] text-blue-300/70">Wake 队列</p>
-                <p className="mt-0.5 text-base font-semibold text-white">{wakeItems.length}</p>
+                <p className="text-[10px] text-slate-500/70">Wake 队列</p>
+                <p className="mt-0.5 text-base font-semibold text-slate-800">{wakeItems.length}</p>
               </div>
-              <span className="rounded-full bg-blue-500/15 px-2 py-0.5 text-[10px] font-semibold text-blue-200">待消费</span>
+              <span className="rounded-full bg-gray-500/15 px-2 py-0.5 text-[10px] font-semibold text-slate-600">待消费</span>
             </div>
           </div>
-          <div className="rounded-xl border border-blue-800/40 bg-blue-900/20 px-3 py-2">
+          <div className="rounded-xl border border-gray-200 bg-white px-3 py-2">
             <div className="flex items-center justify-between gap-2">
               <div>
-                <p className="text-[10px] text-blue-300/70">Watchdog 告警</p>
-                <p className="mt-0.5 text-base font-semibold text-white">{watchdogAlerts.length}</p>
+                <p className="text-[10px] text-slate-500/70">Watchdog 告警</p>
+                <p className="mt-0.5 text-base font-semibold text-slate-800">{watchdogAlerts.length}</p>
               </div>
-              <span className={`rounded-full px-2 py-0.5 text-[10px] font-semibold ${watchdogAlerts.some((item) => item.level === "error") ? "bg-blue-500/15 text-blue-200" : "bg-blue-500/15 text-blue-200"}`}>{watchdogAlerts.some((item) => item.level === "error") ? "error" : "warn"}</span>
+              <span className={`rounded-full px-2 py-0.5 text-[10px] font-semibold ${watchdogAlerts.some((item) => item.level === "error") ? "bg-gray-500/15 text-slate-600" : "bg-gray-500/15 text-slate-600"}`}>{watchdogAlerts.some((item) => item.level === "error") ? "error" : "warn"}</span>
             </div>
           </div>
-          <div className="rounded-xl border border-blue-800/40 bg-blue-900/20 px-3 py-2">
+          <div className="rounded-xl border border-gray-200 bg-white px-3 py-2">
             <div className="flex items-center justify-between gap-2">
               <div>
-                <p className="text-[10px] text-blue-300/70">命令回执</p>
-                <p className="mt-0.5 text-base font-semibold text-white">{receiptInboxCards.length}</p>
+                <p className="text-[10px] text-slate-500/70">命令回执</p>
+                <p className="mt-0.5 text-base font-semibold text-slate-800">{receiptInboxCards.length}</p>
               </div>
-              <span className="rounded-full bg-blue-500/15 px-2 py-0.5 text-[10px] font-semibold text-blue-200">已收到</span>
+              <span className="rounded-full bg-gray-500/15 px-2 py-0.5 text-[10px] font-semibold text-slate-600">已收到</span>
             </div>
           </div>
-          <div className="rounded-xl border border-blue-800/40 bg-blue-900/20 px-3 py-2">
+          <div className="rounded-xl border border-gray-200 bg-white px-3 py-2">
             <div className="flex items-center justify-between gap-2">
               <div>
-                <p className="text-[10px] text-blue-300/70">命令结果</p>
-                <p className="mt-0.5 text-base font-semibold text-white">{resultInboxCards.length}</p>
+                <p className="text-[10px] text-slate-500/70">命令结果</p>
+                <p className="mt-0.5 text-base font-semibold text-slate-800">{resultInboxCards.length}</p>
               </div>
-              <span className="rounded-full bg-blue-500/15 px-2 py-0.5 text-[10px] font-semibold text-blue-200">已完成</span>
+              <span className="rounded-full bg-gray-500/15 px-2 py-0.5 text-[10px] font-semibold text-slate-600">已完成</span>
             </div>
           </div>
         </div>
@@ -669,32 +669,32 @@ export default async function DashboardSystemPage() {
           <DashboardCardTitle
             title="共享讨论中心"
             desc="先把双 AI 围绕同一问题的讨论层跑稳，确保双方都能看见彼此，并且有明确收口。"
-            right={<div className="flex items-center gap-2"><span className="rounded-full bg-blue-950 px-3 py-1 text-xs font-semibold text-white">主题 {discussionThreads.length} 个 · 回帖 {discussionReplyCount} 条</span></div>}
+            right={<div className="flex items-center gap-2"><span className="rounded-full bg-gray-50 px-3 py-1 text-xs font-semibold text-slate-700">主题 {discussionThreads.length} 个 · 回帖 {discussionReplyCount} 条</span></div>}
           />
 
           <div className="mt-4 grid gap-3 xl:grid-cols-[0.9fr_1.1fr]">
-            <div className="rounded-2xl border border-blue-800/40 bg-blue-900/30 p-4">
-              <p className="text-sm font-semibold text-blue-100">讨论主题列表</p>
-              <p className="mt-1 text-[11px] text-blue-300">先看 topic，再看具体来回发言。closed 后默认不再继续往返。</p>
+            <div className="rounded-2xl border border-gray-200 bg-white p-4">
+              <p className="text-sm font-semibold text-slate-700">讨论主题列表</p>
+              <p className="mt-1 text-[11px] text-slate-500">先看 topic，再看具体来回发言。closed 后默认不再继续往返。</p>
               <div className="mt-3 space-y-2">
                 {discussionThreads.length > 0 ? discussionThreads.map((thread) => {
                   const effectiveStatus = deriveDiscussionStatus(thread, inboxMessages);
                   const closureSource = discussionClosureSource(thread);
                   return (
-                  <details key={thread.id} className="rounded-2xl border border-blue-800/40 bg-blue-900/20 p-3">
+                  <details key={thread.id} className="rounded-2xl border border-gray-200 bg-white p-3">
                     <summary className="cursor-pointer list-none">
                       <div className="flex flex-wrap items-center gap-2">
-                        <span className="text-[11px] text-blue-300">{formatEasternTime(thread.updatedAt)}</span>
+                        <span className="text-[11px] text-slate-500">{formatEasternTime(thread.updatedAt)}</span>
                         <span className={`rounded-full px-2 py-0.5 text-[10px] font-semibold ${discussionStatusBadge(effectiveStatus)}`}>{summarizeDiscussionStatus(effectiveStatus)}</span>
                         {closureSource ? <span className={`rounded-full px-2 py-0.5 text-[10px] font-semibold ${closureSource.tone}`}>{closureSource.label}</span> : null}
-                        <span className="rounded-full bg-blue-800/40 px-2 py-0.5 text-[10px] font-semibold text-blue-200">{thread.participants.join(" / ")}</span>
+                        <span className="rounded-full bg-white/40 px-2 py-0.5 text-[10px] font-semibold text-slate-600">{thread.participants.join(" / ")}</span>
                       </div>
-                      <p className="mt-1.5 text-xs font-semibold leading-5 text-blue-200">{thread.title}</p>
-                      <p className="mt-1 text-[11px] leading-4 text-blue-300">{emphasizeQuestion(thread.prompt)}</p>
+                      <p className="mt-1.5 text-xs font-semibold leading-5 text-slate-600">{thread.title}</p>
+                      <p className="mt-1 text-[11px] leading-4 text-slate-500">{emphasizeQuestion(thread.prompt)}</p>
                     </summary>
-                    <div className="mt-2 space-y-2 border-t border-blue-800/30 pt-2">
-                      <p className="text-xs leading-5 text-blue-200">{thread.prompt}</p>
-                      {thread.summary ? <div className="rounded-xl bg-blue-900/30 px-2.5 py-2 text-[11px] text-blue-300">{thread.summary}</div> : null}
+                    <div className="mt-2 space-y-2 border-t border-gray-200 pt-2">
+                      <p className="text-xs leading-5 text-slate-600">{thread.prompt}</p>
+                      {thread.summary ? <div className="rounded-xl bg-white px-2.5 py-2 text-[11px] text-slate-500">{thread.summary}</div> : null}
                       <div className="flex flex-wrap gap-2">
                         {(["open", "deciding", "closed"] as DiscussionStatus[]).map((status) => (
                           <form key={status} action={updateDiscussionStatusAction}>
@@ -703,13 +703,13 @@ export default async function DashboardSystemPage() {
                             <input type="hidden" name="prompt" value={thread.prompt} />
                             <input type="hidden" name="participants" value={thread.participants.join(",")} />
                             <input type="hidden" name="status" value={status} />
-                            <button type="submit" className={`rounded-full px-3 py-1 text-[11px] font-semibold ${status === effectiveStatus ? "bg-blue-950 text-white" : "border border-blue-800/40 bg-blue-900/20 text-blue-200"}`}>{summarizeDiscussionStatus(status)}</button>
+                            <button type="submit" className={`rounded-full px-3 py-1 text-[11px] font-semibold ${status === effectiveStatus ? "bg-white text-slate-700" : "border border-gray-200 bg-white text-slate-600"}`}>{summarizeDiscussionStatus(status)}</button>
                           </form>
                         ))}
                       </div>
                     </div>
                   </details>
-                ); }) : <div className="rounded-2xl border border-dashed border-blue-800/40 bg-blue-900/20 px-3 py-4 text-sm text-blue-300">还没有讨论主题，先发起一个共享讨论</div>}
+                ); }) : <div className="rounded-2xl border border-dashed border-gray-200 bg-white px-3 py-4 text-sm text-slate-500">还没有讨论主题，先发起一个共享讨论</div>}
               </div>
             </div>
 
@@ -721,11 +721,11 @@ export default async function DashboardSystemPage() {
                 const typingParticipants = buildTypingParticipants(thread, inboxMessages);
                 const closureSource = discussionClosureSource(thread);
                 return (
-                  <div key={thread.id} className="rounded-2xl border border-blue-800/40 bg-blue-900/30 p-4">
+                  <div key={thread.id} className="rounded-2xl border border-gray-200 bg-white p-4">
                     <div className="flex items-center justify-between gap-3">
                       <div>
-                        <p className="text-sm font-semibold text-blue-100">{thread.title}</p>
-                        <p className="mt-1 text-[11px] text-blue-300">topicId: {thread.id} · {thread.participants.join(" / ")}</p>
+                        <p className="text-sm font-semibold text-slate-700">{thread.title}</p>
+                        <p className="mt-1 text-[11px] text-slate-500">topicId: {thread.id} · {thread.participants.join(" / ")}</p>
                       </div>
                       <div className="flex flex-wrap items-center gap-2">
                         <span className={`rounded-full px-2.5 py-0.5 text-[10px] font-semibold ${discussionStatusBadge(effectiveStatus)}`}>{summarizeDiscussionStatus(effectiveStatus)}</span>
@@ -745,7 +745,7 @@ export default async function DashboardSystemPage() {
                       })}
                     </div>
                     {typingParticipants.length > 0 ? (
-                      <div className="mt-3 rounded-2xl border border-sky-200 bg-sky-50 px-3 py-2 text-xs text-blue-200">
+                      <div className="mt-3 rounded-2xl border border-sky-200 bg-sky-50 px-3 py-2 text-xs text-slate-600">
                         {typingParticipants.join("、")} 正在输入…
                       </div>
                     ) : null}
@@ -756,23 +756,23 @@ export default async function DashboardSystemPage() {
                         return (
                           <div key={message.id} className={`rounded-2xl border px-3 py-2 ${message.stage === "processing" ? "border-amber-200 bg-amber-50/60" : message.lane === "outbox" ? "border-sky-200 bg-sky-50/60" : "border-emerald-200 bg-white"}`}>
                             <div className="flex flex-wrap items-center gap-2">
-                              <span className="text-[11px] text-blue-300">{formatEasternTime(message.createdAt)}</span>
-                              <span className={`rounded-full px-2 py-0.5 text-[10px] font-semibold ${message.lane === "outbox" ? "bg-sky-100 text-blue-200" : "bg-emerald-100 text-emerald-800"}`}>{message.lane === "outbox" ? "发出" : "回帖"}</span>
+                              <span className="text-[11px] text-slate-500">{formatEasternTime(message.createdAt)}</span>
+                              <span className={`rounded-full px-2 py-0.5 text-[10px] font-semibold ${message.lane === "outbox" ? "bg-sky-100 text-slate-600" : "bg-emerald-100 text-emerald-800"}`}>{message.lane === "outbox" ? "发出" : "回帖"}</span>
                               <span className={`rounded-full px-2 py-0.5 text-[10px] font-semibold ${message.stage === "processing" ? "bg-amber-100 text-amber-800" : "bg-emerald-100 text-emerald-800"}`}>{message.stage === "processing" ? "处理中" : "最终结果"}</span>
                               <span className={`inline-flex items-center gap-1 rounded-full px-2 py-0.5 text-[10px] font-semibold ${fromChip.tone}`}>
                                 <span className={`inline-flex h-4 w-4 items-center justify-center rounded-full text-[9px] font-bold ${fromChip.avatarTone}`}>{fromChip.avatar}</span>
                                 {message.from}
                               </span>
-                              <span className="text-[10px] text-blue-300/70">→</span>
+                              <span className="text-[10px] text-slate-500/70">→</span>
                               <span className={`inline-flex items-center gap-1 rounded-full px-2 py-0.5 text-[10px] font-semibold ${toChip.tone}`}>
                                 <span className={`inline-flex h-4 w-4 items-center justify-center rounded-full text-[9px] font-bold ${toChip.avatarTone}`}>{toChip.avatar}</span>
                                 {message.to}
                               </span>
                             </div>
-                            <p className="mt-1 text-xs leading-5 text-blue-200">{message.text}</p>
+                            <p className="mt-1 text-xs leading-5 text-slate-600">{message.text}</p>
                           </div>
                         );
-                      }) : <div className="rounded-2xl border border-dashed border-blue-800/40 bg-blue-900/20 px-3 py-4 text-sm text-blue-300">这个 topic 还没有正式回复。</div>}
+                      }) : <div className="rounded-2xl border border-dashed border-gray-200 bg-white px-3 py-4 text-sm text-slate-500">这个 topic 还没有正式回复。</div>}
                     </div>
                   </div>
                 );
@@ -785,30 +785,30 @@ export default async function DashboardSystemPage() {
           <DashboardCardTitle
             title="命令中心 / 回执中心"
             desc="命令能力先保留，但降为第二优先，等讨论层跑稳后再继续升级。"
-            right={<div className="flex items-center gap-2"><span className="rounded-full bg-blue-950 px-3 py-1 text-xs font-semibold text-white">历史发件 {sentHistory.length} 条 · 已收到 {visibleInboxMessages.filter((item) => String(item.kind || "").toLowerCase() === "receipt").length} 条 · 已完成 {visibleInboxMessages.filter((item) => String(item.kind || "").toLowerCase() === "result").length} 条</span></div>}
+            right={<div className="flex items-center gap-2"><span className="rounded-full bg-gray-50 px-3 py-1 text-xs font-semibold text-slate-700">历史发件 {sentHistory.length} 条 · 已收到 {visibleInboxMessages.filter((item) => String(item.kind || "").toLowerCase() === "receipt").length} 条 · 已完成 {visibleInboxMessages.filter((item) => String(item.kind || "").toLowerCase() === "result").length} 条</span></div>}
           />
 
           <div className="mt-4 grid gap-3 xl:grid-cols-[0.62fr_1.38fr]">
             <div className="space-y-3">
-              <div className="rounded-2xl border border-blue-800/40 bg-blue-900/30 p-4">
-                <p className="text-sm font-semibold text-blue-100">按接收人统计</p>
+              <div className="rounded-2xl border border-gray-200 bg-white p-4">
+                <p className="text-sm font-semibold text-slate-700">按接收人统计</p>
                 <div className="mt-3 space-y-2">
                   {recipientSummary.length > 0 ? recipientSummary.map((item) => (
-                    <div key={item.recipient} className="flex items-center justify-between rounded-2xl bg-white px-3 py-2 text-sm text-blue-200">
+                    <div key={item.recipient} className="flex items-center justify-between rounded-2xl bg-white px-3 py-2 text-sm text-slate-600">
                       <span>{item.recipient}</span>
-                      <span className="rounded-full bg-blue-950 px-2.5 py-0.5 text-xs font-semibold text-white">{item.count}</span>
+                      <span className="rounded-full bg-gray-50 px-2.5 py-0.5 text-xs font-semibold text-slate-700">{item.count}</span>
                     </div>
-                  )) : <div className="rounded-2xl border border-dashed border-blue-800/40 bg-blue-900/20 px-3 py-4 text-sm text-blue-300">当前没有历史发件记录</div>}
+                  )) : <div className="rounded-2xl border border-dashed border-gray-200 bg-white px-3 py-4 text-sm text-slate-500">当前没有历史发件记录</div>}
                 </div>
               </div>
             </div>
 
             <div className="grid gap-3 2xl:grid-cols-[1.06fr_0.94fr]">
-              <div className="rounded-2xl border border-blue-800/40 bg-blue-900/30 p-4">
-                <div className="sticky top-0 z-10 -mx-4 -mt-4 mb-3 flex items-center justify-between gap-3 rounded-t-2xl border-b border-blue-800/40 bg-blue-900/30 px-4 py-4 backdrop-blur">
-                  <p className="text-sm font-semibold text-blue-100">历史发件箱，网站发给 Agent 的命令</p>
+              <div className="rounded-2xl border border-gray-200 bg-white p-4">
+                <div className="sticky top-0 z-10 -mx-4 -mt-4 mb-3 flex items-center justify-between gap-3 rounded-t-2xl border-b border-gray-200 bg-white px-4 py-4 backdrop-blur">
+                  <p className="text-sm font-semibold text-slate-700">历史发件箱，网站发给 Agent 的命令</p>
                   <div className="flex items-center gap-2">
-                    <span className="rounded-full bg-blue-950 px-2.5 py-0.5 text-xs font-semibold text-white">{sentHistory.length} 条</span>
+                    <span className="rounded-full bg-gray-50 px-2.5 py-0.5 text-xs font-semibold text-slate-700">{sentHistory.length} 条</span>
                     <form action={clearCommandCenterHistoryAction}>
                       <ConfirmSubmitButton
                         message="确认清空命令中心全部历史记录吗？此操作将同时清空历史发件记录、回执记录与相关统计信息，且无法撤销。"
@@ -823,33 +823,33 @@ export default async function DashboardSystemPage() {
                   {sentHistory.length > 0 ? (
                     <>
                       {sentHistory.map((message) => (
-                        <details key={message.id} className={`rounded-2xl border-blue-800/40 bg-blue-900/20 p-3 ${message.status === "done" ? "border-emerald-200 bg-emerald-50/30" : "border-slate-200"}`}>
+                        <details key={message.id} className={`rounded-2xl border-gray-200 bg-white p-3 ${message.status === "done" ? "border-emerald-200 bg-emerald-50/30" : "border-slate-200"}`}>
                           <summary className="cursor-pointer list-none">
                             <div className="flex flex-wrap items-center gap-1.5">
-                              <span className="text-[11px] text-blue-300">{formatEasternTime(message.createdAt)}</span>
+                              <span className="text-[11px] text-slate-500">{formatEasternTime(message.createdAt)}</span>
                               <span className={`rounded-full px-2 py-0.5 text-[10px] font-semibold ${bridgeKindBadge(message.kind)}`}>{displayBridgeKind(message.kind)}</span>
-                              <span className={`rounded-full px-2 py-0.5 text-[10px] font-semibold ${message.status === "done" ? "bg-emerald-100 text-emerald-800" : message.status === "receipt" ? "bg-amber-100 text-amber-800" : "bg-blue-800/40 text-blue-200"}`}>{message.status === "done" ? "已完成" : message.status === "receipt" ? "已收到" : "等待响应"}</span>
-                              <span className="rounded-full bg-blue-800/40 px-2 py-0.5 text-[10px] font-semibold text-blue-200">YANG → {message.to}</span>
+                              <span className={`rounded-full px-2 py-0.5 text-[10px] font-semibold ${message.status === "done" ? "bg-emerald-100 text-emerald-800" : message.status === "receipt" ? "bg-amber-100 text-amber-800" : "bg-white/40 text-slate-600"}`}>{message.status === "done" ? "已完成" : message.status === "receipt" ? "已收到" : "等待响应"}</span>
+                              <span className="rounded-full bg-white/40 px-2 py-0.5 text-[10px] font-semibold text-slate-600">YANG → {message.to}</span>
                             </div>
-                            <p className="mt-1.5 text-xs font-semibold leading-5 text-blue-200">{summarizeMessageTitle(message.text)}</p>
-                            <p className="mt-1 text-[11px] leading-4 text-blue-300">{emphasizeQuestion(message.text)}</p>
+                            <p className="mt-1.5 text-xs font-semibold leading-5 text-slate-600">{summarizeMessageTitle(message.text)}</p>
+                            <p className="mt-1 text-[11px] leading-4 text-slate-500">{emphasizeQuestion(message.text)}</p>
                           </summary>
-                          <div className="mt-2 space-y-2 border-t border-blue-800/30 pt-2">
-                            <p className="text-xs leading-5 text-blue-200">{message.text}</p>
-                            <div className="rounded-xl bg-blue-900/30 px-2.5 py-2 text-[11px] leading-5 text-blue-300">
+                          <div className="mt-2 space-y-2 border-t border-gray-200 pt-2">
+                            <p className="text-xs leading-5 text-slate-600">{message.text}</p>
+                            <div className="rounded-xl bg-white px-2.5 py-2 text-[11px] leading-5 text-slate-500">
                               <div>目标: {message.to}</div>
                               <div>命令ID: {message.commandId || "旧记录未存"}</div>
                               <div>响应状态: {message.status === "done" ? "已收到最终结果" : message.status === "receipt" ? "仅收到系统回执" : "尚未看到响应"}</div>
                               <div>显示方式: 标题摘要 + 展开详情</div>
                             </div>
                             {message.relatedReceipt ? (
-                              <div className="rounded-xl bg-amber-50 px-2.5 py-2 text-[11px] leading-5 text-blue-200">
+                              <div className="rounded-xl bg-amber-50 px-2.5 py-2 text-[11px] leading-5 text-slate-600">
                                 <div className="font-semibold text-amber-700">系统回执</div>
                                 <div className="mt-1">{summarizeMessageTitle(message.relatedReceipt.text)}</div>
                               </div>
                             ) : null}
                             {message.relatedResult ? (
-                              <div className="rounded-xl bg-emerald-50 px-2.5 py-2 text-[11px] leading-5 text-blue-200">
+                              <div className="rounded-xl bg-emerald-50 px-2.5 py-2 text-[11px] leading-5 text-slate-600">
                                 <div className="font-semibold text-emerald-700">真实结果</div>
                                 <div className="mt-1">{summarizeMessageTitle(message.relatedResult.text)}</div>
                               </div>
@@ -859,76 +859,76 @@ export default async function DashboardSystemPage() {
                       ))}
                     </>
                   ) : (
-                    <div className="rounded-2xl border border-dashed border-blue-800/40 bg-blue-900/20 px-4 py-6 text-sm text-blue-300">当前还没有历史发件记录</div>
+                    <div className="rounded-2xl border border-dashed border-gray-200 bg-white px-4 py-6 text-sm text-slate-500">当前还没有历史发件记录</div>
                   )}
                 </div>
               </div>
 
-              <div className="rounded-2xl border border-blue-800/40 bg-emerald-50/60 p-4">
+              <div className="rounded-2xl border border-gray-200 bg-emerald-50/60 p-4">
                 <div className="sticky top-0 z-10 -mx-4 -mt-4 mb-3 flex items-center justify-between gap-3 rounded-t-2xl border-b border-emerald-200 bg-emerald-50/95 px-4 py-4 backdrop-blur">
-                  <p className="text-sm font-semibold text-blue-100">回执箱，Agent 回给老板的执行结果</p>
+                  <p className="text-sm font-semibold text-slate-700">回执箱，Agent 回给老板的执行结果</p>
                   <span className="rounded-full bg-emerald-600 px-2.5 py-0.5 text-xs font-semibold text-white">{visibleInboxMessages.length} 条</span>
                 </div>
                 <div className="space-y-3 overflow-y-auto pr-1 2xl:max-h-[72vh]">
                   <div>
                     <div className="mb-2 flex items-center justify-between">
-                      <p className="text-xs font-semibold text-blue-200">真实执行结果</p>
+                      <p className="text-xs font-semibold text-slate-600">真实执行结果</p>
                       <span className="rounded-full bg-emerald-600 px-2 py-0.5 text-[10px] font-semibold text-white">{resultInboxCards.length}</span>
                     </div>
                     <div className="space-y-2">
                       {resultInboxCards.length > 0 ? resultInboxCards.map((message, index) => (
-                        <details key={`${message.id}-${index}`} className={`rounded-2xl border-blue-800/40 bg-blue-900/20 p-3 ${bridgeCardTone(message.kind, "border-emerald-200")}`}>
+                        <details key={`${message.id}-${index}`} className={`rounded-2xl border-gray-200 bg-white p-3 ${bridgeCardTone(message.kind, "border-emerald-200")}`}>
                           <summary className="cursor-pointer list-none">
                             <div className="flex flex-wrap items-center gap-1.5">
-                              <span className="text-[11px] text-blue-300">{formatEasternTime(message.createdAt)}</span>
+                              <span className="text-[11px] text-slate-500">{formatEasternTime(message.createdAt)}</span>
                               <span className={`rounded-full px-2 py-0.5 text-[10px] font-semibold ${bridgeKindBadge(message.kind)}`}>{displayBridgeKind(message.kind)}</span>
-                              <span className="rounded-full bg-blue-800/40 px-2 py-0.5 text-[10px] font-semibold text-blue-200">{message.from} → {message.to}</span>
+                              <span className="rounded-full bg-white/40 px-2 py-0.5 text-[10px] font-semibold text-slate-600">{message.from} → {message.to}</span>
                             </div>
-                            <p className="mt-1.5 text-xs font-semibold leading-5 text-blue-200">{summarizeMessageTitle(message.text)}</p>
-                            <p className="mt-1 text-[11px] leading-4 text-blue-300">{emphasizeQuestion(message.text)}</p>
+                            <p className="mt-1.5 text-xs font-semibold leading-5 text-slate-600">{summarizeMessageTitle(message.text)}</p>
+                            <p className="mt-1 text-[11px] leading-4 text-slate-500">{emphasizeQuestion(message.text)}</p>
                           </summary>
                           <div className="mt-2 space-y-2 border-t border-emerald-100 pt-2">
-                            <p className="text-xs leading-5 text-blue-200">{message.text}</p>
+                            <p className="text-xs leading-5 text-slate-600">{message.text}</p>
                             {message.meta ? (
                               <details className="rounded-xl bg-emerald-50/70 px-2.5 py-2">
-                                <summary className="cursor-pointer text-[11px] font-medium text-blue-300">{compactMetaSummary(message.meta as Record<string, unknown>) || "查看元数据"}</summary>
-                                <pre className="mt-2 overflow-x-auto rounded-xl bg-blue-950/95 p-2.5 text-[10px] leading-4 text-blue-100">{JSON.stringify(message.meta, null, 2)}</pre>
+                                <summary className="cursor-pointer text-[11px] font-medium text-slate-500">{compactMetaSummary(message.meta as Record<string, unknown>) || "查看元数据"}</summary>
+                                <pre className="mt-2 overflow-x-auto rounded-xl bg-white/95 p-2.5 text-[10px] leading-4 text-slate-700">{JSON.stringify(message.meta, null, 2)}</pre>
                               </details>
                             ) : null}
                           </div>
                         </details>
-                      )) : <div className="rounded-2xl border border-dashed border-emerald-200 bg-white px-4 py-4 text-sm text-blue-300">当前还没有真实执行结果</div>}
+                      )) : <div className="rounded-2xl border border-dashed border-emerald-200 bg-white px-4 py-4 text-sm text-slate-500">当前还没有真实执行结果</div>}
                     </div>
                   </div>
 
                   <div>
                     <div className="mb-2 flex items-center justify-between">
-                      <p className="text-xs font-semibold text-blue-200">系统自动回执</p>
+                      <p className="text-xs font-semibold text-slate-600">系统自动回执</p>
                       <span className="rounded-full bg-amber-500 px-2 py-0.5 text-[10px] font-semibold text-white">{receiptInboxCards.length}</span>
                     </div>
                     <div className="space-y-2">
                       {receiptInboxCards.length > 0 ? receiptInboxCards.map((message, index) => (
-                        <details key={`${message.id}-${index}`} className={`rounded-2xl border-blue-800/40 bg-blue-900/20 p-3 ${bridgeCardTone(message.kind, "border-amber-200")}`}>
+                        <details key={`${message.id}-${index}`} className={`rounded-2xl border-gray-200 bg-white p-3 ${bridgeCardTone(message.kind, "border-amber-200")}`}>
                           <summary className="cursor-pointer list-none">
                             <div className="flex flex-wrap items-center gap-1.5">
-                              <span className="text-[11px] text-blue-300">{formatEasternTime(message.createdAt)}</span>
+                              <span className="text-[11px] text-slate-500">{formatEasternTime(message.createdAt)}</span>
                               <span className={`rounded-full px-2 py-0.5 text-[10px] font-semibold ${bridgeKindBadge(message.kind)}`}>{displayBridgeKind(message.kind)}</span>
-                              <span className="rounded-full bg-blue-800/40 px-2 py-0.5 text-[10px] font-semibold text-blue-200">{message.from} → {message.to}</span>
+                              <span className="rounded-full bg-white/40 px-2 py-0.5 text-[10px] font-semibold text-slate-600">{message.from} → {message.to}</span>
                             </div>
-                            <p className="mt-1.5 text-xs font-semibold leading-5 text-blue-200">{summarizeMessageTitle(message.text)}</p>
-                            <p className="mt-1 text-[11px] leading-4 text-blue-300">{emphasizeQuestion(message.text)}</p>
+                            <p className="mt-1.5 text-xs font-semibold leading-5 text-slate-600">{summarizeMessageTitle(message.text)}</p>
+                            <p className="mt-1 text-[11px] leading-4 text-slate-500">{emphasizeQuestion(message.text)}</p>
                           </summary>
                           <div className="mt-2 space-y-2 border-t border-amber-100 pt-2">
-                            <p className="text-xs leading-5 text-blue-200">{message.text}</p>
+                            <p className="text-xs leading-5 text-slate-600">{message.text}</p>
                             {message.meta ? (
                               <details className="rounded-xl bg-amber-50/70 px-2.5 py-2">
-                                <summary className="cursor-pointer text-[11px] font-medium text-blue-300">{compactMetaSummary(message.meta as Record<string, unknown>) || "查看元数据"}</summary>
-                                <pre className="mt-2 overflow-x-auto rounded-xl bg-blue-950/95 p-2.5 text-[10px] leading-4 text-blue-100">{JSON.stringify(message.meta, null, 2)}</pre>
+                                <summary className="cursor-pointer text-[11px] font-medium text-slate-500">{compactMetaSummary(message.meta as Record<string, unknown>) || "查看元数据"}</summary>
+                                <pre className="mt-2 overflow-x-auto rounded-xl bg-white/95 p-2.5 text-[10px] leading-4 text-slate-700">{JSON.stringify(message.meta, null, 2)}</pre>
                               </details>
                             ) : null}
                           </div>
                         </details>
-                      )) : <div className="rounded-2xl border border-dashed border-amber-200 bg-white px-4 py-4 text-sm text-blue-300">当前还没有系统自动回执</div>}
+                      )) : <div className="rounded-2xl border border-dashed border-amber-200 bg-white px-4 py-4 text-sm text-slate-500">当前还没有系统自动回执</div>}
                     </div>
                   </div>
                 </div>
@@ -940,20 +940,20 @@ export default async function DashboardSystemPage() {
         <AgentStatusHistoryPanel statuses={agentStatuses} history={agentStatusHistory} />
 
         <DashboardCard>
-          <DashboardCardTitle title="系统状态" desc="放在后面，只在需要诊断时看，不打断发命令和看回执。" right={<span className="rounded-full bg-blue-950 px-3 py-1 text-xs font-semibold text-white">{onlineCount} 在线 · {offlineCount} 离线</span>} />
+          <DashboardCardTitle title="系统状态" desc="放在后面，只在需要诊断时看，不打断发命令和看回执。" right={<span className="rounded-full bg-gray-50 px-3 py-1 text-xs font-semibold text-slate-700">{onlineCount} 在线 · {offlineCount} 离线</span>} />
           <div className="mt-3 grid gap-3 xl:grid-cols-[0.86fr_1.14fr]">
             <div className="space-y-3">
-              <div className="rounded-2xl border border-blue-800/40 bg-blue-900/30 p-3">
-                <p className="text-sm font-semibold text-blue-100">本地执行线</p>
-                <p className="mt-1 text-[11px] text-blue-300">这里只看当前还在用的本地入口。</p>
+              <div className="rounded-2xl border border-gray-200 bg-white p-3">
+                <p className="text-sm font-semibold text-slate-700">本地执行线</p>
+                <p className="mt-1 text-[11px] text-slate-500">这里只看当前还在用的本地入口。</p>
                 <div className="mt-2 space-y-2">
                   {agents.map((agent) => (
                     <div key={agent.key} className="flex items-center justify-between rounded-xl bg-white px-3 py-2">
                       <div>
-                        <p className="text-sm font-semibold text-blue-100">{agent.name}</p>
-                        <p className="text-[11px] text-blue-300">{agent.profile} · {agent.port}</p>
+                        <p className="text-sm font-semibold text-slate-700">{agent.name}</p>
+                        <p className="text-[11px] text-slate-500">{agent.profile} · {agent.port}</p>
                       </div>
-                      <span className={`rounded-full px-2.5 py-0.5 text-[11px] font-semibold ${agent.online ? "bg-emerald-100 text-emerald-800" : "bg-blue-800/40 text-blue-200"}`}>
+                      <span className={`rounded-full px-2.5 py-0.5 text-[11px] font-semibold ${agent.online ? "bg-emerald-100 text-emerald-800" : "bg-white/40 text-slate-600"}`}>
                         {agent.online ? "在线" : "离线"}
                       </span>
                     </div>
@@ -961,9 +961,9 @@ export default async function DashboardSystemPage() {
                 </div>
               </div>
 
-              <div className="rounded-2xl border border-blue-800/40 bg-blue-900/30 p-3 text-[11px] leading-5 text-blue-300">
+              <div className="rounded-2xl border border-gray-200 bg-white p-3 text-[11px] leading-5 text-slate-500">
                 <div className="grid gap-2 sm:grid-cols-2">
-                  <div className="rounded-xl bg-white px-3 py-2"><span className="font-semibold text-blue-200">Bridge</span> 发件 {sentHistory.length}，待消费 {outboxMessages.length}，已收到 {receiptInboxCards.length}，已完成 {resultInboxCards.length}</div>
+                  <div className="rounded-xl bg-white px-3 py-2"><span className="font-semibold text-slate-600">Bridge</span> 发件 {sentHistory.length}，待消费 {outboxMessages.length}，已收到 {receiptInboxCards.length}，已完成 {resultInboxCards.length}</div>
                   <div className="rounded-xl bg-white px-3 py-2"><span className="font-semibold text-rose-700">守望</span> 心跳 {agentStatuses.length}，超时 {staleAgentCount}</div>
                   <div className="rounded-xl bg-white px-3 py-2"><span className="font-semibold text-amber-700">Wake</span> 待消费 {wakeItems.length}，已消费 {consumedWakeItems.length}</div>
                   <div className="rounded-xl bg-white px-3 py-2"><span className="font-semibold text-violet-700">Watchdog</span> 告警 {watchdogAlerts.length}，交接 {handedOffPromises.length}，提醒 {watchdogOutboxMessages.length}</div>
@@ -972,9 +972,9 @@ export default async function DashboardSystemPage() {
             </div>
 
             <div className="grid gap-3 lg:grid-cols-2">
-              <div className="rounded-2xl border border-blue-800/40 bg-blue-900/30 p-3">
-                <p className="text-sm font-semibold text-blue-100">Agent heartbeat / state</p>
-                <p className="mt-1 text-[11px] text-blue-300">Remote agents now show typing, context usage, and stuck-risk hints here.</p>
+              <div className="rounded-2xl border border-gray-200 bg-white p-3">
+                <p className="text-sm font-semibold text-slate-700">Agent heartbeat / state</p>
+                <p className="mt-1 text-[11px] text-slate-500">Remote agents now show typing, context usage, and stuck-risk hints here.</p>
                 <div className="mt-2 space-y-3">
                   {agentStatuses.length > 0 ? agentStatuses.map((item) => {
                     const heartbeatAt = heartbeatTime(item);
@@ -985,16 +985,16 @@ export default async function DashboardSystemPage() {
                     const ctxUsage = typeof item.realCtxUsage === "number" && Number.isFinite(item.realCtxUsage) ? Math.max(0, Math.min(100, item.realCtxUsage)) : null;
                     const primaryTask = item.taskProgress || item.currentTask || item.summary;
                     return (
-                      <div key={item.agent} className="rounded-2xl border border-blue-800/40 bg-blue-900/20 p-3">
+                      <div key={item.agent} className="rounded-2xl border border-gray-200 bg-white p-3">
                         <div className="flex flex-wrap items-start justify-between gap-3">
                           <div>
                             <div className="flex flex-wrap items-center gap-2">
-                              <p className="text-sm font-semibold text-blue-100">{item.agent}{item.role ? " / " + item.role : ""}</p>
+                              <p className="text-sm font-semibold text-slate-700">{item.agent}{item.role ? " / " + item.role : ""}</p>
                               <span className={"rounded-full px-2.5 py-0.5 text-[11px] font-semibold " + state.tone}>{state.label}</span>
-                              <span className={"rounded-full px-2.5 py-0.5 text-[11px] font-semibold " + (isStale(heartbeatAt) ? "bg-rose-100 text-rose-800" : "bg-blue-800/40 text-blue-200")}>{displayHeartbeatAge(heartbeatAt)}</span>
+                              <span className={"rounded-full px-2.5 py-0.5 text-[11px] font-semibold " + (isStale(heartbeatAt) ? "bg-rose-100 text-rose-800" : "bg-white/40 text-slate-600")}>{displayHeartbeatAge(heartbeatAt)}</span>
                               {maybeStuck ? <span className="rounded-full bg-orange-100 px-2.5 py-0.5 text-[11px] font-semibold text-orange-800">stuck?</span> : null}
                             </div>
-                            {primaryTask ? <p className="mt-1 text-xs leading-5 text-blue-300">{primaryTask}</p> : null}
+                            {primaryTask ? <p className="mt-1 text-xs leading-5 text-slate-500">{primaryTask}</p> : null}
                           </div>
                           <span className={"rounded-full px-2.5 py-0.5 text-[11px] font-semibold " + statusBadge(item.status)}>{item.status}</span>
                         </div>
@@ -1013,131 +1013,131 @@ export default async function DashboardSystemPage() {
 
                         {ctxUsage !== null ? (
                           <div className="mt-3">
-                            <div className="mb-1 flex items-center justify-between text-[11px] text-blue-300">
+                            <div className="mb-1 flex items-center justify-between text-[11px] text-slate-500">
                               <span>Context usage</span>
-                              <span className={ctxUsage >= 85 ? "font-semibold text-rose-700" : ctxUsage >= 70 ? "font-semibold text-amber-700" : "text-blue-300"}>{ctxUsage}%</span>
+                              <span className={ctxUsage >= 85 ? "font-semibold text-rose-700" : ctxUsage >= 70 ? "font-semibold text-amber-700" : "text-slate-500"}>{ctxUsage}%</span>
                             </div>
-                            <div className="h-2 overflow-hidden rounded-full bg-blue-900/30">
+                            <div className="h-2 overflow-hidden rounded-full bg-white">
                               <div className={"h-full rounded-full " + contextBarTone(ctxUsage)} style={{ width: String(ctxUsage) + "%" }} />
                             </div>
                           </div>
                         ) : null}
 
-                        <div className="mt-3 grid gap-2 text-[11px] text-blue-300 sm:grid-cols-2">
-                          <div className="rounded-xl bg-blue-900/30 px-3 py-2">owner: {item.owner || "-"} / backup: {item.backup || "-"}</div>
-                          <div className="rounded-xl bg-blue-900/30 px-3 py-2">task: {item.taskId || item.currentTask || "-"}</div>
-                          <div className="rounded-xl bg-blue-900/30 px-3 py-2 sm:col-span-2">heartbeat: {formatEasternTime(heartbeatAt)} / updated: {formatEasternTime(item.updatedAt)}</div>
+                        <div className="mt-3 grid gap-2 text-[11px] text-slate-500 sm:grid-cols-2">
+                          <div className="rounded-xl bg-white px-3 py-2">owner: {item.owner || "-"} / backup: {item.backup || "-"}</div>
+                          <div className="rounded-xl bg-white px-3 py-2">task: {item.taskId || item.currentTask || "-"}</div>
+                          <div className="rounded-xl bg-white px-3 py-2 sm:col-span-2">heartbeat: {formatEasternTime(heartbeatAt)} / updated: {formatEasternTime(item.updatedAt)}</div>
                         </div>
                       </div>
                     );
-                  }) : <div className="rounded-xl border border-dashed border-blue-800/40 bg-blue-900/20 px-3 py-4 text-sm text-blue-300">No agent heartbeat yet</div>}
+                  }) : <div className="rounded-xl border border-dashed border-gray-200 bg-white px-3 py-4 text-sm text-slate-500">No agent heartbeat yet</div>}
                 </div>
               </div>
-              <div className="rounded-2xl border border-blue-800/40 bg-blue-900/30 p-3">
-                <p className="text-sm font-semibold text-blue-100">最近系统事件</p>
+              <div className="rounded-2xl border border-gray-200 bg-white p-3">
+                <p className="text-sm font-semibold text-slate-700">最近系统事件</p>
                 <div className="mt-2 space-y-2">
                   {events.length > 0 ? events.slice(0, 5).map((event, index) => (
                     <div key={`${event.stamp}-${index}`} className="rounded-xl bg-white px-3 py-2.5">
                       <div className="flex flex-wrap items-center gap-2">
-                        <span className="text-[11px] text-blue-300">{event.stamp}</span>
+                        <span className="text-[11px] text-slate-500">{event.stamp}</span>
                         <span className={`rounded-full px-2 py-0.5 text-[10px] font-semibold ${taskEventTone(event.type)}`}>{displayTaskEventType(event.type)}</span>
                       </div>
-                      <p className="mt-1 text-sm font-semibold text-blue-100">{event.actor}</p>
-                      <p className="mt-1 text-xs leading-5 text-blue-300">{event.result}</p>
+                      <p className="mt-1 text-sm font-semibold text-slate-700">{event.actor}</p>
+                      <p className="mt-1 text-xs leading-5 text-slate-500">{event.result}</p>
                     </div>
-                  )) : <div className="rounded-xl border border-dashed border-blue-800/40 bg-blue-900/20 px-3 py-4 text-sm text-blue-300">暂无事件记录</div>}
+                  )) : <div className="rounded-xl border border-dashed border-gray-200 bg-white px-3 py-4 text-sm text-slate-500">暂无事件记录</div>}
                 </div>
               </div>
 
-              <div className="rounded-2xl border border-blue-800/40 bg-blue-900/30 p-3">
-                <p className="text-sm font-semibold text-blue-100">Wake 队列</p>
-                <p className="mt-1 text-[11px] text-blue-300">展示待消费与最近已消费的 wake 项，方便确认 outbox / handoff / watchdog 是否真的推送并被 agent 拿走了。</p>
+              <div className="rounded-2xl border border-gray-200 bg-white p-3">
+                <p className="text-sm font-semibold text-slate-700">Wake 队列</p>
+                <p className="mt-1 text-[11px] text-slate-500">展示待消费与最近已消费的 wake 项，方便确认 outbox / handoff / watchdog 是否真的推送并被 agent 拿走了。</p>
                 <div className="mt-2 space-y-3">
                   <div>
-                    <p className="text-[11px] font-semibold text-blue-300">待消费</p>
+                    <p className="text-[11px] font-semibold text-slate-500">待消费</p>
                     <div className="mt-2 space-y-2">
                       {wakeItems.length > 0 ? wakeItems.slice(0, 8).map((item) => (
                         <div key={item.id} className="rounded-xl bg-white px-3 py-2.5">
                           <div className="flex flex-wrap items-center gap-2">
-                            <span className="text-[11px] text-blue-300">{formatEasternTime(item.createdAt)}</span>
+                            <span className="text-[11px] text-slate-500">{formatEasternTime(item.createdAt)}</span>
                             <span className="rounded-full bg-amber-100 px-2 py-0.5 text-[10px] font-semibold text-amber-800">{item.kind}</span>
-                            <span className="rounded-full bg-blue-800/40 px-2 py-0.5 text-[10px] font-semibold text-blue-200">{item.targetAgent}</span>
+                            <span className="rounded-full bg-white/40 px-2 py-0.5 text-[10px] font-semibold text-slate-600">{item.targetAgent}</span>
                           </div>
-                          <p className="mt-1 text-xs leading-5 text-blue-300">related: {item.relatedId || "-"}{item.note ? ` · ${item.note}` : ""}</p>
+                          <p className="mt-1 text-xs leading-5 text-slate-500">related: {item.relatedId || "-"}{item.note ? ` · ${item.note}` : ""}</p>
                         </div>
-                      )) : <div className="rounded-xl border border-dashed border-blue-800/40 bg-blue-900/20 px-3 py-4 text-sm text-blue-300">当前没有待消费的 wake 项</div>}
+                      )) : <div className="rounded-xl border border-dashed border-gray-200 bg-white px-3 py-4 text-sm text-slate-500">当前没有待消费的 wake 项</div>}
                     </div>
                   </div>
 
                   <div>
-                    <p className="text-[11px] font-semibold text-blue-300">最近已消费</p>
+                    <p className="text-[11px] font-semibold text-slate-500">最近已消费</p>
                     <div className="mt-2 space-y-2">
                       {consumedWakeItems.length > 0 ? consumedWakeItems.slice(0, 8).map((item) => (
                         <div key={item.id} className="rounded-xl bg-white px-3 py-2.5">
                           <div className="flex flex-wrap items-center gap-2">
-                            <span className="text-[11px] text-blue-300">{formatEasternTime(item.consumedAt || item.createdAt)}</span>
+                            <span className="text-[11px] text-slate-500">{formatEasternTime(item.consumedAt || item.createdAt)}</span>
                             <span className="rounded-full bg-emerald-100 px-2 py-0.5 text-[10px] font-semibold text-emerald-800">{item.consumeResult || "consumed"}</span>
-                            <span className="rounded-full bg-blue-800/40 px-2 py-0.5 text-[10px] font-semibold text-blue-200">{item.targetAgent}</span>
+                            <span className="rounded-full bg-white/40 px-2 py-0.5 text-[10px] font-semibold text-slate-600">{item.targetAgent}</span>
                           </div>
-                          <p className="mt-1 text-xs leading-5 text-blue-300">kind: {item.kind} · related: {item.relatedId || "-"}{item.note ? ` · ${item.note}` : ""}</p>
+                          <p className="mt-1 text-xs leading-5 text-slate-500">kind: {item.kind} · related: {item.relatedId || "-"}{item.note ? ` · ${item.note}` : ""}</p>
                         </div>
-                      )) : <div className="rounded-xl border border-dashed border-blue-800/40 bg-blue-900/20 px-3 py-4 text-sm text-blue-300">当前还没有已消费的 wake 记录</div>}
+                      )) : <div className="rounded-xl border border-dashed border-gray-200 bg-white px-3 py-4 text-sm text-slate-500">当前还没有已消费的 wake 记录</div>}
                     </div>
                   </div>
                 </div>
               </div>
 
-              <div className="rounded-2xl border border-blue-800/40 bg-blue-900/30 p-3">
-                <p className="text-sm font-semibold text-blue-100">Watchdog 告警</p>
-                <p className="mt-1 text-[11px] text-blue-300">直接展示 watchdog 当前判定的告警，方便核对 stale / overdue / blocked / wake 这几类自动守望结果。</p>
+              <div className="rounded-2xl border border-gray-200 bg-white p-3">
+                <p className="text-sm font-semibold text-slate-700">Watchdog 告警</p>
+                <p className="mt-1 text-[11px] text-slate-500">直接展示 watchdog 当前判定的告警，方便核对 stale / overdue / blocked / wake 这几类自动守望结果。</p>
                 <div className="mt-2 space-y-2">
                   {watchdogAlerts.length > 0 ? watchdogAlerts.slice(0, 8).map((alert, index) => (
                     <div key={`${alert.kind}-${alert.relatedId || alert.target || index}`} className="rounded-xl bg-white px-3 py-2.5">
                       <div className="flex flex-wrap items-center gap-2">
                         <span className={`rounded-full px-2 py-0.5 text-[10px] font-semibold ${alert.level === "error" ? "bg-rose-100 text-rose-800" : "bg-amber-100 text-amber-800"}`}>{alert.level}</span>
-                        <span className="rounded-full bg-blue-800/40 px-2 py-0.5 text-[10px] font-semibold text-blue-200">{alert.kind}</span>
-                        {alert.target ? <span className="text-[11px] text-blue-300">target: {alert.target}</span> : null}
+                        <span className="rounded-full bg-white/40 px-2 py-0.5 text-[10px] font-semibold text-slate-600">{alert.kind}</span>
+                        {alert.target ? <span className="text-[11px] text-slate-500">target: {alert.target}</span> : null}
                       </div>
-                      <p className="mt-1 text-sm font-semibold text-blue-100">{alert.title}</p>
-                      <p className="mt-1 text-xs leading-5 text-blue-300">{alert.detail}</p>
+                      <p className="mt-1 text-sm font-semibold text-slate-700">{alert.title}</p>
+                      <p className="mt-1 text-xs leading-5 text-slate-500">{alert.detail}</p>
                     </div>
-                  )) : <div className="rounded-xl border border-dashed border-blue-800/40 bg-blue-900/20 px-3 py-4 text-sm text-blue-300">当前没有 watchdog 告警</div>}
+                  )) : <div className="rounded-xl border border-dashed border-gray-200 bg-white px-3 py-4 text-sm text-slate-500">当前没有 watchdog 告警</div>}
                 </div>
               </div>
 
-              <div className="rounded-2xl border border-blue-800/40 bg-blue-900/30 p-3">
-                <p className="text-sm font-semibold text-blue-100">Watchdog 交接结果</p>
-                <p className="mt-1 text-[11px] text-blue-300">这里直接看被 watchdog 改成 handed_off 的 promise，确认自动交接不是只发了告警，而是真的改了 owner。</p>
+              <div className="rounded-2xl border border-gray-200 bg-white p-3">
+                <p className="text-sm font-semibold text-slate-700">Watchdog 交接结果</p>
+                <p className="mt-1 text-[11px] text-slate-500">这里直接看被 watchdog 改成 handed_off 的 promise，确认自动交接不是只发了告警，而是真的改了 owner。</p>
                 <div className="mt-2 space-y-2">
                   {handedOffPromises.length > 0 ? handedOffPromises.slice(0, 8).map((item) => (
                     <div key={item.id} className="rounded-xl bg-white px-3 py-2.5">
                       <div className="flex flex-wrap items-center gap-2">
-                        <span className="text-[11px] text-blue-300">{formatEasternTime(item.latestProgressAt || item.createdAt)}</span>
+                        <span className="text-[11px] text-slate-500">{formatEasternTime(item.latestProgressAt || item.createdAt)}</span>
                         <span className="rounded-full bg-violet-100 px-2 py-0.5 text-[10px] font-semibold text-violet-800">handed_off</span>
-                        <span className="rounded-full bg-blue-800/40 px-2 py-0.5 text-[10px] font-semibold text-blue-200">{item.owner}</span>
+                        <span className="rounded-full bg-white/40 px-2 py-0.5 text-[10px] font-semibold text-slate-600">{item.owner}</span>
                       </div>
-                      <p className="mt-1 text-sm font-semibold text-blue-100">{item.title}</p>
-                      <p className="mt-1 text-xs leading-5 text-blue-300">backup: {item.backup || "-"} · reason: {item.blockedReason || "-"}</p>
+                      <p className="mt-1 text-sm font-semibold text-slate-700">{item.title}</p>
+                      <p className="mt-1 text-xs leading-5 text-slate-500">backup: {item.backup || "-"} · reason: {item.blockedReason || "-"}</p>
                     </div>
-                  )) : <div className="rounded-xl border border-dashed border-blue-800/40 bg-blue-900/20 px-3 py-4 text-sm text-blue-300">当前没有 handed_off 的 promise</div>}
+                  )) : <div className="rounded-xl border border-dashed border-gray-200 bg-white px-3 py-4 text-sm text-slate-500">当前没有 handed_off 的 promise</div>}
                 </div>
               </div>
 
-              <div className="rounded-2xl border border-blue-800/40 bg-blue-900/30 p-3">
-                <p className="text-sm font-semibold text-blue-100">Watchdog 提醒发件</p>
-                <p className="mt-1 text-[11px] text-blue-300">单独展示 watchdog 自动塞进 outbox 的提醒，避免它们混在普通人工发件里看不出来。</p>
+              <div className="rounded-2xl border border-gray-200 bg-white p-3">
+                <p className="text-sm font-semibold text-slate-700">Watchdog 提醒发件</p>
+                <p className="mt-1 text-[11px] text-slate-500">单独展示 watchdog 自动塞进 outbox 的提醒，避免它们混在普通人工发件里看不出来。</p>
                 <div className="mt-2 space-y-2">
                   {watchdogOutboxMessages.length > 0 ? watchdogOutboxMessages.slice(-8).reverse().map((item) => (
                     <div key={item.id} className="rounded-xl bg-white px-3 py-2.5">
                       <div className="flex flex-wrap items-center gap-2">
-                        <span className="text-[11px] text-blue-300">{formatEasternTime(item.createdAt)}</span>
+                        <span className="text-[11px] text-slate-500">{formatEasternTime(item.createdAt)}</span>
                         <span className="rounded-full bg-rose-100 px-2 py-0.5 text-[10px] font-semibold text-rose-800">{item.kind}</span>
-                        <span className="rounded-full bg-blue-800/40 px-2 py-0.5 text-[10px] font-semibold text-blue-200">watchdog → {item.to}</span>
+                        <span className="rounded-full bg-white/40 px-2 py-0.5 text-[10px] font-semibold text-slate-600">watchdog → {item.to}</span>
                       </div>
-                      <p className="mt-1 text-xs leading-5 text-blue-200">{item.text}</p>
-                      <p className="mt-1 text-[11px] text-blue-300">related: {String(item.meta?.relatedId || "-")}</p>
+                      <p className="mt-1 text-xs leading-5 text-slate-600">{item.text}</p>
+                      <p className="mt-1 text-[11px] text-slate-500">related: {String(item.meta?.relatedId || "-")}</p>
                     </div>
-                  )) : <div className="rounded-xl border border-dashed border-blue-800/40 bg-blue-900/20 px-3 py-4 text-sm text-blue-300">当前没有 watchdog 自动提醒发件</div>}
+                  )) : <div className="rounded-xl border border-dashed border-gray-200 bg-white px-3 py-4 text-sm text-slate-500">当前没有 watchdog 自动提醒发件</div>}
                 </div>
               </div>
             </div>

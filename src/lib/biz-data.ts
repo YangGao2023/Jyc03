@@ -84,6 +84,7 @@ export type ExpenseRecord = {
   source_type?: string;
   source_id?: string;
   order_id?: string;
+  voided?: boolean;
 };
 
 export type CashEntry = {
@@ -97,6 +98,7 @@ export type CashEntry = {
   source_type?: string;
   source_id?: string;
   order_id?: string;
+  voided?: boolean;
 };
 
 export type MaterialRecord = {
@@ -397,6 +399,7 @@ export const bizExpenses = normalizeList<ExpenseRecord>(rawAssetsRecord.expenses
   expense_date: toString(item.expense_date),
   remark: toString(item.remark) || undefined,
   office: Boolean(item.office),
+  voided: Boolean(item.voided),
 }));
 
 export const bizCashEntries = normalizeList<CashEntry>(rawAssetsRecord.cash_entries, (item) => ({
@@ -405,6 +408,7 @@ export const bizCashEntries = normalizeList<CashEntry>(rawAssetsRecord.cash_entr
   amount: toNumber(item.amount),
   date: toString(item.date),
   note: toString(item.note) || undefined,
+  voided: Boolean(item.voided),
 }));
 
 export const bizMaterials = normalizeList<MaterialRecord>(rawAssetsRecord.materials, (item) => ({

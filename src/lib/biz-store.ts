@@ -609,7 +609,7 @@ async function sqliteWrite(snapshot: BizStoreSnapshot): Promise<void> {
       id: e.id, target: e.target, detail: e.detail, amount: e.amount,
       expense_type: e.expense_type, payment_method: e.payment_method,
       expense_date: e.expense_date, remark: e.remark ?? null, office: e.office ? 1 : 0,
-      source_type: e.source_type ?? null, source_id: e.source_id ?? null,
+      source_type: e.source_type ?? null, source_id: e.source_id ?? null, voided: e.voided ? 1 : 0,
       updated_at: new Date().toISOString(),
     });
 
@@ -627,7 +627,7 @@ async function sqliteWrite(snapshot: BizStoreSnapshot): Promise<void> {
       note: c.note ?? null,
       order_number: c.order_number ?? null,
       source_type: c.source_type ?? null,
-      source_id: c.source_id ?? null,
+      source_id: c.source_id ?? null, voided: c.voided ? 1 : 0,
       updated_at: new Date().toISOString(),
     });
 

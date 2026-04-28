@@ -4963,7 +4963,20 @@ function EmployeesSection({ employees, setEmployees, attendances, setAttendances
     .filter((employee) => employee.status === "在职")
     .filter((employee) => payrollEthnicityFilter === "全部" || employee.ethnicity === payrollEthnicityFilter)
     .map((employee) => {
-      const rows = ensureAttendanceRows(normalizedEmployees, attendances, payrollRange, settings).filter((item) => item.note !== "__deleted__" && (item.employee_id === employee.id || item.employee_name === employee.name) && item.date >= payrollRange.start && item.date <= payrollRange.end);
+      const rows = attendances
+        .filter((item) => item.note !== "__deleted__" && (item.employee_id === employee.id || item.employee_name === employee.name) && item.date >= payrollRange.start && item.date <= payrollRange.end)
+        .map((item) => {
+          const leaveMinutes = Math.max(0, Math.round(item.leave_minutes || 0));
+          const overtimeMinutes = Math.max(0, Math.round(item.overtime_minutes || 0));
+          const workedMinutes = calcWorkedMinutes(leaveMinutes, overtimeMinutes);
+          return {
+            ...item,
+            leave_minutes: leaveMinutes,
+            overtime_minutes: overtimeMinutes,
+            worked_minutes: workedMinutes,
+            meal_allowance: workedMinutes > 300 ? Boolean(item.meal_allowance && employee.meal_allowance_eligible !== false) : false,
+          };
+        });
       const totalMinutes = rows.reduce((sum, item) => sum + item.worked_minutes, 0);
       const mealCount = rows.filter((item) => item.meal_allowance).length;
       const hourlyRate = employee.hourly_rate || 0;
@@ -4984,7 +4997,7 @@ function EmployeesSection({ employees, setEmployees, attendances, setAttendances
         payrollId,
         paid: existing?.payment_status === "已发放" && Boolean(linkedExpense),
       };
-    }), [normalizedEmployees, attendances, payrollRange, settings, payrolls, payrollEthnicityFilter, mealAllowanceAmount, expenses]);
+    }), [normalizedEmployees, attendances, payrollRange, payrolls, payrollEthnicityFilter, mealAllowanceAmount, expenses]);
 
   const [employeeDraft, setEmployeeDraft] = useState({ name: "", phone: "", hourly_rate: "", workdays: ["Mon", "Tue", "Wed", "Thu", "Fri"], meal_allowance_eligible: true, ethnicity: "华人", position: "" });
   const [attendanceDraft, setAttendanceDraft] = useState({ employee_id: "", date: today, leave_minutes: "0", overtime_minutes: "0" });

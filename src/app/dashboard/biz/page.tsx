@@ -5962,20 +5962,20 @@ export default function DashboardBizPage() {
         ? "border-amber-200 bg-amber-50 text-amber-700"
         : "border-emerald-200 bg-emerald-50 text-emerald-700";
   const saveText = saveState === "saving"
-    ? "正在保存更改..."
+    ? "正在自动保存..."
     : saveState === "conflict"
       ? "保存冲突,请刷新后重试"
       : saveState === "error"
         ? "保存失败"
         : isDirty
-          ? "当前有未保存更改"
+          ? "检测到新改动,等待自动保存"
           : lastSavedAt
             ? `已保存 · ${lastSavedAt}`
             : "当前数据已同步";
   const saveHint = saveState === "error" || saveState === "conflict"
     ? saveText
     : isDirty
-      ? "检测到改动后会自动保存,上面的保存按钮也还能手动点。"
+      ? "检测到改动后会自动保存,右侧按钮可立即保存。"
       : "当前页面没有未保存更改。";
 
   return (
@@ -5988,7 +5988,7 @@ export default function DashboardBizPage() {
 
       <div className="mt-3 flex flex-wrap items-center justify-between gap-3 rounded-[18px] border border-gray-200 bg-gray-50 px-4 py-3 shadow-sm">
         <div>
-          <p className="text-xs font-semibold text-slate-700">手动保存</p>
+          <p className="text-xs font-semibold text-slate-700">自动保存</p>
           <p className="mt-1 text-xs text-slate-700">{saveHint}</p>
         </div>
         <div className="flex items-center gap-2">
@@ -6003,7 +6003,7 @@ export default function DashboardBizPage() {
             {showVoided ? "隐藏已作废" : "显示已作废"}
           </button>
           <div className={`rounded-lg border px-3 py-1.5 text-xs font-semibold ${saveTone}`}>{saveText}</div>
-          <ActionBtn tone={isDirty ? "primary" : "success"} disabled={!isDirty || saveState === "saving"} onClick={persistSnapshot}>{saveState === "saving" ? "保存中..." : "保存更改"}</ActionBtn>
+          <ActionBtn tone={isDirty ? "primary" : "success"} disabled={!isDirty || saveState === "saving"} onClick={persistSnapshot}>{saveState === "saving" ? "保存中..." : "立即保存"}</ActionBtn>
         </div>
       </div>
 

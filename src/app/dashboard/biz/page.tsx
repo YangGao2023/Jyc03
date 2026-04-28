@@ -5674,8 +5674,6 @@ export default function DashboardBizPage() {
   const [isHydrated, setIsHydrated] = useState(false);
   const [saveState, setSaveState] = useState<"idle" | "saving" | "saved" | "error" | "conflict">("idle");
   const [showVoided, setShowVoided] = useState(false);
-  const [transferDraft, setTransferDraft] = useState<{ amount: string; date: string; note: string } | null>(null);
-  const [transferSuccess, setTransferSuccess] = useState<string | null>(null);
   const orderSummary = useMemo(() => summarizeOrders(orders.filter((o) => o.status !== "已作废")), [orders]);
   const snapshot = useMemo(() => buildBizSnapshot({
     revision: storeRevision,
@@ -5781,12 +5779,6 @@ export default function DashboardBizPage() {
     }
   }, [isHydrated, saveState, savedSnapshotJson, snapshotJson]);
 
-  useEffect(() => {
-    if (!transferSuccess) return;
-    const t = setTimeout(() => setTransferSuccess(null), 5000);
-    return () => clearTimeout(t);
-  }, [transferSuccess]);
-
   async function persistSnapshot() {
     if (!isHydrated || saveState === "saving" || !isDirty) return;
 
@@ -5852,12 +5844,6 @@ export default function DashboardBizPage() {
           <p className="mt-1 text-xs text-slate-700">{saveHint}</p>
         </div>
         <div className="flex items-center gap-2">
-          <button
-            onClick={() => setTransferDraft({ amount: "", date: todayIso(), note: "" })}
-            className="rounded-lg border border-gray-200 bg-white px-3 py-1.5 text-xs font-medium text-slate-600 transition-colors hover:border-gray-300"
-          >
-            现金转账
-          </button>
           <button
             onClick={() => setShowVoided((v) => !v)}
             className={`rounded-lg border px-3 py-1.5 text-xs font-medium transition-colors ${
@@ -5976,96 +5962,6 @@ export default function DashboardBizPage() {
         </div>
       </div>
 
-      {/* ─── Transfer Success Toast ─── */}
-      {transferSuccess && (
-        <div className="fixed bottom-6 right-6 z-50 animate-slide-up rounded-xl border border-emerald-200 bg-emerald-50 px-4 py-3 shadow-lg">
-          <p className="text-xs font-medium text-emerald-700">✓ {transferSuccess}</p>
-        </div>
-      )}
-
-      {/* ─── Transfer Dialog ─── */}
-      {transferDraft && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/30">
-          <div className="w-full max-w-sm rounded-2xl bg-white p-6 shadow-xl">
-            <h3 className="text-sm font-semibold text-slate-800">现金转账</h3>
-            <p className="mt-1 text-xs text-slate-500">记录内部账户间的资金调动</p>
-            <div className="mt-4 space-y-3">
-              <div>
-                <label className="text-xs font-medium text-slate-600">金额 ($)</label>
-                <input
-                  type="number"
-                  value={transferDraft.amount}
-                  onChange={(e) => setTransferDraft({ ...transferDraft, amount: e.target.value })}
-                  placeholder="0.00"
-                  className="mt-1 h-9 w-full rounded-lg border border-slate-300 bg-white px-3 text-sm text-slate-800"
-                />
-              </div>
-              <div>
-                <label className="text-xs font-medium text-slate-600">日期</label>
-                <input
-                  type="date"
-                  value={transferDraft.date}
-                  onChange={(e) => setTransferDraft({ ...transferDraft, date: e.target.value })}
-                  className="mt-1 h-9 w-full rounded-lg border border-slate-300 bg-white px-3 text-sm text-slate-800"
-                />
-              </div>
-              <div>
-                <label className="text-xs font-medium text-slate-600">备注</label>
-                <input
-                  value={transferDraft.note}
-                  onChange={(e) => setTransferDraft({ ...transferDraft, note: e.target.value })}
-                  placeholder="转账说明（如：转至办公账户）"
-                  className="mt-1 h-9 w-full rounded-lg border border-slate-300 bg-white px-3 text-sm text-slate-800"
-                />
-              </div>
-            </div>
-            <div className="mt-5 flex justify-end gap-2">
-              <button
-                onClick={() => setTransferDraft(null)}
-                className="rounded-lg border border-gray-200 bg-white px-4 py-2 text-xs font-medium text-slate-600 transition-colors hover:border-gray-300"
-              >
-                取消
-              </button>
-              <button
-                onClick={() => {
-                  const amount = parseFloat(transferDraft.amount);
-                  if (isNaN(amount) || amount <= 0) return;
-                  const transferId = crypto.randomUUID();
-                  const note = transferDraft.note.trim() || "内部转账";
-                  setCashEntries((prev) => [
-                    ...prev,
-                    {
-                      id: crypto.randomUUID(),
-                      type: "支出",
-                      amount,
-                      date: transferDraft.date,
-                      note: "转账支出: " + note,
-                      method: "转账",
-                      source_type: "transfer-out",
-                      source_id: transferId,
-                    },
-                    {
-                      id: crypto.randomUUID(),
-                      type: "收入",
-                      amount,
-                      date: transferDraft.date,
-                      note: "转账收入: " + note,
-                      method: "转账",
-                      source_type: "transfer-in",
-                      source_id: transferId,
-                    },
-                  ]);
-                  setTransferDraft(null);
-                  setTransferSuccess(`转账 $${amount.toFixed(2)} 成功，请点击「保存更改」写入数据库`);
-                }}
-                className="rounded-lg bg-sky-600 px-4 py-2 text-xs font-medium text-white transition-colors hover:bg-sky-700"
-              >
-                确认转账
-              </button>
-            </div>
-          </div>
-        </div>
-      )}
     </PageSection>
   );
 }

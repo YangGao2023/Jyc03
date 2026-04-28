@@ -1099,9 +1099,10 @@ function buildCustomerInvoiceHTML(order: BizOrder, draft: DraftFields, rows: Mat
   const isCustom = order.order_type === "定制单";
   const taxAmount = (draft.total_price || 0) * (draft.tax_rate || 0) / 100;
   const totalAfterTax = calcTotalAfterTax(draft.total_price || 0, draft.tax_rate || 0, draft.discount || 0);
-  const photo = draft.preview_image
+  const hasPhoto = Boolean(draft.preview_image);
+  const photo = hasPhoto
     ? `<img src="${escHtml(draft.preview_image)}" alt="preview" style="width:100%;height:100%;object-fit:cover;display:block"/>`
-    : `<div style="width:100%;height:100%;display:flex;align-items:center;justify-content:center;background:#dbeafe;color:#1e3a8a;font-weight:700;font-size:18px">PHOTO</div>`;
+    : `<div style="width:100%;height:100%;background:#fff"></div>`;
   const template = getPrintTemplateSettings(settings);
   const notes = (draft.remarks || template.invoiceNote)
     .split(/\n+/)
@@ -1116,8 +1117,8 @@ function buildCustomerInvoiceHTML(order: BizOrder, draft: DraftFields, rows: Mat
   const middleSection = isCustom
     ? `<div class="middle">
     <div class="photoWrap">
-      <div class="photoInner">${photo}</div>
-      <div class="photoCode">${escHtml(order.order_number)}</div>
+      <div class="photoInner${hasPhoto ? "" : " photoInnerBlank"}">${photo}</div>
+      ${hasPhoto ? `<div class="photoCode">${escHtml(order.order_number)}</div>` : ""}
     </div>
     <div class="descWrap"><div style="padding:10px;font-size:13px;line-height:1.65;color:#111827;min-height:260px">${escHtml(draft.description || "-")}</div></div>
   </div>`
@@ -1198,7 +1199,7 @@ function buildCustomerInvoiceHTML(order: BizOrder, draft: DraftFields, rows: Mat
       </div>
     </div>
   </div>
-`, { pageTitle: `Invoice ${order.order_number}`, bodyPadding: "0", maxWidth: "202mm", extraStyles: `@page{size:A4 portrait;margin:4mm}.sheet{width:202mm;height:289mm;overflow:hidden;border:1px solid #a3a3a3;background:#fff}.topbar{display:grid;grid-template-columns:1.2fr 1fr;gap:4px;padding:4px;background:${brandBlue}}.topbox{background:${brandBlue};color:#fff;padding:10px 12px;min-height:52px;display:flex;align-items:center;justify-content:space-between;border:1px solid rgba(255,255,255,.35)}.topbox h1{font-size:14px;font-weight:800;letter-spacing:.02em;color:#fff}.topbox p{font-size:10px;line-height:1.2;color:rgba(255,255,255,.92)}.sectionBlue{background:${brandBlue};color:#fff;font-weight:700;padding:7px 10px;font-size:13px}.contactInvoice{display:grid;grid-template-columns:2.4fr 1fr;gap:4px;padding:0 4px 4px;background:${brandBlue}}.panel{border:1px solid #a3a3a3;background:#fff}.rows{padding:0;background:#fff}.row{display:grid;grid-template-columns:58px 1fr 58px 1fr;border-top:1px solid #d4d4d4}.row:first-child{border-top:none}.cell{padding:8px 10px;font-size:11px}.label{font-weight:700}.invoiceBox .big{font-size:16px;font-weight:800;text-align:center;padding:14px 10px;border-top:1px solid #d4d4d4}.invoiceBox .date{font-size:14px;font-weight:800;text-align:center;padding:14px 10px;border-top:1px solid #d4d4d4}.midBlue{margin:0 4px 4px;background:${brandBlue};color:#fff;padding:7px 10px;font-size:11px;font-weight:700;display:flex;justify-content:space-between}.middle{display:grid;grid-template-columns:1.08fr 0.92fr;gap:4px;padding:0 4px 4px}.photoWrap{border:1px solid #a3a3a3;background:#fff;height:148mm;position:relative;padding:4px}.photoInner{height:100%;border:1px solid #111827;background:#e5e7eb;overflow:hidden}.photoCode{position:absolute;left:12px;bottom:8px;font-size:24px;font-weight:900;letter-spacing:.04em;color:#111}.descWrap{border:1px solid #a3a3a3;background:#fff;height:148mm;overflow:hidden}.descWrap > div{padding:10px!important;font-size:12px!important;line-height:1.45!important;min-height:auto!important}.bottom{display:grid;grid-template-columns:1.2fr .9fr;gap:4px;padding:0 4px 4px}.noteBody{border:1px solid #a3a3a3;background:#fff;padding:10px;min-height:72mm;font-size:11px;line-height:1.45;overflow:hidden}.totalBody{border:1px solid #a3a3a3;background:#fff;padding:10px 12px;min-height:72mm;display:flex;flex-direction:column;justify-content:center;gap:10px}.totalRow{display:flex;justify-content:space-between;font-size:15px;font-weight:800}.totalRow .v{color:#2b6fdb}@media print{html,body{margin:0!important;padding:0!important}.sheet{border:none;-webkit-print-color-adjust:exact;print-color-adjust:exact;break-inside:avoid;page-break-inside:avoid}}` });
+`, { pageTitle: `Invoice ${order.order_number}`, bodyPadding: "0", maxWidth: "202mm", extraStyles: `@page{size:A4 portrait;margin:4mm}.sheet{width:202mm;height:289mm;overflow:hidden;border:1px solid #a3a3a3;background:#fff}.topbar{display:grid;grid-template-columns:1.2fr 1fr;gap:4px;padding:4px;background:${brandBlue}}.topbox{background:${brandBlue};color:#fff;padding:10px 12px;min-height:52px;display:flex;align-items:center;justify-content:space-between;border:1px solid rgba(255,255,255,.35)}.topbox h1{font-size:14px;font-weight:800;letter-spacing:.02em;color:#fff}.topbox p{font-size:10px;line-height:1.2;color:rgba(255,255,255,.92)}.sectionBlue{background:${brandBlue};color:#fff;font-weight:700;padding:7px 10px;font-size:13px}.contactInvoice{display:grid;grid-template-columns:2.4fr 1fr;gap:4px;padding:0 4px 4px;background:${brandBlue}}.panel{border:1px solid #a3a3a3;background:#fff}.rows{padding:0;background:#fff}.row{display:grid;grid-template-columns:58px 1fr 58px 1fr;border-top:1px solid #d4d4d4}.row:first-child{border-top:none}.cell{padding:8px 10px;font-size:11px}.label{font-weight:700}.invoiceBox .big{font-size:16px;font-weight:800;text-align:center;padding:14px 10px;border-top:1px solid #d4d4d4}.invoiceBox .date{font-size:14px;font-weight:800;text-align:center;padding:14px 10px;border-top:1px solid #d4d4d4}.midBlue{margin:0 4px 4px;background:${brandBlue};color:#fff;padding:7px 10px;font-size:11px;font-weight:700;display:flex;justify-content:space-between}.middle{display:grid;grid-template-columns:1.08fr 0.92fr;gap:4px;padding:0 4px 4px}.photoWrap{border:1px solid #a3a3a3;background:#fff;height:148mm;position:relative;padding:4px}.photoInner{height:100%;border:1px solid #111827;background:#e5e7eb;overflow:hidden}.photoInnerBlank{border:none;background:#fff}.photoCode{position:absolute;left:12px;bottom:8px;font-size:24px;font-weight:900;letter-spacing:.04em;color:#111}.descWrap{border:1px solid #a3a3a3;background:#fff;height:148mm;overflow:hidden}.descWrap > div{padding:10px!important;font-size:12px!important;line-height:1.45!important;min-height:auto!important}.bottom{display:grid;grid-template-columns:1.2fr .9fr;gap:4px;padding:0 4px 4px}.noteBody{border:1px solid #a3a3a3;background:#fff;padding:10px;min-height:72mm;font-size:11px;line-height:1.45;overflow:hidden}.totalBody{border:1px solid #a3a3a3;background:#fff;padding:10px 12px;min-height:72mm;display:flex;flex-direction:column;justify-content:center;gap:10px}.totalRow{display:flex;justify-content:space-between;font-size:15px;font-weight:800}.totalRow .v{color:#2b6fdb}@media print{html,body{margin:0!important;padding:0!important}.sheet{border:none;-webkit-print-color-adjust:exact;print-color-adjust:exact;break-inside:avoid;page-break-inside:avoid}}` });
 }
 
 type PrintShellOptions = {
@@ -5793,20 +5794,36 @@ export default function DashboardBizPage() {
         const payload = (await response.json()) as { ok: boolean; data: BizStoreSnapshot };
         if (cancelled || !payload?.data) return;
         const loadedSnapshot = buildBizSnapshot(payload.data);
-        setStoreRevision(loadedSnapshot.revision);
-        setOrders(loadedSnapshot.orders);
-        setClients(loadedSnapshot.clients);
-        setSuppliers(loadedSnapshot.suppliers);
-        setExpenses(loadedSnapshot.expenses);
-        setCashEntries(loadedSnapshot.cashEntries);
-        setMaterials(loadedSnapshot.materials);
-        setEmployees(loadedSnapshot.employees);
-        setAttendances(loadedSnapshot.attendances);
-        setPayrolls(loadedSnapshot.payrolls);
-        setPrintArchives(loadedSnapshot.printArchives);
-        setSettings(loadedSnapshot.settings);
-        setSavedSnapshotJson(serializeBizSnapshot(loadedSnapshot));
-        try { localStorage.setItem("biz-store-backup", serializeBizSnapshot(loadedSnapshot)); } catch {}
+        const loadedSnapshotJson = serializeBizSnapshot(loadedSnapshot);
+        let hydratedSnapshot = loadedSnapshot;
+        try {
+          const liveBackup = localStorage.getItem("biz-store-live-backup");
+          if (liveBackup) {
+            const parsedBackup = JSON.parse(liveBackup) as Partial<BizStoreSnapshot>;
+            const backupSnapshot = buildBizSnapshot(parsedBackup);
+            const backupSnapshotJson = serializeBizSnapshot(backupSnapshot);
+            if (backupSnapshot.revision === loadedSnapshot.revision && backupSnapshotJson !== loadedSnapshotJson) {
+              hydratedSnapshot = backupSnapshot;
+            }
+          }
+        } catch {}
+        setStoreRevision(hydratedSnapshot.revision);
+        setOrders(hydratedSnapshot.orders);
+        setClients(hydratedSnapshot.clients);
+        setSuppliers(hydratedSnapshot.suppliers);
+        setExpenses(hydratedSnapshot.expenses);
+        setCashEntries(hydratedSnapshot.cashEntries);
+        setMaterials(hydratedSnapshot.materials);
+        setEmployees(hydratedSnapshot.employees);
+        setAttendances(hydratedSnapshot.attendances);
+        setPayrolls(hydratedSnapshot.payrolls);
+        setPrintArchives(hydratedSnapshot.printArchives);
+        setSettings(hydratedSnapshot.settings);
+        setSavedSnapshotJson(loadedSnapshotJson);
+        try {
+          localStorage.setItem("biz-store-backup", loadedSnapshotJson);
+          localStorage.setItem("biz-store-live-backup", serializeBizSnapshot(hydratedSnapshot));
+        } catch {}
       } catch {
         setSaveState("error");
         try {
@@ -5862,6 +5879,22 @@ export default function DashboardBizPage() {
     }
   }, [isHydrated, saveState, savedSnapshotJson, snapshotJson]);
 
+  useEffect(() => {
+    if (!isHydrated) return;
+    try {
+      localStorage.setItem("biz-store-live-backup", snapshotJson);
+    } catch {}
+  }, [isHydrated, snapshotJson]);
+
+  useEffect(() => {
+    if (!isHydrated || !isDirty) return;
+    if (saveState === "saving" || saveState === "conflict" || saveState === "error") return;
+    const timer = window.setTimeout(() => {
+      void persistSnapshot();
+    }, 1200);
+    return () => window.clearTimeout(timer);
+  }, [isHydrated, isDirty, saveState, snapshotJson]);
+
   async function persistSnapshot() {
     if (!isHydrated || saveState === "saving" || !isDirty) return;
 
@@ -5879,10 +5912,14 @@ export default function DashboardBizPage() {
       if (!response.ok) throw new Error("save failed");
       const payload = (await response.json()) as { ok: boolean; data: BizStoreSnapshot };
       const nextSnapshot = buildBizSnapshot({ ...snapshot, revision: payload.data.revision ?? snapshot.revision });
+      const nextSnapshotJson = serializeBizSnapshot(nextSnapshot);
       setStoreRevision(nextSnapshot.revision);
-      setSavedSnapshotJson(serializeBizSnapshot(nextSnapshot));
+      setSavedSnapshotJson(nextSnapshotJson);
       setLastSavedAt(new Date().toLocaleTimeString("zh-CN", { hour12: false }));
-      try { localStorage.setItem("biz-store-backup", serializeBizSnapshot(nextSnapshot)); } catch {}
+      try {
+        localStorage.setItem("biz-store-backup", nextSnapshotJson);
+        localStorage.setItem("biz-store-live-backup", nextSnapshotJson);
+      } catch {}
       setSaveState("saved");
     } catch {
       setSaveState("error");
@@ -5910,7 +5947,7 @@ export default function DashboardBizPage() {
   const saveHint = saveState === "error" || saveState === "conflict"
     ? saveText
     : isDirty
-      ? "改完后需要手动点保存,不再自动写入。"
+      ? "检测到改动后会自动保存,上面的保存按钮也还能手动点。"
       : "当前页面没有未保存更改。";
 
   return (

@@ -15,6 +15,7 @@ import {
   bizSettings,
   bizSuppliers,
   bizPrintArchives,
+  bizAppointments,
   summarizeOrders,
   type BizOrder,
   type BizSettings,
@@ -25,6 +26,7 @@ import {
   type ExpenseRecord,
   type MaterialRecord,
   type MaterialRow,
+  type MeasurementAppointmentRecord,
   type PaymentRecord,
   type PayrollRecord,
   type PrintArchiveRecord,
@@ -205,6 +207,15 @@ function orderBelongsToClient(order: BizOrder, client: ContactRecord) {
   const clientPhone = normalizeEntityPhone(client.phone);
   if (sameName && (!orderPhone || !clientPhone || orderPhone === clientPhone)) return true;
   return Boolean(orderPhone && clientPhone && orderPhone === clientPhone);
+}
+
+function appointmentBelongsToClient(appt: MeasurementAppointmentRecord, client: ContactRecord) {
+  if (appt.client_id && appt.client_id === client.id) return true;
+  const sameName = normalizeEntityText(appt.client_name) === normalizeEntityText(client.name);
+  const apptPhone = normalizeEntityPhone(appt.phone);
+  const clientPhone = normalizeEntityPhone(client.phone);
+  if (sameName && (!apptPhone || !clientPhone || apptPhone === clientPhone)) return true;
+  return Boolean(apptPhone && clientPhone && apptPhone === clientPhone);
 }
 
 
@@ -2934,6 +2945,8 @@ function FinanceSection({ orders, setOrders, expenses, setExpenses, cashEntries,
   settings: BizSettings;
 }) {
   const [sub, setSub] = useState<FinanceSub>("income");
+  const [incomeView, setIncomeView] = useState<'order' | 'independent'>('order');
+  const [independentIncomePage, setIndependentIncomePage] = useState(1);
   const today = new Date().toISOString().slice(0, 10);
   const expenseTypeOptions = useMemo(() => getExpenseTypeOptions(settings), [settings]);
   const officeTargets = useMemo(() => Array.from(new Set([...suppliers.map((item) => item.name), ...employees.map((item) => item.name), ...clients.map((item) => item.name)])), [suppliers, employees, clients]);
@@ -3224,6 +3237,16 @@ function FinanceSection({ orders, setOrders, expenses, setExpenses, cashEntries,
       <div className="mb-4 flex flex-wrap border-b-2 border-slate-200 bg-white self-start">
         {FINANCE_SUBS.map((t) => <button key={t.key} onClick={() => setSub(t.key)} className={`border-b-2 px-4 py-2 text-xs font-semibold transition-colors ${sub === t.key ? "border-blue-600 text-blue-700" : "border-transparent text-slate-500 hover:text-slate-700"}`}>{t.label}</button>)}
       </div>
+      {sub === "income" && (
+        <SegmentedControl
+          options={[
+            { key: "order", label: "订单收入" },
+            { key: "independent", label: "独立收入" },
+          ]}
+          value={incomeView}
+          onChange={setIncomeView}
+        />
+      )}
 
       {sub === "audit" && (
         <div className="mb-4">
@@ -3308,7 +3331,47 @@ function FinanceSection({ orders, setOrders, expenses, setExpenses, cashEntries,
           </div>
         </div>
       )}
-      {sub === "income" && (<><div className="overflow-x-auto rounded-xl border border-slate-200 bg-white"><table className="w-full text-left text-xs"><thead><tr className="border-b border-slate-200 bg-slate-50"><th className="px-4 py-2 font-semibold text-slate-600">订单号</th><th className="px-4 py-2 font-semibold text-slate-600">客户</th><th className="px-4 py-2 font-semibold text-slate-600">金额</th><th className="px-4 py-2 font-semibold text-slate-600">支付方式</th><th className="px-4 py-2 font-semibold text-slate-600">日期</th><th className="px-4 py-2 font-semibold text-slate-600">明细</th></tr></thead><tbody>{filteredPaymentRows.length ? pagedPaymentRows.map(({ key, order, record }) => <tr key={key} className="border-b border-slate-100 last:border-b-0"><td className="px-4 py-2 font-medium text-slate-700">{order.order_number}</td><td className="px-4 py-2 text-slate-700">{order.client_name}</td><td className={`px-4 py-2 font-semibold ${record.type === "refund" ? "text-rose-600" : "text-green-600"}`}>{record.type === "refund" ? "-" : "+"}{formatMoney(record.amount)}</td><td className="px-4 py-2 text-slate-600">{record.method}</td><td className="px-4 py-2 text-slate-500">{record.date}</td><td className="px-4 py-2 text-slate-500">{record.note ?? "-"}</td></tr>) : <tr><td colSpan={6} className="py-10 text-center text-xs text-slate-400">这个日期范围内没有收入记录</td></tr>}</tbody></table></div><div className="flex flex-wrap items-center justify-between gap-3 rounded-xl border border-slate-200 bg-white px-4 py-3 text-xs text-slate-600"><span>第 {paymentPage} / {paymentPageCount} 页，共 {filteredPaymentRows.length} 条收款</span><div className="flex items-center gap-2"><button type="button" onClick={() => setPaymentPage((p) => Math.max(1, p - 1))} disabled={paymentPage <= 1} className="rounded-lg border border-slate-200 px-3 py-1.5 disabled:cursor-not-allowed disabled:opacity-40">上一页</button><button type="button" onClick={() => setPaymentPage((p) => Math.min(paymentPageCount, p + 1))} disabled={paymentPage >= paymentPageCount} className="rounded-lg border border-slate-200 px-3 py-1.5 disabled:cursor-not-allowed disabled:opacity-40">下一页</button></div></div></>)}
+      {sub === "income" && incomeView === "order" && (<><div className="overflow-x-auto rounded-xl border border-slate-200 bg-white"><table className="w-full text-left text-xs"><thead><tr className="border-b border-slate-200 bg-slate-50"><th className="px-4 py-2 font-semibold text-slate-600">订单号</th><th className="px-4 py-2 font-semibold text-slate-600">客户</th><th className="px-4 py-2 font-semibold text-slate-600">金额</th><th className="px-4 py-2 font-semibold text-slate-600">支付方式</th><th className="px-4 py-2 font-semibold text-slate-600">日期</th><th className="px-4 py-2 font-semibold text-slate-600">明细</th></tr></thead><tbody>{filteredPaymentRows.length ? pagedPaymentRows.map(({ key, order, record }) => <tr key={key} className="border-b border-slate-100 last:border-b-0"><td className="px-4 py-2 font-medium text-slate-700">{order.order_number}</td><td className="px-4 py-2 text-slate-700">{order.client_name}</td><td className={`px-4 py-2 font-semibold ${record.type === "refund" ? "text-rose-600" : "text-green-600"}`}>{record.type === "refund" ? "-" : "+"}{formatMoney(record.amount)}</td><td className="px-4 py-2 text-slate-600">{record.method}</td><td className="px-4 py-2 text-slate-500">{record.date}</td><td className="px-4 py-2 text-slate-500">{record.note ?? "-"}</td></tr>) : <tr><td colSpan={6} className="py-10 text-center text-xs text-slate-400">这个日期范围内没有收入记录</td></tr>}</tbody></table></div><div className="flex flex-wrap items-center justify-between gap-3 rounded-xl border border-slate-200 bg-white px-4 py-3 text-xs text-slate-600"><span>第 {paymentPage} / {paymentPageCount} 页，共 {filteredPaymentRows.length} 条收款</span><div className="flex items-center gap-2"><button type="button" onClick={() => setPaymentPage((p) => Math.max(1, p - 1))} disabled={paymentPage <= 1} className="rounded-lg border border-slate-200 px-3 py-1.5 disabled:cursor-not-allowed disabled:opacity-40">上一页</button><button type="button" onClick={() => setPaymentPage((p) => Math.min(paymentPageCount, p + 1))} disabled={paymentPage >= paymentPageCount} className="rounded-lg border border-slate-200 px-3 py-1.5 disabled:cursor-not-allowed disabled:opacity-40">下一页</button></div></div></>)}
+      {sub === "income" && incomeView === "independent" && (() => {
+        const indepCash = cashEntries.filter(e => e.type === "收入" && isDateInRange(e.date, financeDateStart, financeDateEnd));
+        const pc = Math.max(1, Math.ceil(indepCash.length / 10));
+        const pagedCash = indepCash.slice((independentIncomePage - 1) * 10, independentIncomePage * 10);
+        return (
+          <>
+            <div className="overflow-x-auto rounded-xl border border-slate-200 bg-white">
+              <table className="w-full text-left text-xs">
+                <thead>
+                  <tr className="border-b border-slate-200 bg-slate-50">
+                    <th className="px-4 py-2 font-semibold text-slate-600">日期</th>
+                    <th className="px-4 py-2 font-semibold text-slate-600">来源</th>
+                    <th className="px-4 py-2 font-semibold text-slate-600">金额</th>
+                    <th className="px-4 py-2 font-semibold text-slate-600">方式</th>
+                    <th className="px-4 py-2 font-semibold text-slate-600">备注</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {pagedCash.length ? pagedCash.map(entry => (
+                    <tr key={entry.id} className="border-b border-slate-100 last:border-b-0">
+                      <td className="px-4 py-2 text-slate-500">{entry.date}</td>
+                      <td className="px-4 py-2 text-slate-700">{(entry as Record<string, unknown>).source as string || entry.note || "-"}</td>
+                      <td className="px-4 py-2 font-semibold text-green-600">+{formatMoney(entry.amount)}</td>
+                      <td className="px-4 py-2 text-slate-600">{(entry as Record<string, unknown>).method as string || "-"}</td>
+                      <td className="px-4 py-2 text-slate-500">{entry.note || "-"}</td>
+                    </tr>
+                  )) : <tr><td colSpan={5} className="py-10 text-center text-xs text-slate-400">暂无独立收入记录</td></tr>}
+                </tbody>
+              </table>
+            </div>
+            <div className="flex flex-wrap items-center justify-between gap-3 rounded-xl border border-slate-200 bg-white px-4 py-3 text-xs text-slate-600">
+              <span>第 {independentIncomePage} / {pc} 页，共 {indepCash.length} 条</span>
+              <div className="flex items-center gap-2">
+                <button type="button" onClick={() => setIndependentIncomePage(p => Math.max(1, p - 1))} disabled={independentIncomePage <= 1} className="rounded-lg border border-slate-200 px-3 py-1.5 disabled:cursor-not-allowed disabled:opacity-40">上一页</button>
+                <button type="button" onClick={() => setIndependentIncomePage(p => Math.min(pc, p + 1))} disabled={independentIncomePage >= pc} className="rounded-lg border border-slate-200 px-3 py-1.5 disabled:cursor-not-allowed disabled:opacity-40">下一页</button>
+              </div>
+            </div>
+          </>
+        );
+      })()}
       {sub === "expense" && (<><div className="overflow-x-auto rounded-xl border border-slate-200 bg-white"><table className="w-full text-left text-xs"><thead><tr className="border-b border-slate-200 bg-slate-50"><th className="px-4 py-2 font-semibold text-slate-600">对象</th><th className="px-4 py-2 font-semibold text-slate-600">明细</th><th className="px-4 py-2 font-semibold text-slate-600">金额</th><th className="px-4 py-2 font-semibold text-slate-600">类型</th><th className="px-4 py-2 font-semibold text-slate-600">方式</th><th className="px-4 py-2 font-semibold text-slate-600">办公室</th><th className="px-4 py-2 font-semibold text-slate-600">日期</th><th className="px-4 py-2 font-semibold text-slate-600">操作</th></tr></thead><tbody>{filteredExpenses.length ? pagedExpenses.map((item) => <tr key={item.id} className="border-b border-slate-100 last:border-b-0"><td className="px-4 py-2 text-slate-700">{item.target}</td><td className="px-4 py-2 text-slate-500">{item.detail}</td><td className="px-4 py-2 font-semibold text-rose-600">{formatMoney(item.amount)}</td><td className="px-4 py-2 text-slate-600">{item.expense_type}</td><td className="px-4 py-2 text-slate-600">{item.payment_method}</td><td className="px-4 py-2 text-slate-600">{item.office ? "是" : "否"}</td><td className="px-4 py-2 text-slate-500">{item.expense_date}</td><td className="px-4 py-2"><div className="flex items-center gap-2">{editingExpenseId === item.id ? <span className="text-xs text-slate-400">编辑中</span> : <><button onClick={() => openEditExpense(item)} className="rounded border border-slate-200 px-2 py-0.5 text-xs text-slate-600 hover:border-slate-300 hover:bg-slate-50 transition-colors">编辑</button>{confirmingExpenseId === item.id ? <><button onClick={() => deleteExpense(item.id)} className="rounded border border-red-400 bg-red-500 px-2 py-0.5 text-xs font-semibold text-white hover:bg-red-600 transition-colors">确认</button><button onClick={() => setConfirmingExpenseId(null)} className="rounded border border-slate-200 px-2 py-0.5 text-xs text-slate-500 hover:border-slate-300 transition-colors">取消</button></> : <button onClick={() => setConfirmingExpenseId(item.id)} className="rounded border border-red-100 px-2 py-0.5 text-xs text-red-500 hover:border-red-300 hover:bg-red-50 transition-colors">删除</button>}</>}</div></td></tr>) : <tr><td colSpan={8} className="py-10 text-center text-xs text-slate-400">这个日期范围内没有支出记录</td></tr>}</tbody></table></div><div className="flex flex-wrap items-center justify-between gap-3 rounded-xl border border-slate-200 bg-white px-4 py-3 text-xs text-slate-600"><span>第 {expensesPage} / {expensesPageCount} 页，共 {filteredExpenses.length} 条支出</span><div className="flex items-center gap-2"><button type="button" onClick={() => setExpensesPage((p) => Math.max(1, p - 1))} disabled={expensesPage <= 1} className="rounded-lg border border-slate-200 px-3 py-1.5 disabled:cursor-not-allowed disabled:opacity-40">上一页</button><button type="button" onClick={() => setExpensesPage((p) => Math.min(expensesPageCount, p + 1))} disabled={expensesPage >= expensesPageCount} className="rounded-lg border border-slate-200 px-3 py-1.5 disabled:cursor-not-allowed disabled:opacity-40">下一页</button></div></div></>)}
       {sub === "cash" && (<><div className="overflow-x-auto rounded-xl border border-slate-200 bg-white"><table className="w-full text-left text-xs"><thead><tr className="border-b border-slate-200 bg-slate-50"><th className="px-4 py-2 font-semibold text-slate-600">类型</th><th className="px-4 py-2 font-semibold text-slate-600">金额</th><th className="px-4 py-2 font-semibold text-slate-600">日期</th><th className="px-4 py-2 font-semibold text-slate-600">备注</th></tr></thead><tbody>{filteredCashEntries.length ? pagedCashEntries.map((item) => <tr key={item.id} className="border-b border-slate-100 last:border-b-0"><td className="px-4 py-2"><span className={`rounded-full px-2 py-0.5 text-[11px] font-semibold ${item.type === "收入" ? "bg-green-50 text-green-700" : "bg-rose-50 text-rose-700"}`}>{item.type}</span></td><td className={`px-4 py-2 font-semibold ${item.type === "收入" ? "text-green-600" : "text-rose-600"}`}>{formatMoney(item.amount)}</td><td className="px-4 py-2 text-slate-500">{item.date}</td><td className="px-4 py-2 text-slate-500">{item.note ?? "-"}</td></tr>) : <tr><td colSpan={4} className="py-10 text-center text-xs text-slate-400">这个日期范围内没有现金流水</td></tr>}</tbody></table></div><div className="flex flex-wrap items-center justify-between gap-3 rounded-xl border border-slate-200 bg-white px-4 py-3 text-xs text-slate-600"><span>第 {cashPage} / {cashPageCount} 页，共 {filteredCashEntries.length} 条现金</span><div className="flex items-center gap-2"><button type="button" onClick={() => setCashPage((p) => Math.max(1, p - 1))} disabled={cashPage <= 1} className="rounded-lg border border-slate-200 px-3 py-1.5 disabled:cursor-not-allowed disabled:opacity-40">上一页</button><button type="button" onClick={() => setCashPage((p) => Math.min(cashPageCount, p + 1))} disabled={cashPage >= cashPageCount} className="rounded-lg border border-slate-200 px-3 py-1.5 disabled:cursor-not-allowed disabled:opacity-40">下一页</button></div></div></>)}
       {sub === "ledger" && <div className="overflow-x-auto rounded-xl border border-slate-200 bg-white"><table className="w-full text-left text-xs"><thead><tr className="border-b border-slate-200 bg-slate-50"><th className="px-4 py-2 font-semibold text-slate-600">月份</th><th className="px-4 py-2 font-semibold text-slate-600">收入</th><th className="px-4 py-2 font-semibold text-slate-600">支出</th><th className="px-4 py-2 font-semibold text-slate-600">净额</th><th className="px-4 py-2 font-semibold text-slate-600">工资</th><th className="px-4 py-2 font-semibold text-slate-600">净利润</th></tr></thead><tbody>{ledgerRows.map((item) => <tr key={item.month} className="border-b border-slate-100 last:border-b-0"><td className="px-4 py-2 font-medium text-slate-700">{item.month}</td><td className="px-4 py-2 text-green-600">{formatMoney(item.income)}</td><td className="px-4 py-2 text-rose-600">{formatMoney(item.expense)}</td><td className="px-4 py-2 text-slate-700">{formatMoney(item.net)}</td><td className="px-4 py-2 text-amber-600">{formatMoney(item.wage)}</td><td className={`px-4 py-2 font-semibold ${item.profit >= 0 ? "text-emerald-600" : "text-rose-600"}`}>{formatMoney(item.profit)}</td></tr>)}</tbody></table></div>}
@@ -3495,9 +3558,9 @@ function FinanceSection({ orders, setOrders, expenses, setExpenses, cashEntries,
 // ─── Clients ─────────────────────────────────────────────────────────────────
 
 type ContactSub = "clients" | "suppliers";
-type ClientDetailTab = "overview" | "orders" | "activity";
+type ClientDetailTab = "overview" | "orders" | "appointments" | "activity";
 
-function ClientsSection({ clients, setClients, suppliers, setSuppliers, orders, setOrders, setCashEntries, materials, setMaterials, settings }: { clients: ContactRecord[]; setClients: React.Dispatch<React.SetStateAction<ContactRecord[]>>; suppliers: SupplierRecord[]; setSuppliers: React.Dispatch<React.SetStateAction<SupplierRecord[]>>; orders: BizOrder[]; setOrders: React.Dispatch<React.SetStateAction<BizOrder[]>>; setCashEntries: React.Dispatch<React.SetStateAction<CashEntry[]>>; materials: MaterialRecord[]; setMaterials: React.Dispatch<React.SetStateAction<MaterialRecord[]>>; settings: BizSettings; }) {
+function ClientsSection({ clients, setClients, suppliers, setSuppliers, orders, setOrders, appointments, setAppointments, setCashEntries, materials, setMaterials, settings }: { clients: ContactRecord[]; setClients: React.Dispatch<React.SetStateAction<ContactRecord[]>>; suppliers: SupplierRecord[]; setSuppliers: React.Dispatch<React.SetStateAction<SupplierRecord[]>>; orders: BizOrder[]; setOrders: React.Dispatch<React.SetStateAction<BizOrder[]>>; appointments: MeasurementAppointmentRecord[]; setAppointments: React.Dispatch<React.SetStateAction<MeasurementAppointmentRecord[]>>; setCashEntries: React.Dispatch<React.SetStateAction<CashEntry[]>>; materials: MaterialRecord[]; setMaterials: React.Dispatch<React.SetStateAction<MaterialRecord[]>>; settings: BizSettings; }) {
   const [sub, setSub] = useState<ContactSub>("clients");
   const today = new Date().toISOString().slice(0, 10);
   const [clientDraft, setClientDraft] = useState({ name: "", contact: "", phone: "", wechat: "", address: "", note: "" });
@@ -3525,6 +3588,12 @@ function ClientsSection({ clients, setClients, suppliers, setSuppliers, orders, 
   const [newOrderTypeForClient, setNewOrderTypeForClient] = useState<"定制单" | "批发单" | null>(null);
   const [editOrderForClient, setEditOrderForClient] = useState<BizOrder | null>(null);
   const [deleteOrderConfirm, setDeleteOrderConfirm] = useState<string | null>(null);
+  const [lightboxImage, setLightboxImage] = useState<string | null>(null);
+  const [clientAppointmentsPage, setClientAppointmentsPage] = useState(1);
+  const [confirmingDeleteAppointmentId, setConfirmingDeleteAppointmentId] = useState<string | null>(null);
+  const [showAppointmentModal, setShowAppointmentModal] = useState(false);
+  const [editingAppointment, setEditingAppointment] = useState<MeasurementAppointmentRecord | null>(null);
+  const [appointmentDraft, setAppointmentDraft] = useState({ appointment_date: new Date().toISOString().slice(0, 10), address: '', description: '' });
   const [selectedClientId, setSelectedClientId] = useState<string>(clients[0]?.id ?? "");
   const [quickCollectDraft, setQuickCollectDraft] = useState({ orderNumber: "", amount: "", date: today, method: "现金", note: "", office: false });
   const contactConfigs: Record<ContactSub, SplitTabularSchemaConfig> = {
@@ -3697,6 +3766,11 @@ function ClientsSection({ clients, setClients, suppliers, setSuppliers, orders, 
   const clientReceivablePageSize = 10;
   const clientReceivablePageCount = Math.max(1, Math.ceil(receivableOrders.length / clientReceivablePageSize));
   const pagedReceivableOrders = receivableOrders.slice((clientReceivablePage - 1) * clientReceivablePageSize, clientReceivablePage * clientReceivablePageSize);
+
+  const selectedClientAppointments = selectedClient ? appointments.filter((item) => appointmentBelongsToClient(item, selectedClient)).sort((a, b) => String(b.appointment_date).localeCompare(String(a.appointment_date))) : [];
+  const clientAppointmentsPageSize = 10;
+  const clientAppointmentsPageCount = Math.max(1, Math.ceil(selectedClientAppointments.length / clientAppointmentsPageSize));
+  const pagedClientAppointments = selectedClientAppointments.slice((clientAppointmentsPage - 1) * clientAppointmentsPageSize, clientAppointmentsPage * clientAppointmentsPageSize);
 
   function selectClient(clientId: string) {
     setSelectedClientId(clientId);
@@ -3993,6 +4067,7 @@ function ClientsSection({ clients, setClients, suppliers, setSuppliers, orders, 
                     options={[
                       { key: "overview", label: "总览" },
                       { key: "orders", label: "订单与收款" },
+                      { key: "appointments", label: "量衣预约" },
                       { key: "activity", label: "业务动态" },
                     ]}
                     value={clientDetailTab}
@@ -4150,6 +4225,7 @@ function ClientsSection({ clients, setClients, suppliers, setSuppliers, orders, 
                                   <th className="px-3 py-2 font-semibold text-slate-600">总额</th>
                                   <th className="px-3 py-2 font-semibold text-slate-600">已收</th>
                                   <th className="px-3 py-2 font-semibold text-slate-600">余款</th>
+                                  <th className="px-3 py-2 font-semibold text-slate-600">图片</th>
                                   <th className="px-3 py-2 font-semibold text-slate-600">操作</th>
                                 </tr>
                               </thead>
@@ -4162,6 +4238,11 @@ function ClientsSection({ clients, setClients, suppliers, setSuppliers, orders, 
                                     <td className="px-3 py-2 text-slate-700">{formatMoney(item.total_after_tax ?? item.total_price ?? 0)}</td>
                                     <td className="px-3 py-2 text-emerald-600">{formatMoney(item.amount_paid ?? 0)}</td>
                                     <td className={`px-3 py-2 font-semibold ${(item.balance ?? 0) > 0 ? "text-amber-600" : "text-slate-700"}`}>{formatMoney(item.balance ?? 0)}</td>
+                                    <td className="px-3 py-2">
+                                      {(item.order_images ?? []).length > 0 ? (
+                                        <button onClick={() => setLightboxImage((item.order_images ?? [])[0]!)} className="rounded border border-slate-200 bg-slate-50 px-2 py-1 text-[11px] text-slate-600 hover:border-slate-300 hover:bg-white transition-colors">查看</button>
+                                      ) : <span className="text-[11px] text-slate-400">-</span>}
+                                    </td>
                                     <td className="px-3 py-2">
                                       <div className="flex flex-wrap items-center gap-1">
                                         {(item.balance ?? 0) > 0 ? <button onClick={() => applyQuickCollectPreset("balance", item)} className="rounded-md border border-amber-200 bg-amber-50 px-2 py-1 text-[11px] font-semibold text-amber-700 hover:bg-amber-100">收清</button> : <span className="text-[11px] text-emerald-600">已结清</span>}
@@ -4224,6 +4305,98 @@ function ClientsSection({ clients, setClients, suppliers, setSuppliers, orders, 
                       ) : <div className="rounded-xl border border-dashed border-slate-200 py-10 text-center text-xs text-slate-400">暂时还没有收款记录</div>}
                     </div>
                   </div>
+                    ) : null}
+
+                    {clientDetailTab === "appointments" ? (
+                      <div className="space-y-3">
+                        <div className="flex items-center justify-between">
+                          <p className="text-xs font-semibold text-slate-900">量衣预约</p>
+                          <button onClick={() => { setEditingAppointment(null); setAppointmentDraft({ appointment_date: new Date().toISOString().slice(0, 10), address: '', description: '' }); setShowAppointmentModal(true); }} className="rounded-md border border-slate-300 bg-white px-2 py-1 text-[11px] font-semibold text-slate-600 hover:border-slate-400 hover:text-slate-900 transition-colors">+ 新建预约</button>
+                        </div>
+                        {selectedClientAppointments.length ? (
+                          <div className="overflow-x-auto rounded-xl border border-slate-200 bg-white">
+                            <table className="w-full text-left text-xs">
+                              <thead>
+                                <tr className="border-b border-slate-200 bg-slate-50">
+                                  <th className="px-3 py-2 font-semibold text-slate-600">日期</th>
+                                  <th className="px-3 py-2 font-semibold text-slate-600">地址</th>
+                                  <th className="px-3 py-2 font-semibold text-slate-600">描述</th>
+                                  <th className="px-3 py-2 font-semibold text-slate-600">操作</th>
+                                </tr>
+                              </thead>
+                              <tbody>
+                                {pagedClientAppointments.map((item) => (
+                                  <tr key={item.id} className="border-b border-slate-100 last:border-b-0">
+                                    <td className="px-3 py-2 text-slate-500">{item.appointment_date}</td>
+                                    <td className="px-3 py-2 text-slate-600">{item.address ?? "-"}</td>
+                                    <td className="px-3 py-2 text-slate-500">{item.description ?? "-"}</td>
+                                    <td className="px-3 py-2">
+                                      <div className="flex flex-wrap items-center gap-1">
+                                        <button onClick={() => { setEditingAppointment(item); setAppointmentDraft({ appointment_date: item.appointment_date, address: item.address ?? '', description: item.description ?? '' }); setShowAppointmentModal(true); }} className="rounded-md border border-slate-200 bg-white px-2 py-1 text-[11px] font-semibold text-slate-600 hover:border-slate-400 transition-colors">编辑</button>
+                                        {confirmingDeleteAppointmentId === item.id ? (
+                                          <>
+                                            <button onClick={() => { setAppointments((prev) => prev.filter((a) => a.id !== item.id)); setConfirmingDeleteAppointmentId(null); }} className="rounded-md border border-red-400 bg-red-50 px-2 py-1 text-[11px] font-semibold text-red-700 hover:bg-red-100">确认</button>
+                                            <button onClick={() => setConfirmingDeleteAppointmentId(null)} className="rounded-md border border-slate-200 px-2 py-1 text-[11px] text-slate-500 hover:border-slate-300">取消</button>
+                                          </>
+                                        ) : (
+                                          <button onClick={() => setConfirmingDeleteAppointmentId(item.id)} className="rounded-md border border-slate-200 bg-white px-2 py-1 text-[11px] text-slate-500 hover:border-rose-300 hover:text-rose-600 transition-colors">删除</button>
+                                        )}
+                                      </div>
+                                    </td>
+                                  </tr>
+                                ))}
+                              </tbody>
+                            </table>
+                            {clientAppointmentsPageCount > 1 && (
+                              <div className="flex items-center justify-between border-t border-slate-100 px-3 py-2 text-xs text-slate-500">
+                                <span>第 {clientAppointmentsPage} / {clientAppointmentsPageCount} 页，共 {selectedClientAppointments.length} 条</span>
+                                <div className="flex gap-1">
+                                  <ActionBtn onClick={() => setClientAppointmentsPage((p) => Math.max(1, p - 1))} disabled={clientAppointmentsPage <= 1}>上一页</ActionBtn>
+                                  <ActionBtn onClick={() => setClientAppointmentsPage((p) => Math.min(clientAppointmentsPageCount, p + 1))} disabled={clientAppointmentsPage >= clientAppointmentsPageCount}>下一页</ActionBtn>
+                                </div>
+                              </div>
+                            )}
+                          </div>
+                        ) : <div className="rounded-xl border border-dashed border-slate-200 py-10 text-center text-xs text-slate-400">这个客户还没有量衣预约记录</div>}
+                        {showAppointmentModal && (
+                          <div className="fixed inset-0 z-50 flex items-center justify-center bg-slate-950/45 px-4">
+                            <div className="w-full max-w-md rounded-2xl border border-slate-200 bg-white p-5 shadow-2xl">
+                              <div className="mb-4 flex items-start justify-between gap-3">
+                                <h3 className="text-base font-semibold text-slate-900">{editingAppointment ? "编辑预约" : "新建预约"}</h3>
+                                <button onClick={() => setShowAppointmentModal(false)} className="rounded-lg border border-slate-200 px-2.5 py-1 text-xs text-slate-500 hover:border-slate-300 hover:text-slate-700 transition-colors">关闭</button>
+                              </div>
+                              <div className="space-y-3">
+                                <div>
+                                  <label className="mb-1 block text-[11px] font-semibold text-slate-500">日期</label>
+                                  <input type="date" value={appointmentDraft.appointment_date} onChange={(e) => setAppointmentDraft((d) => ({ ...d, appointment_date: e.target.value }))} className="h-9 w-full rounded-lg border border-slate-300 bg-white px-3 text-xs text-slate-700" />
+                                </div>
+                                <div>
+                                  <label className="mb-1 block text-[11px] font-semibold text-slate-500">地址</label>
+                                  <input type="text" value={appointmentDraft.address} onChange={(e) => setAppointmentDraft((d) => ({ ...d, address: e.target.value }))} className="h-9 w-full rounded-lg border border-slate-300 bg-white px-3 text-xs text-slate-700" placeholder="量衣地址" />
+                                </div>
+                                <div>
+                                  <label className="mb-1 block text-[11px] font-semibold text-slate-500">描述</label>
+                                  <input type="text" value={appointmentDraft.description} onChange={(e) => setAppointmentDraft((d) => ({ ...d, description: e.target.value }))} className="h-9 w-full rounded-lg border border-slate-300 bg-white px-3 text-xs text-slate-700" placeholder="备注说明" />
+                                </div>
+                              </div>
+                              <div className="mt-5 flex justify-end gap-2">
+                                <ActionBtn onClick={() => setShowAppointmentModal(false)}>取消</ActionBtn>
+                                <ActionBtn tone="primary" onClick={() => {
+                                  if (!appointmentDraft.appointment_date) return;
+                                  if (editingAppointment) {
+                                    setAppointments((prev) => prev.map((a) => a.id === editingAppointment.id ? { ...a, appointment_date: appointmentDraft.appointment_date, address: appointmentDraft.address || undefined, description: appointmentDraft.description || undefined } : a));
+                                  } else {
+                                    const newId = nextSequentialId(appointments.map((a) => a.id), "APT");
+                                    setAppointments((prev) => [{ id: newId, client_name: selectedClient?.name ?? "", client_id: selectedClient?.id, phone: selectedClient?.phone ?? undefined, appointment_date: appointmentDraft.appointment_date, address: appointmentDraft.address || undefined, description: appointmentDraft.description || undefined }, ...prev]);
+                                  }
+                                  setShowAppointmentModal(false);
+                                  setEditingAppointment(null);
+                                }}>确认</ActionBtn>
+                              </div>
+                            </div>
+                          </div>
+                        )}
+                      </div>
                     ) : null}
 
                     {clientDetailTab === "activity" ? (
@@ -4303,6 +4476,14 @@ function ClientsSection({ clients, setClients, suppliers, setSuppliers, orders, 
             </table>
           </div>
           <div className="flex flex-wrap items-center justify-between gap-3 rounded-xl border border-slate-200 bg-white px-4 py-3 text-xs text-slate-600"><span>第 {suppliersPage} / {suppliersPageCount} 页，共 {suppliers.length} 条供应商</span><div className="flex items-center gap-2"><button type="button" onClick={() => setSuppliersPage((p) => Math.max(1, p - 1))} disabled={suppliersPage <= 1} className="rounded-lg border border-slate-200 px-3 py-1.5 disabled:cursor-not-allowed disabled:opacity-40">上一页</button><button type="button" onClick={() => setSuppliersPage((p) => Math.min(suppliersPageCount, p + 1))} disabled={suppliersPage >= suppliersPageCount} className="rounded-lg border border-slate-200 px-3 py-1.5 disabled:cursor-not-allowed disabled:opacity-40">下一页</button></div></div>
+        </div>
+      )}
+      {lightboxImage && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/70" onClick={() => setLightboxImage(null)}>
+          <div className="relative max-h-[90vh] max-w-[90vw]" onClick={(e) => e.stopPropagation()}>
+            <img src={`/legacy-materials/${lightboxImage}`} alt="order image" className="max-h-[85vh] max-w-[85vw] rounded-xl border-4 border-white object-contain shadow-2xl" />
+            <button onClick={() => setLightboxImage(null)} className="absolute -right-3 -top-3 flex h-8 w-8 items-center justify-center rounded-full bg-white text-sm font-bold text-slate-700 shadow-lg hover:bg-slate-100">X</button>
+          </div>
         </div>
       )}
     </div>
@@ -5379,6 +5560,7 @@ const NAV_GROUPS: Array<{
 export default function DashboardBizPage() {
   const [section, setSection] = useState<Section>("overview");
   const [orders, setOrders] = useState<BizOrder[]>(bizOrders);
+  const [appointments, setAppointments] = useState<MeasurementAppointmentRecord[]>(bizAppointments);
   const [clients, setClients] = useState<ContactRecord[]>(bizClients);
   const [suppliers, setSuppliers] = useState<SupplierRecord[]>(bizSuppliers);
   const [expenses, setExpenses] = useState<ExpenseRecord[]>(bizExpenses);
@@ -5634,6 +5816,8 @@ export default function DashboardBizPage() {
               setSuppliers={setSuppliers}
               orders={orders}
               setOrders={setOrders}
+              appointments={appointments}
+              setAppointments={setAppointments}
               setCashEntries={setCashEntries}
               materials={materials}
               setMaterials={setMaterials}

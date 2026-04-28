@@ -41,6 +41,7 @@ export type BizOrder = {
   remarks?: string;
   payment_history?: PaymentRecord[];
   material_rows?: MaterialRow[];
+  order_images?: string[];
 };
 
 export type ContactRecord = {
@@ -82,6 +83,7 @@ export type ExpenseRecord = {
   office?: boolean;
   source_type?: string;
   source_id?: string;
+  order_id?: string;
 };
 
 export type CashEntry = {
@@ -93,6 +95,7 @@ export type CashEntry = {
   order_number?: string;
   source_type?: string;
   source_id?: string;
+  order_id?: string;
 };
 
 export type MaterialRecord = {

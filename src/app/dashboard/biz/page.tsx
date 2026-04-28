@@ -5675,6 +5675,7 @@ export default function DashboardBizPage() {
   const [saveState, setSaveState] = useState<"idle" | "saving" | "saved" | "error" | "conflict">("idle");
   const [showVoided, setShowVoided] = useState(false);
   const [transferDraft, setTransferDraft] = useState<{ amount: string; date: string; note: string } | null>(null);
+  const [transferSuccess, setTransferSuccess] = useState<string | null>(null);
   const orderSummary = useMemo(() => summarizeOrders(orders.filter((o) => o.status !== "已作废")), [orders]);
   const snapshot = useMemo(() => buildBizSnapshot({
     revision: storeRevision,
@@ -5779,6 +5780,12 @@ export default function DashboardBizPage() {
       setSaveState("idle");
     }
   }, [isHydrated, saveState, savedSnapshotJson, snapshotJson]);
+
+  useEffect(() => {
+    if (!transferSuccess) return;
+    const t = setTimeout(() => setTransferSuccess(null), 5000);
+    return () => clearTimeout(t);
+  }, [transferSuccess]);
 
   async function persistSnapshot() {
     if (!isHydrated || saveState === "saving" || !isDirty) return;
@@ -5969,6 +5976,13 @@ export default function DashboardBizPage() {
         </div>
       </div>
 
+      {/* ─── Transfer Success Toast ─── */}
+      {transferSuccess && (
+        <div className="fixed bottom-6 right-6 z-50 animate-slide-up rounded-xl border border-emerald-200 bg-emerald-50 px-4 py-3 shadow-lg">
+          <p className="text-xs font-medium text-emerald-700">✓ {transferSuccess}</p>
+        </div>
+      )}
+
       {/* ─── Transfer Dialog ─── */}
       {transferDraft && (
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/30">
@@ -6042,6 +6056,7 @@ export default function DashboardBizPage() {
                     },
                   ]);
                   setTransferDraft(null);
+                  setTransferSuccess(`转账 $${amount.toFixed(2)} 成功，请点击「保存更改」写入数据库`);
                 }}
                 className="rounded-lg bg-sky-600 px-4 py-2 text-xs font-medium text-white transition-colors hover:bg-sky-700"
               >

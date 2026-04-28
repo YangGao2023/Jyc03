@@ -276,6 +276,7 @@ function toString(value: unknown) {
 }
 
 function calculatePaymentNet(history: PaymentRecord[]) {
+  if (!Array.isArray(history)) return 0;
   return history.reduce(
     (sum, item) => sum + (item.type === "refund" ? -item.amount : item.amount),
     0,
@@ -289,30 +290,37 @@ function deriveOrderStatus(totalAfterTax: number, amountPaid: number, rawStatus?
   return "下单";
 }
 
+function safeParseArray<T>(v: unknown): T[] {
+  if (Array.isArray(v)) return v as T[];
+  if (typeof v === "string") {
+    try {
+      const parsed = JSON.parse(v);
+      if (Array.isArray(parsed)) return parsed as T[];
+    } catch {}
+  }
+  return [];
+}
+
 function normalizeOrder(raw: Record<string, unknown>): BizOrder {
   const totalPrice = toNumber(raw.total_price);
 
-  const paymentHistory: PaymentRecord[] = Array.isArray(raw.payment_history)
-    ? (raw.payment_history as Record<string, unknown>[]).map((p) => ({
+  const paymentHistory: PaymentRecord[] = safeParseArray<Record<string, unknown>>(raw.payment_history).map((p) => ({
         date: String(p.date ?? ""),
         amount: toNumber(p.amount),
         method: String(p.method ?? ""),
         note: p.note != null ? String(p.note) : undefined,
         type: p.type === "refund" ? ("refund" as const) : ("payment" as const),
         office: Boolean(p.office),
-      }))
-    : [];
+      }));
 
-  const materialRows: MaterialRow[] = Array.isArray(raw.material_rows)
-    ? (raw.material_rows as Record<string, unknown>[]).map((m) => ({
+  const materialRows: MaterialRow[] = safeParseArray<Record<string, unknown>>(raw.material_rows).map((m) => ({
         name: String(m.name ?? ""),
         spec: m.spec != null ? String(m.spec) : undefined,
         qty: toNumber(m.qty),
         unit: String(m.unit ?? ""),
         unit_price: toNumber(m.unit_price),
         image: m.image != null ? String(m.image) : undefined,
-      }))
-    : [];
+      }));
 
   const taxRate = toNumber(raw.tax_rate);
   const discount = toNumber(raw.discount);

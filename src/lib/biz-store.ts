@@ -53,7 +53,14 @@ function val<T>(v: unknown, fallback: T): T {
 
 function parseJson<T>(v: unknown, fallback: T): T {
   if (typeof v === "string") {
-    try { return JSON.parse(v); } catch { return fallback; }
+    try {
+      const parsed = JSON.parse(v);
+      // Handle double-encoded JSON (e.g. '"[\"value\"]"' stored as string)
+      if (typeof parsed === "string") {
+        try { return JSON.parse(parsed); } catch {}
+      }
+      return parsed;
+    } catch { return fallback; }
   }
   return v as T ?? fallback;
 }
@@ -105,8 +112,8 @@ function orderToRow(o: BizOrder): Record<string, unknown> {
     operation_type: o.operation_type ?? null,
     install_info: o.install_info ?? null,
     remarks: o.remarks ?? null,
-    payment_history: JSON.stringify(o.payment_history ?? []),
-    material_rows: JSON.stringify(o.material_rows ?? []),
+    payment_history: JSON.stringify(Array.isArray(o.payment_history) ? o.payment_history : []),
+    material_rows: JSON.stringify(Array.isArray(o.material_rows) ? o.material_rows : []),
     updated_at: new Date().toISOString(),
   };
 }
@@ -176,14 +183,29 @@ function normalizeSnapshot(snapshot: Partial<BizStoreSnapshot>): BizStoreSnapsho
   const clients = Array.isArray(snapshot.clients) ? snapshot.clients : [];
   const suppliers = Array.isArray(snapshot.suppliers) ? snapshot.suppliers : [];
   const orders = Array.isArray(snapshot.orders)
-    ? snapshot.orders.map((item) => ({
-        ...item,
-        client_id: resolveClientId(clients, {
-          clientId: item.client_id,
-          clientName: item.client_name,
-          phone: item.phone,
-        }),
-      }))
+    ? snapshot.orders.map((item) => {
+        // Ensure payment_history and material_rows are arrays (not JSON strings)
+        const payment_history = Array.isArray(item.payment_history)
+          ? item.payment_history
+          : typeof item.payment_history === 'string'
+            ? (() => { try { const p = JSON.parse(item.payment_history); return Array.isArray(p) ? p : []; } catch { return []; } })()
+            : [];
+        const material_rows = Array.isArray(item.material_rows)
+          ? item.material_rows
+          : typeof item.material_rows === 'string'
+            ? (() => { try { const m = JSON.parse(item.material_rows); return Array.isArray(m) ? m : []; } catch { return []; } })()
+            : [];
+        return {
+          ...item,
+          payment_history,
+          material_rows,
+          client_id: resolveClientId(clients, {
+            clientId: item.client_id,
+            clientName: item.client_name,
+            phone: item.phone,
+          }),
+        };
+      })
     : [];
   const appointments = Array.isArray(snapshot.appointments)
     ? snapshot.appointments.map((item) => ({

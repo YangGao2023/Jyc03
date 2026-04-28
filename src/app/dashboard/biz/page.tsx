@@ -5171,6 +5171,11 @@ function EmployeesSection({ employees, setEmployees, attendances, setAttendances
     delete payload.hire_date;
     delete payload.contract_end;
     setEmployees((prev) => editingEmployeeId ? prev.map((item) => item.id === editingEmployeeId ? payload : item) : [payload, ...prev]);
+    // Cascade employee rename to attendance and payroll records
+    if (editingEmployeeId && current && current.name !== payload.name) {
+      setAttendances((prev) => prev.map((r) => r.employee_id === editingEmployeeId ? { ...r, employee_name: payload.name } : r));
+      setPayrolls((prev) => prev.map((r) => r.employee_id === editingEmployeeId ? { ...r, employee_name: payload.name } : r));
+    }
     setShowEmployeeModal(false);
   }
 

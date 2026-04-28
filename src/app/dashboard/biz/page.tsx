@@ -2950,6 +2950,9 @@ function FinanceSection({ orders, setOrders, expenses, setExpenses, cashEntries,
   const [sub, setSub] = useState<FinanceSub>("income");
   const [incomeView, setIncomeView] = useState<'order' | 'independent'>('order');
   const [independentIncomePage, setIndependentIncomePage] = useState(1);
+  const [showIncomeForm, setShowIncomeForm] = useState(false);
+  const [editingIncomeId, setEditingIncomeId] = useState<string | null>(null);
+  const [incomeDraft, setIncomeDraft] = useState({ date: "", amount: "", method: "现金", note: "" });
   const today = new Date().toISOString().slice(0, 10);
   const expenseTypeOptions = useMemo(() => getExpenseTypeOptions(settings), [settings]);
   const officeTargets = useMemo(() => Array.from(new Set([...suppliers.map((item) => item.name), ...employees.map((item) => item.name), ...clients.map((item) => item.name)])), [suppliers, employees, clients]);
@@ -3337,11 +3340,66 @@ function FinanceSection({ orders, setOrders, expenses, setExpenses, cashEntries,
       )}
       {sub === "income" && incomeView === "order" && (<><div className="overflow-x-auto rounded-xl border border-slate-200 bg-white"><table className="w-full text-left text-xs"><thead><tr className="border-b border-slate-200 bg-slate-50"><th className="px-4 py-2 font-semibold text-slate-600">订单号</th><th className="px-4 py-2 font-semibold text-slate-600">客户</th><th className="px-4 py-2 font-semibold text-slate-600">金额</th><th className="px-4 py-2 font-semibold text-slate-600">支付方式</th><th className="px-4 py-2 font-semibold text-slate-600">日期</th><th className="px-4 py-2 font-semibold text-slate-600">明细</th></tr></thead><tbody>{filteredPaymentRows.length ? pagedPaymentRows.map(({ key, order, record }) => <tr key={key} className="border-b border-slate-100 last:border-b-0"><td className="px-4 py-2 font-medium text-slate-700">{order.order_number}</td><td className="px-4 py-2 text-slate-700">{order.client_name}</td><td className={`px-4 py-2 font-semibold ${record.type === "refund" ? "text-rose-600" : "text-green-600"}`}>{record.type === "refund" ? "-" : "+"}{formatMoney(record.amount)}</td><td className="px-4 py-2 text-slate-600">{record.method}</td><td className="px-4 py-2 text-slate-500">{record.date}</td><td className="px-4 py-2 text-slate-500">{record.note ?? "-"}</td></tr>) : <tr><td colSpan={6} className="py-10 text-center text-xs text-slate-400">这个日期范围内没有收入记录</td></tr>}</tbody></table></div><div className="flex flex-wrap items-center justify-between gap-3 rounded-xl border border-slate-200 bg-white px-4 py-3 text-xs text-slate-600"><span>第 {paymentPage} / {paymentPageCount} 页，共 {filteredPaymentRows.length} 条收款</span><div className="flex items-center gap-2"><button type="button" onClick={() => setPaymentPage((p) => Math.max(1, p - 1))} disabled={paymentPage <= 1} className="rounded-lg border border-slate-200 px-3 py-1.5 disabled:cursor-not-allowed disabled:opacity-40">上一页</button><button type="button" onClick={() => setPaymentPage((p) => Math.min(paymentPageCount, p + 1))} disabled={paymentPage >= paymentPageCount} className="rounded-lg border border-slate-200 px-3 py-1.5 disabled:cursor-not-allowed disabled:opacity-40">下一页</button></div></div></>)}
       {sub === "income" && incomeView === "independent" && (() => {
-        const indepCash = cashEntries.filter(e => e.type === "收入" && isDateInRange(e.date, financeDateStart, financeDateEnd));
+        const indepCash = cashEntries.filter(e => e.type === "收入" && isDateInRange(e.date, financeDateStart, financeDateEnd) && !e.source_type?.startsWith("order-") && !e.order_id);
         const pc = Math.max(1, Math.ceil(indepCash.length / 10));
         const pagedCash = indepCash.slice((independentIncomePage - 1) * 10, independentIncomePage * 10);
+        function handleSaveIncome() {
+          const amt = Number(incomeDraft.amount);
+          if (!amt || amt <= 0 || !incomeDraft.date) return;
+          if (editingIncomeId) {
+            setCashEntries((prev) => prev.map(e => e.id === editingIncomeId ? { ...e, amount: amt, date: incomeDraft.date, method: incomeDraft.method, note: incomeDraft.note || undefined } : e));
+            setEditingIncomeId(null);
+          } else {
+            setCashEntries((prev) => [{ id: nextYearScopedId(prev.map(e => e.id), "CASH", new Date().getFullYear()), type: "收入", amount: amt, date: incomeDraft.date, method: incomeDraft.method, note: incomeDraft.note || undefined, source_type: "independent" }, ...prev]);
+          }
+          setShowIncomeForm(false);
+          setIncomeDraft({ date: today, amount: "", method: "现金", note: "" });
+        }
+        function handleDeleteIncome(id: string) {
+          setCashEntries((prev) => prev.filter(e => e.id !== id));
+          setEditingIncomeId(null);
+        }
+        function handleEditIncome(entry: typeof cashEntries[0]) {
+          setEditingIncomeId(entry.id);
+          setIncomeDraft({ date: entry.date, amount: String(entry.amount), method: entry.method ?? "现金", note: entry.note ?? "" });
+          setShowIncomeForm(true);
+        }
+        function openNewIncomeForm() {
+          setEditingIncomeId(null);
+          setIncomeDraft({ date: today, amount: "", method: "现金", note: "" });
+          setShowIncomeForm(true);
+        }
         return (
           <>
+            {showIncomeForm && (
+              <div className="mb-3 rounded-xl border border-slate-200 bg-white p-4">
+                <div className="mb-3 grid grid-cols-2 gap-3 sm:grid-cols-4">
+                  <div>
+                    <label className="mb-1 block text-[11px] font-medium text-slate-500">金额</label>
+                    <input type="number" step="0.01" value={incomeDraft.amount} onChange={e => setIncomeDraft(p => ({ ...p, amount: e.target.value }))} className="w-full rounded-lg border border-slate-200 px-3 py-1.5 text-xs outline-none focus:border-blue-400" placeholder="0.00" />
+                  </div>
+                  <div>
+                    <label className="mb-1 block text-[11px] font-medium text-slate-500">日期</label>
+                    <input type="date" value={incomeDraft.date} onChange={e => setIncomeDraft(p => ({ ...p, date: e.target.value }))} className="w-full rounded-lg border border-slate-200 px-3 py-1.5 text-xs outline-none focus:border-blue-400" />
+                  </div>
+                  <div>
+                    <label className="mb-1 block text-[11px] font-medium text-slate-500">方式</label>
+                    <select value={incomeDraft.method} onChange={e => setIncomeDraft(p => ({ ...p, method: e.target.value }))} className="w-full rounded-lg border border-slate-200 px-3 py-1.5 text-xs outline-none focus:border-blue-400"><option value="现金">现金</option><option value="微信">微信</option><option value="支付宝">支付宝</option><option value="POS">POS</option><option value="转账">转账</option></select>
+                  </div>
+                  <div>
+                    <label className="mb-1 block text-[11px] font-medium text-slate-500">备注</label>
+                    <input type="text" value={incomeDraft.note} onChange={e => setIncomeDraft(p => ({ ...p, note: e.target.value }))} className="w-full rounded-lg border border-slate-200 px-3 py-1.5 text-xs outline-none focus:border-blue-400" placeholder="可选" />
+                  </div>
+                </div>
+                <div className="flex items-center gap-2">
+                  <button onClick={handleSaveIncome} disabled={!incomeDraft.amount || Number(incomeDraft.amount) <= 0 || !incomeDraft.date} className="rounded-lg bg-blue-500 px-4 py-1.5 text-xs font-medium text-white hover:bg-blue-600 disabled:cursor-not-allowed disabled:opacity-40 transition-colors">{editingIncomeId ? "保存修改" : "添加"}</button>
+                  <button onClick={() => { setShowIncomeForm(false); setEditingIncomeId(null); setIncomeDraft({ date: today, amount: "", method: "现金", note: "" }); }} className="rounded-lg border border-slate-200 px-4 py-1.5 text-xs text-slate-600 hover:bg-slate-50 transition-colors">取消</button>
+                </div>
+              </div>
+            )}
+            <div className="mb-3">
+              <button onClick={openNewIncomeForm} className="rounded-lg bg-blue-500 px-4 py-1.5 text-xs font-medium text-white hover:bg-blue-600 transition-colors">+ 新增独立收入</button>
+            </div>
             <div className="overflow-x-auto rounded-xl border border-slate-200 bg-white">
               <table className="w-full text-left text-xs">
                 <thead>
@@ -3351,18 +3409,24 @@ function FinanceSection({ orders, setOrders, expenses, setExpenses, cashEntries,
                     <th className="px-4 py-2 font-semibold text-slate-600">金额</th>
                     <th className="px-4 py-2 font-semibold text-slate-600">方式</th>
                     <th className="px-4 py-2 font-semibold text-slate-600">备注</th>
+                    <th className="px-4 py-2 font-semibold text-slate-600">操作</th>
                   </tr>
                 </thead>
                 <tbody>
                   {pagedCash.length ? pagedCash.map(entry => (
                     <tr key={entry.id} className="border-b border-slate-100 last:border-b-0">
                       <td className="px-4 py-2 text-slate-500">{entry.date}</td>
-                      <td className="px-4 py-2 text-slate-700">{(entry as Record<string, unknown>).source as string || entry.note || "-"}</td>
+                      <td className="px-4 py-2 text-slate-700">{entry.note || "-"}</td>
                       <td className="px-4 py-2 font-semibold text-green-600">+{formatMoney(entry.amount)}</td>
-                      <td className="px-4 py-2 text-slate-600">{(entry as Record<string, unknown>).method as string || "-"}</td>
+                      <td className="px-4 py-2 text-slate-600">{entry.method || "-"}</td>
                       <td className="px-4 py-2 text-slate-500">{entry.note || "-"}</td>
+                      <td className="px-4 py-2">
+                        <div className="flex items-center gap-2">
+                          {editingIncomeId === entry.id ? <span className="text-xs text-slate-400">编辑中</span> : <><button onClick={() => handleEditIncome(entry)} className="rounded border border-slate-200 px-2 py-0.5 text-xs text-slate-600 hover:border-slate-300 hover:bg-slate-50 transition-colors">编辑</button><button onClick={() => handleDeleteIncome(entry.id)} className="rounded border border-red-100 px-2 py-0.5 text-xs text-red-500 hover:border-red-300 hover:bg-red-50 transition-colors">删除</button></>}
+                        </div>
+                      </td>
                     </tr>
-                  )) : <tr><td colSpan={5} className="py-10 text-center text-xs text-slate-400">暂无独立收入记录</td></tr>}
+                  )) : <tr><td colSpan={6} className="py-10 text-center text-xs text-slate-400">暂无独立收入记录</td></tr>}
                 </tbody>
               </table>
             </div>

@@ -11,12 +11,8 @@ import {
   bizExpenses,
   formatMoney,
   bizMaterials,
-  bizAppointments,
   bizPayrolls,
-  bizPurchases,
-  bizQuotes,
   bizSettings,
-  bizShowcases,
   bizSuppliers,
   bizPrintArchives,
   summarizeOrders,
@@ -29,13 +25,9 @@ import {
   type ExpenseRecord,
   type MaterialRecord,
   type MaterialRow,
-  type MeasurementAppointmentRecord,
   type PaymentRecord,
   type PayrollRecord,
   type PrintArchiveRecord,
-  type PurchaseRecord,
-  type QuoteRecord,
-  type ShowcaseRecord,
   type SupplierRecord,
 } from "@/lib/biz-data";
 import type { BizStoreSnapshot } from "@/lib/biz-store";
@@ -93,12 +85,10 @@ function reconcileCashEntries(
   cashEntries: CashEntry[],
   orders: BizOrder[],
   expenses: ExpenseRecord[],
-  purchases: PurchaseRecord[],
 ) {
   const officeExpenseIds = new Set(
     expenses.filter((item) => item.office).map((item) => item.id),
   );
-  const purchaseIds = new Set(purchases.map((item) => item.id));
   const orderPaymentCounts = new Map<string, number>();
 
   for (const order of orders) {
@@ -117,10 +107,6 @@ function reconcileCashEntries(
   return cashEntries.filter((entry) => {
     if (entry.source_type === "expense") {
       return Boolean(entry.source_id && officeExpenseIds.has(entry.source_id));
-    }
-
-    if (entry.source_type === "purchase") {
-      return Boolean(entry.source_id && purchaseIds.has(entry.source_id));
     }
 
     if (entry.source_type === "order-payment" || entry.source_type === "order-refund" || entry.source_type === "order-deposit") {
@@ -221,24 +207,8 @@ function orderBelongsToClient(order: BizOrder, client: ContactRecord) {
   return Boolean(orderPhone && clientPhone && orderPhone === clientPhone);
 }
 
-function appointmentBelongsToClient(item: MeasurementAppointmentRecord, client: ContactRecord) {
-  if (item.client_id && item.client_id === client.id) return true;
-  const sameName = normalizeEntityText(item.client_name) === normalizeEntityText(client.name);
-  const itemPhone = normalizeEntityPhone(item.phone);
-  const clientPhone = normalizeEntityPhone(client.phone);
-  if (sameName && (!itemPhone || !clientPhone || itemPhone === clientPhone)) return true;
-  return Boolean(itemPhone && clientPhone && itemPhone === clientPhone);
-}
-
-function quoteBelongsToClient(item: QuoteRecord, client: ContactRecord) {
-  return item.client_id === client.id || normalizeEntityText(item.client_name) === normalizeEntityText(client.name);
-}
 
 function materialBelongsToSupplier(item: MaterialRecord, supplier: SupplierRecord) {
-  return item.supplier_id === supplier.id || normalizeEntityText(item.supplier) === normalizeEntityText(supplier.name);
-}
-
-function purchaseBelongsToSupplier(item: PurchaseRecord, supplier: SupplierRecord) {
   return item.supplier_id === supplier.id || normalizeEntityText(item.supplier) === normalizeEntityText(supplier.name);
 }
 
@@ -366,7 +336,6 @@ function buildBizSnapshot(input: Partial<BizStoreSnapshot>): BizStoreSnapshot {
     expenses: input.expenses ?? [],
     cashEntries: input.cashEntries ?? [],
     materials: input.materials ?? [],
-    purchases: input.purchases ?? [],
     employees: input.employees ?? [],
     attendances: input.attendances ?? [],
     appointments: input.appointments ?? [],
@@ -396,19 +365,6 @@ function formatSlashDate(value?: string) {
   return `${year}/${Number(month)}/${Number(day)}`;
 }
 
-function formatAppointmentCopyText(item: MeasurementAppointmentRecord) {
-  const [datePart, timePart = ""] = item.appointment_date.split("T");
-  const time = timePart.slice(0, 5);
-  return [
-    `预约日期：${formatSlashDate(datePart)}`,
-    `预约时间段：${time}`,
-    `描述：${item.description ?? ""}`,
-    `客户名：${item.client_name}`,
-    `地址：${item.address ?? ""}`,
-    `电话：${item.phone ?? ""}`,
-    "----------------------------",
-  ].join("\n");
-}
 
 function getSupplierCategoryOptions(settings: BizSettings) {
   return (settings.supplier_categories || "布料\n五金\n玻璃\n物流\n其他")
@@ -579,7 +535,6 @@ function getOverviewDomains(
   data: {
     expenses: ExpenseRecord[];
     payrolls: PayrollRecord[];
-    quotes: QuoteRecord[];
     clients: ContactRecord[];
     suppliers: SupplierRecord[];
     materials: MaterialRecord[];
@@ -595,9 +550,6 @@ function getOverviewDomains(
 }> {
   const totalExpense = data.expenses.reduce((sum, item) => sum + item.amount, 0);
   const totalPayroll = data.payrolls.reduce((sum, item) => sum + item.net_salary, 0);
-  const draftQuotes = data.quotes.filter((item) => item.status === "草稿").length;
-  const sentQuotes = data.quotes.filter((item) => item.status === "已发送").length;
-  const wonQuotes = data.quotes.filter((item) => item.status === "已成交").length;
   const lowStockCount = data.materials.filter((item) => item.stock_quantity <= item.min_stock).length;
   const activeEmployees = data.employees.filter((item) => item.status === "在职").length;
   const monthlyPayroll = data.payrolls
@@ -625,17 +577,6 @@ function getOverviewDomains(
       stats: [
         { label: "收入", value: formatMoney(orderSummary.amountPaid), accent: "text-green-600" },
         { label: "净利润", value: formatMoney(orderSummary.amountPaid - totalExpense - totalPayroll), accent: "text-emerald-600" },
-      ],
-    },
-    {
-      key: "quotes",
-      title: "报价展示",
-      sub: "Quotes & Showcase",
-      color: "border-violet-200 bg-violet-50/40 hover:border-violet-300",
-      dot: "bg-violet-500",
-      stats: [
-        { label: "草稿 / 已发", value: `${draftQuotes} / ${sentQuotes}` },
-        { label: "已成交", value: String(wonQuotes), accent: "text-green-600" },
       ],
     },
     {
@@ -679,7 +620,6 @@ function OverviewSection({
   orderSummary,
   expenses,
   payrolls,
-  quotes,
   clients,
   suppliers,
   materials,
@@ -689,13 +629,12 @@ function OverviewSection({
   orderSummary: ReturnType<typeof summarizeOrders>;
   expenses: ExpenseRecord[];
   payrolls: PayrollRecord[];
-  quotes: QuoteRecord[];
   clients: ContactRecord[];
   suppliers: SupplierRecord[];
   materials: MaterialRecord[];
   employees: EmployeeRecord[];
 }) {
-  const domains = getOverviewDomains(orderSummary, { expenses, payrolls, quotes, clients, suppliers, materials, employees });
+  const domains = getOverviewDomains(orderSummary, { expenses, payrolls, clients, suppliers, materials, employees });
   return (
     <div>
       <SectionHeader eyebrow="Business Overview" title="业务总览" />
@@ -738,7 +677,6 @@ function OverviewSection({
             { label: "新建定制单", section: "orders" },
             { label: "新建批发单", section: "orders" },
             { label: "录入支出", section: "finance" },
-            { label: "新建报价单", section: "quotes" },
             { label: "添加客户", section: "clients" },
             { label: "采购入库", section: "materials" },
           ].map((q) => (
@@ -1240,7 +1178,6 @@ const DEFAULT_PRINT_SHELL: Required<Pick<PrintShellOptions, "maxWidth" | "bodyPa
 
 const BASE_PRINT_TYPOGRAPHY_STYLES = ".muted{color:#64748b}.title{font-weight:800}";
 const STANDARD_TABLE_PRINT_STYLES = `${BASE_PRINT_TYPOGRAPHY_STYLES}.head{display:flex;justify-content:space-between;align-items:flex-end;border-bottom:3px solid #0f172a;padding-bottom:14px;margin-bottom:18px}.title{font-size:28px}.muted{font-size:12px}table{width:100%;border-collapse:collapse}`;
-const QUOTE_PRINT_STYLES = `${BASE_PRINT_TYPOGRAPHY_STYLES}.brand{display:flex;justify-content:space-between;align-items:flex-start;border-bottom:3px solid #0f172a;padding-bottom:16px;margin-bottom:24px}.title{font-size:30px;letter-spacing:.04em}.card{border:1px solid #cbd5e1;border-radius:16px;padding:18px 20px;margin-bottom:16px}.row{display:flex;justify-content:space-between;gap:12px;padding:8px 0;border-bottom:1px dashed #e2e8f0}.row:last-child{border-bottom:none}.amount{font-size:28px;font-weight:800;color:#0f766e}.footer{margin-top:24px;border-top:1px solid #cbd5e1;padding-top:16px;font-size:12px;line-height:1.7;color:#475569}`;
 
 function buildStandardPrintHeader(title: string, subtitle: string) {
   return `<div class="head"><div><div class="title">${escHtml(title)}</div><div class="muted">${escHtml(subtitle)}</div></div><div class="muted">Printed ${escHtml(new Date().toLocaleString())}</div></div>`;
@@ -1298,14 +1235,6 @@ function buildWorkerPickupHTML(order: BizOrder, rows: MaterialRow[], settings?: 
 </table>`, { pageTitle: `领料单 · ${order.order_number}` });
 }
 
-function buildQuotePrintHTML(quote: QuoteRecord, settings: BizSettings): string {
-  return buildPrintShell("QUOTE", `
-<div class="brand"><div><div class="title">QUOTE</div><div class="muted">${escHtml(settings.company_name || "Company")}</div><div class="muted">${escHtml(settings.address || "")}</div><div class="muted">${escHtml(settings.phone || "")}${settings.email ? ` · ${escHtml(settings.email)}` : ""}</div></div><div style="text-align:right"><div><strong>${escHtml(quote.id)}</strong></div><div class="muted">Created: ${escHtml(quote.created_at)}</div><div class="muted">Valid Until: ${escHtml(quote.valid_until)}</div><div class="muted">Status: ${escHtml(quote.status)}</div></div></div>
-<div class="card"><div class="row"><span class="muted">Client</span><strong>${escHtml(quote.client_name)}</strong></div><div class="row"><span class="muted">Project</span><strong>${escHtml(quote.title)}</strong></div><div class="row"><span class="muted">Quoted Amount</span><span class="amount">${escHtml(formatMoney(quote.amount))}</span></div></div>
-<div class="card"><div style="font-size:14px;font-weight:700;margin-bottom:10px">Payment & Contact</div><div class="row"><span class="muted">Bank</span><span>${escHtml(settings.bank_account || "-")}</span></div><div class="row"><span class="muted">WeChat Pay</span><span>${escHtml(settings.wechat_pay || "-")}</span></div><div class="row"><span class="muted">Alipay</span><span>${escHtml(settings.alipay || "-")}</span></div><div class="row"><span class="muted">Other</span><span>${escHtml(settings.other_payment || "-")}</span></div></div>
-<div class="footer">${escHtml(settings.quote_footer || "")}</div>
-`, { pageTitle: `Quote ${quote.id}`, maxWidth: "820px", extraStyles: QUOTE_PRINT_STYLES });
-}
 
 function buildSimpleTablePrintHTML(title: string, subtitle: string, columns: string[], rows: Array<Array<string | number>>) {
   const headerHtml = columns
@@ -3516,20 +3445,18 @@ function FinanceSection({ orders, setOrders, expenses, setExpenses, cashEntries,
 type ContactSub = "clients" | "suppliers";
 type ClientDetailTab = "overview" | "orders" | "activity";
 
-function ClientsSection({ clients, setClients, suppliers, setSuppliers, orders, setOrders, appointments, setAppointments, quotes, setQuotes, setCashEntries, materials, setMaterials, purchases, setPurchases, settings, onCreateAppointment }: { clients: ContactRecord[]; setClients: React.Dispatch<React.SetStateAction<ContactRecord[]>>; suppliers: SupplierRecord[]; setSuppliers: React.Dispatch<React.SetStateAction<SupplierRecord[]>>; orders: BizOrder[]; setOrders: React.Dispatch<React.SetStateAction<BizOrder[]>>; appointments: MeasurementAppointmentRecord[]; setAppointments: React.Dispatch<React.SetStateAction<MeasurementAppointmentRecord[]>>; quotes: QuoteRecord[]; setQuotes: React.Dispatch<React.SetStateAction<QuoteRecord[]>>; setCashEntries: React.Dispatch<React.SetStateAction<CashEntry[]>>; materials: MaterialRecord[]; setMaterials: React.Dispatch<React.SetStateAction<MaterialRecord[]>>; purchases: PurchaseRecord[]; setPurchases: React.Dispatch<React.SetStateAction<PurchaseRecord[]>>; settings: BizSettings; onCreateAppointment: (client: ContactRecord) => void; }) {
+function ClientsSection({ clients, setClients, suppliers, setSuppliers, orders, setOrders, setCashEntries, materials, setMaterials, settings }: { clients: ContactRecord[]; setClients: React.Dispatch<React.SetStateAction<ContactRecord[]>>; suppliers: SupplierRecord[]; setSuppliers: React.Dispatch<React.SetStateAction<SupplierRecord[]>>; orders: BizOrder[]; setOrders: React.Dispatch<React.SetStateAction<BizOrder[]>>; setCashEntries: React.Dispatch<React.SetStateAction<CashEntry[]>>; materials: MaterialRecord[]; setMaterials: React.Dispatch<React.SetStateAction<MaterialRecord[]>>; settings: BizSettings; }) {
   const [sub, setSub] = useState<ContactSub>("clients");
   const today = new Date().toISOString().slice(0, 10);
   const [clientDraft, setClientDraft] = useState({ name: "", contact: "", phone: "", wechat: "", address: "", note: "" });
   const supplierCategoryOptions = useMemo(() => getSupplierCategoryOptions(settings), [settings]);
   const [supplierDraft, setSupplierDraft] = useState({ name: "", category: supplierCategoryOptions[0] ?? "布料", contact_person: "", phone: "", email: "", website: "", address: "", remark: "" });
-  const [supplierPurchaseDraft, setSupplierPurchaseDraft] = useState({ supplier: suppliers[0]?.name ?? "", detail: "", amount: "", payment_method: "转账", purchase_date: today, office: false, note: "" });
   const [showClientModal, setShowClientModal] = useState(false);
   const [showSupplierModal, setShowSupplierModal] = useState(false);
   const [editingClientId, setEditingClientId] = useState<string | null>(null);
   const [editingSupplierId, setEditingSupplierId] = useState<string | null>(null);
   const [confirmingClientId, setConfirmingClientId] = useState<string | null>(null);
   const [confirmingSupplierId, setConfirmingSupplierId] = useState<string | null>(null);
-  const [showSupplierPurchaseModal, setShowSupplierPurchaseModal] = useState(false);
   const [directoryHint, setDirectoryHint] = useState("");
   const [clientDetailTab, setClientDetailTab] = useState<ClientDetailTab>("overview");
   const [clientSearch, setClientSearch] = useState("");
@@ -3565,11 +3492,9 @@ function ClientsSection({ clients, setClients, suppliers, setSuppliers, orders, 
       setClients((prev) => prev.map((item) => item.id === editingClientId ? { ...item, name: nextName, contact: clientDraft.contact || undefined, phone: nextPhone, wechat: clientDraft.wechat || undefined, address: nextAddress, note: clientDraft.note || undefined } : item));
       if (originalClient) {
         setOrders((prev) => prev.map((item) => orderBelongsToClient(item, originalClient) ? { ...item, client_name: nextName, client_id: originalClient.id, phone: nextPhone, address: nextAddress } : item));
-        setAppointments((prev) => prev.map((item) => appointmentBelongsToClient(item, originalClient) ? { ...item, client_name: nextName, phone: nextPhone, address: nextAddress, client_id: originalClient.id } : item));
-        setQuotes((prev) => prev.map((item) => quoteBelongsToClient(item, originalClient) ? { ...item, client_name: nextName, client_id: originalClient.id } : item));
       }
       setSelectedClientId(editingClientId);
-      setDirectoryHint(`已同步客户 ${nextName} 的订单、预约和报价关联。`);
+      setDirectoryHint(`已同步客户 ${nextName} 的订单关联。`);
     } else {
       const newId = nextSequentialId(clients.map((item) => item.id), "CL");
       setClients((prev) => [{ id: newId, name: clientDraft.name.trim(), contact: clientDraft.contact || undefined, phone: clientDraft.phone || undefined, wechat: clientDraft.wechat || undefined, address: clientDraft.address || undefined, note: clientDraft.note || undefined, created_at: today, balance: 0, is_vip: false }, ...prev]);
@@ -3589,10 +3514,8 @@ function ClientsSection({ clients, setClients, suppliers, setSuppliers, orders, 
 
   function deleteClient(client: ContactRecord) {
     const linkedOrders = orders.filter((item) => orderBelongsToClient(item, client));
-    const linkedAppointments = appointments.filter((item) => appointmentBelongsToClient(item, client));
-    const linkedQuotes = quotes.filter((item) => quoteBelongsToClient(item, client));
-    if (linkedOrders.length || linkedAppointments.length || linkedQuotes.length) {
-      setDirectoryHint(`客户 ${client.name} 还有 ${linkedOrders.length} 个订单、${linkedAppointments.length} 个预约、${linkedQuotes.length} 个报价，先处理这些记录再删。`);
+    if (linkedOrders.length) {
+      setDirectoryHint(`客户 ${client.name} 还有 ${linkedOrders.length} 个订单，先处理这些记录再删。`);
       setConfirmingClientId(null);
       return;
     }
@@ -3610,9 +3533,8 @@ function ClientsSection({ clients, setClients, suppliers, setSuppliers, orders, 
       setSuppliers((prev) => prev.map((item) => item.id === editingSupplierId ? { ...item, name: nextName, category: supplierDraft.category, contact_person: supplierDraft.contact_person || undefined, phone: supplierDraft.phone || undefined, email: supplierDraft.email || undefined, website: supplierDraft.website || undefined, address: supplierDraft.address || undefined, remark: supplierDraft.remark || undefined } : item));
       if (originalSupplier) {
         setMaterials((prev) => prev.map((item) => materialBelongsToSupplier(item, originalSupplier) ? { ...item, supplier: nextName, supplier_id: originalSupplier.id } : item));
-        setPurchases((prev) => prev.map((item) => purchaseBelongsToSupplier(item, originalSupplier) ? { ...item, supplier: nextName, supplier_id: originalSupplier.id } : item));
       }
-      setDirectoryHint(`已同步供应商 ${nextName} 的物料和采购关联。`);
+      setDirectoryHint(`已同步供应商 ${nextName} 的物料关联。`);
     } else {
       setSuppliers((prev) => [{ id: nextSequentialId(prev.map((item) => item.id), "SUP"), name: supplierDraft.name.trim(), category: supplierDraft.category, contact_person: supplierDraft.contact_person || undefined, phone: supplierDraft.phone || undefined, email: supplierDraft.email || undefined, website: supplierDraft.website || undefined, address: supplierDraft.address || undefined, remark: supplierDraft.remark || undefined, last_purchase_date: today }, ...prev]);
       setDirectoryHint(`已新增供应商 ${supplierDraft.name.trim()}。`);
@@ -3630,34 +3552,14 @@ function ClientsSection({ clients, setClients, suppliers, setSuppliers, orders, 
 
   function deleteSupplier(supplier: SupplierRecord) {
     const linkedMaterials = materials.filter((item) => materialBelongsToSupplier(item, supplier));
-    const linkedPurchases = purchases.filter((item) => purchaseBelongsToSupplier(item, supplier));
-    if (linkedMaterials.length || linkedPurchases.length) {
-      setDirectoryHint(`供应商 ${supplier.name} 还有 ${linkedMaterials.length} 个物料、${linkedPurchases.length} 条采购记录，先处理这些记录再删。`);
+    if (linkedMaterials.length) {
+      setDirectoryHint(`供应商 ${supplier.name} 还有 ${linkedMaterials.length} 个物料关联，先处理这些记录再删。`);
       setConfirmingSupplierId(null);
       return;
     }
     setSuppliers((prev) => prev.filter((item) => item.id !== supplier.id));
     setDirectoryHint(`已删除供应商 ${supplier.name}。`);
     setConfirmingSupplierId(null);
-  }
-
-  function openSupplierPurchase(supplier: SupplierRecord) {
-    setSupplierPurchaseDraft({ supplier: supplier.name, detail: "", amount: "", payment_method: "转账", purchase_date: today, office: false, note: "" });
-    setDirectoryHint("");
-    setShowSupplierPurchaseModal(true);
-  }
-
-  function addSupplierPurchase() {
-    const amount = Number(supplierPurchaseDraft.amount) || 0;
-    if (!supplierPurchaseDraft.supplier || amount <= 0) return;
-    const purchaseId = nextYearScopedId(purchases.map((item) => item.id), "PO", new Date().getFullYear());
-    const matchedSupplier = findSupplierByReference(suppliers, { supplierName: supplierPurchaseDraft.supplier });
-    setPurchases((prev) => [{ id: purchaseId, supplier: supplierPurchaseDraft.supplier, supplier_id: matchedSupplier?.id, item_name: supplierPurchaseDraft.detail.trim() || "采购支出", quantity: 1, unit: "笔", unit_price: amount, total_amount: amount, purchase_date: supplierPurchaseDraft.purchase_date, status: supplierPurchaseDraft.payment_method }, ...prev]);
-    if (supplierPurchaseDraft.office) {
-      setCashEntries((prev) => [{ id: nextYearScopedId(prev.map((item) => item.id), "CASH", new Date().getFullYear()), type: "转出", amount, date: supplierPurchaseDraft.purchase_date, note: supplierPurchaseDraft.note || `${supplierPurchaseDraft.supplier} 采购支出`, source_type: "purchase", source_id: purchaseId }, ...prev]);
-    }
-    setDirectoryHint(`已新增采购 ${purchaseId}${matchedSupplier ? "，已绑定供应商" : "，但供应商名称未唯一匹配"}。`);
-    setShowSupplierPurchaseModal(false);
   }
 
   const filteredClients = clients.filter((item) => {
@@ -3680,16 +3582,6 @@ function ClientsSection({ clients, setClients, suppliers, setSuppliers, orders, 
         .filter((item) => orderBelongsToClient(item, selectedClient))
         .sort((a, b) => String(b.order_date ?? "").localeCompare(String(a.order_date ?? "")))
     : [];
-  const selectedClientAppointments = selectedClient
-    ? [...appointments]
-        .filter((item) => appointmentBelongsToClient(item, selectedClient))
-        .sort((a, b) => String(b.appointment_date).localeCompare(String(a.appointment_date)))
-    : [];
-  const selectedClientQuotes = selectedClient
-    ? [...quotes]
-        .filter((item) => quoteBelongsToClient(item, selectedClient))
-        .sort((a, b) => String(b.created_at).localeCompare(String(a.created_at)))
-    : [];
   const clientTotal = selectedClientOrders.reduce((sum, item) => sum + (item.total_after_tax ?? item.total_price ?? 0), 0);
   const clientPaid = selectedClientOrders.reduce((sum, item) => sum + (item.amount_paid ?? 0), 0);
   const clientBalance = selectedClientOrders.reduce((sum, item) => sum + (item.balance ?? 0), 0);
@@ -3699,7 +3591,6 @@ function ClientsSection({ clients, setClients, suppliers, setSuppliers, orders, 
   const clientCustomOrderCount = selectedClientOrders.filter((item) => item.order_type !== "批发单").length;
   const clientWholesaleOrderCount = selectedClientOrders.filter((item) => item.order_type === "批发单").length;
   const clientLastOrder = selectedClientOrders[0]?.order_date ?? "-";
-  const nextAppointment = [...selectedClientAppointments].filter((item) => getAppointmentStatus(item.appointment_date) !== "已完成").sort((a, b) => String(a.appointment_date).localeCompare(String(b.appointment_date)))[0];
   const clientRecentPayments = selectedClientOrders
     .flatMap((order) => (order.payment_history ?? []).map((record) => ({
       ...record,
@@ -3715,20 +3606,6 @@ function ClientsSection({ clients, setClients, suppliers, setSuppliers, orders, 
       label: `订单 ${item.order_number}`,
       detail: `${item.order_type} · ${item.status ?? "-"} · ${formatMoney(item.total_after_tax ?? item.total_price ?? 0)}`,
       tone: "text-slate-700",
-    })),
-    ...selectedClientAppointments.map((item) => ({
-      key: `appointment-${item.id}`,
-      date: item.appointment_date,
-      label: "预约",
-      detail: `${formatAppointmentDate(item.appointment_date)} · ${item.address ?? "未填写地址"}`,
-      tone: "text-sky-700",
-    })),
-    ...selectedClientQuotes.map((item) => ({
-      key: `quote-${item.id}`,
-      date: item.created_at,
-      label: `报价 ${item.id}`,
-      detail: `${item.title} · ${item.status} · ${formatMoney(item.amount)}`,
-      tone: "text-violet-700",
     })),
     ...clientRecentPayments.map((item, index) => ({
       key: `payment-${item.order_number}-${index}-${item.date}`,
@@ -3926,32 +3803,6 @@ function ClientsSection({ clients, setClients, suppliers, setSuppliers, orders, 
         </div>
       )}
 
-      {showSupplierPurchaseModal && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center bg-slate-950/45 px-4">
-          <div className="w-full max-w-2xl rounded-2xl border border-slate-200 bg-white p-5 shadow-2xl">
-            <div className="mb-4 flex items-start justify-between gap-3">
-              <div>
-                <h3 className="text-base font-semibold text-slate-900">新建采购</h3>
-                <p className="mt-1 text-sm text-slate-500">可以直接从供应商这里录采购，也可以选择是否从办公室抽屉里出钱。</p>
-              </div>
-              <button onClick={() => setShowSupplierPurchaseModal(false)} className="rounded-lg border border-slate-200 px-2.5 py-1 text-xs text-slate-500 hover:border-slate-300 hover:text-slate-700 transition-colors">关闭</button>
-            </div>
-            <div className="grid gap-2 sm:grid-cols-2 xl:grid-cols-3">
-              <SmallInput value={supplierPurchaseDraft.supplier} onChange={(v) => setSupplierPurchaseDraft((d) => ({ ...d, supplier: v }))} placeholder="供应商" />
-              <SmallInput value={supplierPurchaseDraft.detail} onChange={(v) => setSupplierPurchaseDraft((d) => ({ ...d, detail: v }))} placeholder="采购明细" />
-              <SmallInput value={supplierPurchaseDraft.amount} onChange={(v) => setSupplierPurchaseDraft((d) => ({ ...d, amount: v }))} type="number" placeholder="总价" />
-              <SmallSelect value={supplierPurchaseDraft.payment_method} onChange={(v) => setSupplierPurchaseDraft((d) => ({ ...d, payment_method: v }))} options={PAYMENT_METHODS} />
-              <SmallInput value={supplierPurchaseDraft.purchase_date} onChange={(v) => setSupplierPurchaseDraft((d) => ({ ...d, purchase_date: v }))} type="date" />
-            </div>
-            <div className="mt-2"><SmallInput value={supplierPurchaseDraft.note} onChange={(v) => setSupplierPurchaseDraft((d) => ({ ...d, note: v }))} placeholder="备注（可选）" /></div>
-            <label className="mt-3 flex items-center gap-2 text-xs text-slate-600"><input type="checkbox" checked={supplierPurchaseDraft.office} onChange={(e) => setSupplierPurchaseDraft((d) => ({ ...d, office: e.target.checked }))} /> 这笔采购从办公室抽屉里转出</label>
-            <div className="mt-5 flex justify-end gap-2">
-              <ActionBtn onClick={() => setShowSupplierPurchaseModal(false)}>取消</ActionBtn>
-              <ActionBtn tone="primary" onClick={addSupplierPurchase}>确认新建</ActionBtn>
-            </div>
-          </div>
-        </div>
-      )}
 
       {sub === "clients" ? (
         <div className="space-y-3 xl:space-y-2">
@@ -3965,7 +3816,6 @@ function ClientsSection({ clients, setClients, suppliers, setSuppliers, orders, 
                 <div className="max-h-[420px] space-y-2 overflow-y-auto pr-1 xl:max-h-[calc(100vh-22rem)]">
                   {pagedClients.length ? pagedClients.map((item) => {
                     const itemOrders = orders.filter((order) => orderBelongsToClient(order, item));
-                    const itemAppointments = appointments.filter((entry) => appointmentBelongsToClient(entry, item));
                     const itemBalance = itemOrders.reduce((sum, order) => sum + (order.balance ?? 0), 0);
                     const isActive = selectedClient?.id === item.id;
                     return (
@@ -3984,7 +3834,6 @@ function ClientsSection({ clients, setClients, suppliers, setSuppliers, orders, 
                         </div>
                         <div className="mt-2 flex flex-wrap gap-3 text-[11px] text-slate-500">
                           <span>{itemOrders.length} 个订单</span>
-                          <span>{itemAppointments.length} 个预约</span>
                         </div>
                       </button>
                     );
@@ -4016,7 +3865,6 @@ function ClientsSection({ clients, setClients, suppliers, setSuppliers, orders, 
                     </div>
                     <div className="flex flex-wrap gap-2">
                       <ActionBtn onClick={() => toggleVip(selectedClient.id)}>{selectedClient.is_vip ? "取消VIP" : "设为VIP"}</ActionBtn>
-                      <ActionBtn onClick={() => onCreateAppointment(selectedClient)}>+ 新建预约</ActionBtn>
                       <ActionBtn onClick={() => openEditClient(selectedClient)}>编辑客户</ActionBtn>
                       {confirmingClientId === selectedClient.id ? (
                         <>
@@ -4032,7 +3880,6 @@ function ClientsSection({ clients, setClients, suppliers, setSuppliers, orders, 
                   <StatStrip
                     items={[
                       { label: "订单数", value: String(selectedClientOrders.length) },
-                      { label: "报价数", value: String(selectedClientQuotes.length), accent: "text-violet-600" },
                       { label: "定制 / 批发", value: `${clientCustomOrderCount} / ${clientWholesaleOrderCount}` },
                       { label: "业务总额", value: formatMoney(clientTotal), accent: "text-slate-800" },
                       { label: "已收 / 余款", value: `${formatMoney(clientPaid)} / ${formatMoney(clientBalance)}`, accent: clientBalance > 0 ? "text-amber-600" : "text-emerald-600" },
@@ -4043,7 +3890,7 @@ function ClientsSection({ clients, setClients, suppliers, setSuppliers, orders, 
                     options={[
                       { key: "overview", label: "总览" },
                       { key: "orders", label: "订单与收款" },
-                      { key: "activity", label: "预约与动态" },
+                      { key: "activity", label: "业务动态" },
                     ]}
                     value={clientDetailTab}
                     onChange={(value) => setClientDetailTab(value as ClientDetailTab)}
@@ -4066,8 +3913,6 @@ function ClientsSection({ clients, setClients, suppliers, setSuppliers, orders, 
                       <p className="text-[11px] uppercase tracking-[0.2em] text-slate-400">业务状态</p>
                       <div className="mt-3 space-y-3 text-sm">
                         <div className="flex items-center justify-between"><span className="text-slate-500">最近下单</span><span className="font-medium text-slate-900">{clientLastOrder}</span></div>
-                        <div className="flex items-center justify-between"><span className="text-slate-500">下次预约</span><span className="max-w-[180px] text-right font-medium text-slate-900">{nextAppointment ? formatAppointmentDate(nextAppointment.appointment_date) : "暂无"}</span></div>
-                        <div className="flex items-center justify-between"><span className="text-slate-500">预约数</span><span className="font-medium text-slate-900">{selectedClientAppointments.length}</span></div>
                         <div className="flex items-center justify-between"><span className="text-slate-500">备注</span><span className="max-w-[180px] text-right text-slate-900">{selectedClient.note ?? "-"}</span></div>
                       </div>
                     </div>
@@ -4225,35 +4070,11 @@ function ClientsSection({ clients, setClients, suppliers, setSuppliers, orders, 
                     ) : null}
 
                     {clientDetailTab === "activity" ? (
-                      <div className="grid gap-3 lg:grid-cols-2">
-                    <div className="rounded-xl border border-slate-200 bg-white p-4">
-                      <div className="mb-3 flex items-center justify-between">
-                        <p className="text-sm font-semibold text-slate-900">预约记录</p>
-                        <span className="text-[11px] text-slate-400">从客户详情联动过来</span>
-                      </div>
-                      {selectedClientAppointments.length ? (
-                        <div className="space-y-2">
-                          {selectedClientAppointments.slice(0, 5).map((item) => {
-                            const status = getAppointmentStatus(item.appointment_date);
-                            return (
-                              <div key={item.id} className="rounded-lg border border-slate-200 px-3 py-2">
-                                <div className="flex items-center justify-between gap-2">
-                                  <span className="text-xs font-medium text-slate-800">{formatAppointmentDate(item.appointment_date)}</span>
-                                  <AppointmentStatusBadge status={status} />
-                                </div>
-                                <p className="mt-1 text-[11px] text-slate-500">{item.address ?? "未填写地址"}</p>
-                                <p className="mt-1 text-[11px] text-slate-400">{item.description ?? "无备注"}</p>
-                              </div>
-                            );
-                          })}
-                        </div>
-                      ) : <div className="rounded-xl border border-dashed border-slate-200 py-10 text-center text-sm text-slate-400">暂时还没有预约记录</div>}
-                    </div>
-
+                      <div className="grid gap-3">
                     <div className="rounded-xl border border-slate-200 bg-white p-4">
                       <div className="mb-3 flex items-center justify-between">
                         <p className="text-sm font-semibold text-slate-900">业务时间线</p>
-                        <span className="text-[11px] text-slate-400">订单、收款、预约放在一起看</span>
+                        <span className="text-[11px] text-slate-400">订单、收款放在一起看</span>
                       </div>
                       {clientBusinessFeed.length ? (
                         <div className="space-y-2">
@@ -4304,10 +4125,8 @@ function ClientsSection({ clients, setClients, suppliers, setSuppliers, orders, 
                     <td className="px-4 py-2.5 text-slate-600">{item.email ?? "-"}</td>
                     <td className="px-4 py-2.5 text-slate-600">{item.website ?? "-"}</td>
                     <td className="px-4 py-2.5 text-slate-500">{item.address ?? "-"}</td>
-                    <td className="px-4 py-2.5 text-slate-500">{item.last_purchase_date ?? "-"}</td>
                     <td className="px-4 py-2.5">
                       <div className="flex flex-wrap gap-2">
-                        <button onClick={() => openSupplierPurchase(item)} className="rounded border border-emerald-100 px-2 py-1 text-[11px] text-emerald-600 hover:border-emerald-300 hover:bg-emerald-50 transition-colors">新建采购</button>
                         <button onClick={() => openEditSupplier(item)} className="rounded border border-slate-200 px-2 py-1 text-[11px] text-slate-600 hover:border-slate-300 hover:bg-slate-50 transition-colors">编辑</button>
                         {confirmingSupplierId === item.id ? <><button onClick={() => deleteSupplier(item)} className="rounded border border-red-400 bg-red-500 px-2 py-1 text-[11px] font-semibold text-white hover:bg-red-600 transition-colors">确认</button><button onClick={() => setConfirmingSupplierId(null)} className="rounded border border-slate-200 px-2 py-1 text-[11px] text-slate-500 hover:border-slate-300 transition-colors">取消</button></> : <button onClick={() => setConfirmingSupplierId(item.id)} className="rounded border border-rose-100 px-2 py-1 text-[11px] text-rose-500 hover:border-rose-300 hover:bg-rose-50 transition-colors">删除</button>}
                       </div>
@@ -4323,7 +4142,7 @@ function ClientsSection({ clients, setClients, suppliers, setSuppliers, orders, 
   );
 }
 
-type MaterialSub = "inventory" | "purchases";
+type MaterialSub = "inventory";
 
 function normalizeInventoryToken(value: string) {
   return value
@@ -4479,7 +4298,7 @@ function getCommittedMaterialMap(materials: MaterialRecord[], orders: BizOrder[]
   return committed;
 }
 
-function MaterialsSection({ materials, setMaterials, purchases, setPurchases, suppliers, orders, setExpenses, setCashEntries }: { materials: MaterialRecord[]; setMaterials: React.Dispatch<React.SetStateAction<MaterialRecord[]>>; purchases: PurchaseRecord[]; setPurchases: React.Dispatch<React.SetStateAction<PurchaseRecord[]>>; suppliers: SupplierRecord[]; orders: BizOrder[]; setExpenses: React.Dispatch<React.SetStateAction<ExpenseRecord[]>>; setCashEntries: React.Dispatch<React.SetStateAction<CashEntry[]>>; }) {
+function MaterialsSection({ materials, setMaterials, suppliers, orders, setExpenses, setCashEntries }: { materials: MaterialRecord[]; setMaterials: React.Dispatch<React.SetStateAction<MaterialRecord[]>>; suppliers: SupplierRecord[]; orders: BizOrder[]; setExpenses: React.Dispatch<React.SetStateAction<ExpenseRecord[]>>; setCashEntries: React.Dispatch<React.SetStateAction<CashEntry[]>>; }) {
   const [sub, setSub] = useState<MaterialSub>("inventory");
   const today = new Date().toISOString().slice(0, 10);
   const [editingMaterialId, setEditingMaterialId] = useState<string | null>(null);
@@ -4487,8 +4306,6 @@ function MaterialsSection({ materials, setMaterials, purchases, setPurchases, su
   const [materialDraft, setMaterialDraft] = useState({ code: "", name: "", specification: "", size: "", unit: "个", stock_quantity: "", factory_price_rmb: "", weight: "", usd_cost: "", sale_price_usd: "", supplier: suppliers[0]?.name ?? "", image: "", remark: "" });
   const [showMaterialModal, setShowMaterialModal] = useState(false);
   const [inventoryHint, setInventoryHint] = useState("");
-  const [confirmingPurchaseId, setConfirmingPurchaseId] = useState<string | null>(null);
-  const monthlyPurchase = purchases.filter((item) => item.purchase_date.startsWith(today.slice(0, 7))).reduce((sum, item) => sum + item.total_amount, 0);
   const inventoryRows = materials;
 
   function resetMaterialDraft() {
@@ -4540,23 +4357,10 @@ function MaterialsSection({ materials, setMaterials, purchases, setPurchases, su
     setConfirmingMaterialId(null);
   }
 
-  function deletePurchase(id: string) {
-    const removed = purchases.find((item) => item.id === id);
-    setPurchases((prev) => prev.filter((item) => item.id !== id));
-    setCashEntries((prev) => prev.filter((item) => !(item.source_type === "purchase" && item.source_id === id)));
-    if (removed?.expense_id) {
-      setExpenses((prev) => prev.filter((item) => item.id !== removed.expense_id));
-    } else if (removed) {
-      setExpenses((prev) => prev.filter((item) => !(item.expense_type === "采购" && item.target === removed.supplier && item.detail === `${removed.item_name} 采购` && item.amount === removed.total_amount && item.expense_date === removed.purchase_date)));
-    }
-    setConfirmingPurchaseId(null);
-  }
-
   return (
     <div>
       <SectionHeader eyebrow="Materials & Inventory" title="物料库存" actions={sub === "inventory" ? <ActionBtn tone="primary" onClick={() => { resetMaterialDraft(); setShowMaterialModal(true); }}>+ 新建物料</ActionBtn> : undefined} />
-      <StatStrip items={[{ label: "物料品类", value: String(materials.length) }, { label: "总库存", value: String(materials.reduce((sum, item) => sum + item.stock_quantity, 0)) }, { label: "本月采购额", value: formatMoney(monthlyPurchase), accent: "text-red-600" }, { label: "批发订单数", value: String(orders.filter((item) => item.order_type === "批发单" && item.status !== "已关闭").length), accent: "text-sky-600" }]} />
-      <SegmentedControl options={[{ key: "inventory", label: "库存清单" }, { key: "purchases", label: "采购记录" }]} value={sub} onChange={setSub} />
+      <StatStrip items={[{ label: "物料品类", value: String(materials.length) }, { label: "总库存", value: String(materials.reduce((sum, item) => sum + item.stock_quantity, 0)) }, { label: "批发订单数", value: String(orders.filter((item) => item.order_type === "批发单" && item.status !== "已关闭").length), accent: "text-sky-600" }]} />
 
       {inventoryHint ? <div className="mb-4 rounded-xl border border-sky-100 bg-sky-50 px-4 py-3 text-xs text-sky-700">{inventoryHint}</div> : null}
 
@@ -4605,8 +4409,7 @@ function MaterialsSection({ materials, setMaterials, purchases, setPurchases, su
         </div>
       )}
 
-      {sub === "inventory" ? (
-        <div className="space-y-4">
+      <div className="space-y-4">
           <div className="overflow-x-auto rounded-xl border border-slate-200 bg-white">
             <table className="w-full text-left text-xs">
               <thead>
@@ -4644,205 +4447,8 @@ function MaterialsSection({ materials, setMaterials, purchases, setPurchases, su
             </table>
           </div>
         </div>
-      ) : (
-        <div className="space-y-4">
-          <div className="overflow-x-auto rounded-xl border border-slate-200 bg-white">
-            <table className="w-full text-left text-xs">
-              <thead>
-                <tr className="border-b border-slate-200 bg-slate-50">
-                  <th className="px-4 py-2.5 font-semibold text-slate-600">采购单号</th>
-                  <th className="px-4 py-2.5 font-semibold text-slate-600">供应商</th>
-                  <th className="px-4 py-2.5 font-semibold text-slate-600">品名</th>
-                  <th className="px-4 py-2.5 font-semibold text-slate-600">数量</th>
-                  <th className="px-4 py-2.5 font-semibold text-slate-600">单价</th>
-                  <th className="px-4 py-2.5 font-semibold text-slate-600">总价</th>
-                  <th className="px-4 py-2.5 font-semibold text-slate-600">采购日期</th>
-                  <th className="px-4 py-2.5 font-semibold text-slate-600">状态</th>
-                  <th className="px-4 py-2.5 font-semibold text-slate-600">操作</th>
-                </tr>
-              </thead>
-              <tbody>
-                {purchases.map((item) => (
-                  <tr key={item.id} className="border-b border-slate-100 last:border-b-0">
-                    <td className="px-4 py-2.5 font-medium text-slate-700">{item.id}</td>
-                    <td className="px-4 py-2.5 text-slate-700">{item.supplier}</td>
-                    <td className="px-4 py-2.5 text-slate-600">{item.item_name}</td>
-                    <td className="px-4 py-2.5 text-slate-600">{item.quantity} {item.unit}</td>
-                    <td className="px-4 py-2.5 text-slate-700">{formatMoney(item.unit_price)}</td>
-                    <td className="px-4 py-2.5 font-semibold text-red-600">{formatMoney(item.total_amount)}</td>
-                    <td className="px-4 py-2.5 text-slate-500">{item.purchase_date}</td>
-                    <td className="px-4 py-2.5 text-slate-600">{item.status}</td>
-                    <td className="px-4 py-2.5"><div className="flex gap-2">{confirmingPurchaseId === item.id ? <><button onClick={() => deletePurchase(item.id)} className="rounded border border-red-400 bg-red-500 px-2 py-1 text-[11px] font-semibold text-white hover:bg-red-600 transition-colors">确认</button><button onClick={() => setConfirmingPurchaseId(null)} className="rounded border border-slate-200 px-2 py-1 text-[11px] text-slate-500 hover:border-slate-300 transition-colors">取消</button></> : <button onClick={() => setConfirmingPurchaseId(item.id)} className="rounded border border-rose-100 px-2 py-1 text-[11px] text-rose-500 hover:border-rose-300 hover:bg-rose-50 transition-colors">删除</button>}</div></td>
-                  </tr>
-                ))}
-              </tbody>
-            </table>
-          </div>
-        </div>
-      )}
     </div>
   );
-}
-
-function formatAppointmentDate(value: string) {
-  if (!value) return "-";
-  const date = new Date(value);
-  if (Number.isNaN(date.getTime())) return value;
-  return new Intl.DateTimeFormat("zh-CN", {
-    month: "2-digit",
-    day: "2-digit",
-    hour: "2-digit",
-    minute: "2-digit",
-    hour12: false,
-  }).format(date);
-}
-
-function getAppointmentStatus(value: string) {
-  const date = new Date(value);
-  if (Number.isNaN(date.getTime())) return "待确认";
-  const start = new Date();
-  start.setHours(0, 0, 0, 0);
-  const end = new Date(start);
-  end.setDate(end.getDate() + 1);
-  if (date < start) return "已完成";
-  if (date >= start && date < end) return "今日预约";
-  return "待上门";
-}
-
-function AppointmentStatusBadge({ status }: { status: string }) {
-  const styles: Record<string, string> = {
-    "今日预约": "bg-amber-50 text-amber-700",
-    "待上门": "bg-sky-50 text-sky-700",
-    "已完成": "bg-emerald-50 text-emerald-700",
-    "待确认": "bg-slate-100 text-slate-600",
-  };
-  return <span className={`rounded-full px-2 py-0.5 text-[11px] font-semibold ${styles[status] ?? styles["待确认"]}`}>{status}</span>;
-}
-
-function AppointmentsSection({ appointments, setAppointments, clients, prefillClient, onPrefillConsumed }: { appointments: MeasurementAppointmentRecord[]; setAppointments: React.Dispatch<React.SetStateAction<MeasurementAppointmentRecord[]>>; clients: ContactRecord[]; prefillClient?: Partial<MeasurementAppointmentRecord> | null; onPrefillConsumed: () => void; }) {
-  const today = todayIso();
-  const tomorrow = addDaysIso(today, 1);
-  const [search, setSearch] = useState("");
-  const [statusFilter, setStatusFilter] = useState("全部");
-  const [datePreset, setDatePreset] = useState("全部");
-  const [rangeStart, setRangeStart] = useState(`${today}T00:00`);
-  const [rangeEnd, setRangeEnd] = useState(`${tomorrow}T23:59`);
-  const [showAppointmentModal, setShowAppointmentModal] = useState(false);
-  const [confirmingAppointmentId, setConfirmingAppointmentId] = useState<string | null>(null);
-  const [copyState, setCopyState] = useState("");
-  const [draft, setDraft] = useState({ client_id: "", client_name: "", phone: "", address: "", appointment_date: `${today}T10:00`, description: "" });
-
-  const clientOptions = clients.map((item) => ({ value: item.id, label: item.name }));
-
-  useEffect(() => {
-    if (!prefillClient) return;
-    setDraft((prev) => ({
-      ...prev,
-      client_id: prefillClient.client_id ?? "",
-      client_name: prefillClient.client_name ?? "",
-      phone: prefillClient.phone ?? "",
-      address: prefillClient.address ?? "",
-      appointment_date: prefillClient.appointment_date ?? `${todayIso()}T10:00`,
-      description: prefillClient.description ?? "",
-    }));
-    setShowAppointmentModal(true);
-    onPrefillConsumed();
-  }, [onPrefillConsumed, prefillClient]);
-
-  function hydrateFromClient(clientId: string) {
-    const client = clients.find((item) => item.id === clientId);
-    setDraft((prev) => ({
-      ...prev,
-      client_id: clientId,
-      client_name: client?.name ?? prev.client_name,
-      phone: client?.phone ?? prev.phone,
-      address: client?.address ?? prev.address,
-    }));
-  }
-
-  function hydrateFromClientName(name: string) {
-    const client = findClientByReference(clients, { clientName: name.trim() });
-    if (!client) {
-      setDraft((prev) => ({ ...prev, client_name: name }));
-      return;
-    }
-    setDraft((prev) => ({
-      ...prev,
-      client_id: client.id,
-      client_name: client.name,
-      phone: client.phone ?? prev.phone,
-      address: client.address ?? prev.address,
-    }));
-  }
-
-  function matchesDatePreset(appointmentDate: string) {
-    const dateOnly = appointmentDate.slice(0, 10);
-    if (datePreset === "全部") return true;
-    if (datePreset === "今日") return dateOnly === today;
-    if (datePreset === "明日") return dateOnly === tomorrow;
-    if (datePreset === "近7天") return dateOnly >= today && dateOnly <= addDaysIso(today, 6);
-    return appointmentDate >= rangeStart && appointmentDate <= rangeEnd;
-  }
-
-  const filteredAppointments = useMemo(() => {
-    return [...appointments]
-      .sort((a, b) => a.appointment_date.localeCompare(b.appointment_date))
-      .filter((item) => {
-        const status = getAppointmentStatus(item.appointment_date);
-        const keyword = search.trim().toLowerCase();
-        const matchesSearch = !keyword || item.client_name.toLowerCase().includes(keyword) || (item.phone ?? "").toLowerCase().includes(keyword) || (item.address ?? "").toLowerCase().includes(keyword);
-        const matchesStatus = statusFilter === "全部" || status === statusFilter;
-        return matchesSearch && matchesStatus && matchesDatePreset(item.appointment_date);
-      });
-  }, [appointments, search, statusFilter, datePreset, rangeStart, rangeEnd]);
-
-  const stats = {
-    total: appointments.length,
-    today: appointments.filter((item) => getAppointmentStatus(item.appointment_date) === "今日预约").length,
-    upcoming: appointments.filter((item) => getAppointmentStatus(item.appointment_date) === "待上门").length,
-    done: appointments.filter((item) => getAppointmentStatus(item.appointment_date) === "已完成").length,
-  };
-
-  function addAppointment() {
-    if (!draft.client_name.trim() || !draft.appointment_date) return;
-    setAppointments((prev) => [{
-      id: nextYearScopedId(prev.map((item) => item.id), "APT", new Date().getFullYear()),
-      client_id: draft.client_id || undefined,
-      client_name: draft.client_name.trim(),
-      phone: draft.phone || undefined,
-      address: draft.address || undefined,
-      appointment_date: draft.appointment_date,
-      description: draft.description || undefined,
-    }, ...prev]);
-    setDraft({ client_id: "", client_name: "", phone: "", address: "", appointment_date: `${todayIso()}T10:00`, description: "" });
-    setShowAppointmentModal(false);
-  }
-
-  async function copyAppointment(item: MeasurementAppointmentRecord) {
-    const ok = await copyPlainText(formatAppointmentCopyText(item));
-    setCopyState(ok ? `已复制 ${item.client_name} 的预约信息` : "复制失败");
-  }
-
-  async function copyAppointmentList() {
-    const text = filteredAppointments.map((item) => formatAppointmentCopyText(item)).join("\n");
-    const ok = await copyPlainText(text);
-    setCopyState(ok ? `已复制 ${filteredAppointments.length} 条预约信息` : "复制失败");
-  }
-
-  function deleteAppointment(item: MeasurementAppointmentRecord) {
-    setAppointments((prev) => prev.filter((entry) => entry.id !== item.id));
-    setConfirmingAppointmentId(null);
-  }
-
-  const appointmentConfig: TabularSchemaConfig = {
-    title: "测量预约",
-    filePrefix: "biz-appointments",
-    columns: ["客户", "电话", "地址", "预约时间", "状态", "说明"],
-    exportRows: () => mapRows(filteredAppointments, (item) => [item.client_name, item.phone ?? "", item.address ?? "", item.appointment_date, getAppointmentStatus(item.appointment_date), item.description ?? ""]),
-    printRows: () => mapRows(filteredAppointments, (item) => [item.client_name, item.phone ?? "-", item.address ?? "-", formatAppointmentDate(item.appointment_date), getAppointmentStatus(item.appointment_date), item.description ?? "-"]),
-  };
-
-  return <div><SectionHeader eyebrow="Measurement Appointments" title="测量预约" actions={<><ActionBtn onClick={copyAppointmentList}>复制当前列表</ActionBtn><ActionBtn tone="primary" onClick={() => setShowAppointmentModal(true)}>+ 新建预约</ActionBtn></>} /><StatStrip items={[{ label: "预约总数", value: String(stats.total) }, { label: "今日上门", value: String(stats.today), accent: "text-amber-600" }, { label: "待上门", value: String(stats.upcoming), accent: "text-sky-600" }, { label: "已完成", value: String(stats.done), accent: "text-emerald-600" }]} />{showAppointmentModal ? <div className="fixed inset-0 z-50 flex items-center justify-center bg-slate-950/45 px-4"><div className="w-full max-w-3xl rounded-2xl border border-slate-200 bg-white p-5 shadow-2xl"><div className="mb-4 flex items-start justify-between gap-3"><div><h3 className="text-base font-semibold text-slate-900">新建测量预约</h3><p className="mt-1 text-sm text-slate-500">支持直接搜索客户并自动带出电话和地址。</p></div><button onClick={() => setShowAppointmentModal(false)} className="rounded-lg border border-slate-200 px-2.5 py-1 text-xs text-slate-500 hover:border-slate-300 hover:text-slate-700 transition-colors">关闭</button></div><div className="grid gap-2 sm:grid-cols-2 xl:grid-cols-3"><select value={draft.client_id || ""} onChange={(e) => hydrateFromClient(e.target.value)} className="h-8 rounded-lg border border-slate-300 bg-white px-3 text-xs text-slate-700"><option value="">选择客户后自动带出电话和地址</option>{clientOptions.map((item) => <option key={item.value} value={item.value}>{item.label}</option>)}</select><div><input list="appointment-client-options" value={draft.client_name} onChange={(e) => hydrateFromClientName(e.target.value)} placeholder="客户名称" className="h-8 w-full rounded-lg border border-slate-300 bg-white px-3 text-xs text-slate-700 focus:border-blue-400 focus:outline-none" /><datalist id="appointment-client-options">{clients.map((item) => <option key={item.id} value={item.name} />)}</datalist></div><SmallInput value={draft.phone} onChange={(v) => setDraft((d) => ({ ...d, phone: v }))} placeholder="电话" /><div className="sm:col-span-2 xl:col-span-2"><SmallInput value={draft.address} onChange={(v) => setDraft((d) => ({ ...d, address: v }))} placeholder="测量地址" /></div><SmallInput value={draft.appointment_date} onChange={(v) => setDraft((d) => ({ ...d, appointment_date: v }))} type="datetime-local" /><div className="sm:col-span-2 xl:col-span-3"><SmallInput value={draft.description} onChange={(v) => setDraft((d) => ({ ...d, description: v }))} placeholder="描述，例如栏杆、复尺、现场确认" /></div></div><p className="mt-2 text-[11px] text-slate-400">原始应用里预约实体还带 Google Calendar event id。当前网站架构没有外部日历凭证和同步流，所以先保留字段但只做站内排期。</p><div className="mt-5 flex justify-end gap-2"><ActionBtn onClick={() => setShowAppointmentModal(false)}>取消</ActionBtn><ActionBtn tone="primary" onClick={addAppointment}>确认新建</ActionBtn></div></div></div> : null}<div className="mb-4"><PanelCard title="排期列表"><div className="mb-3 flex flex-wrap gap-2"><div className="relative min-w-[180px] flex-1"><span className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-400 text-sm">⌕</span><input value={search} onChange={(e) => setSearch(e.target.value)} placeholder="搜索客户 / 电话 / 地址" className="h-8 w-full rounded-lg border border-slate-300 bg-white pl-8 pr-3 text-xs text-slate-700" /></div><select value={statusFilter} onChange={(e) => setStatusFilter(e.target.value)} className="h-8 rounded-lg border border-slate-300 bg-white px-3 text-xs text-slate-700"><option>全部</option><option>今日预约</option><option>待上门</option><option>已完成</option></select><select value={datePreset} onChange={(e) => setDatePreset(e.target.value)} className="h-8 rounded-lg border border-slate-300 bg-white px-3 text-xs text-slate-700"><option>全部</option><option>今日</option><option>明日</option><option>近7天</option><option>自定义</option></select><input type="datetime-local" value={rangeStart} onChange={(e) => setRangeStart(e.target.value)} className="h-8 rounded-lg border border-slate-300 bg-white px-3 text-xs text-slate-700" /><input type="datetime-local" value={rangeEnd} onChange={(e) => setRangeEnd(e.target.value)} className="h-8 rounded-lg border border-slate-300 bg-white px-3 text-xs text-slate-700" /></div>{copyState ? <p className="mb-3 text-xs text-emerald-600">{copyState}</p> : null}<div className="space-y-2">{filteredAppointments.length ? filteredAppointments.map((item) => { const status = getAppointmentStatus(item.appointment_date); return <div key={item.id} className="rounded-xl border border-slate-200 bg-white p-3"><div className="flex flex-wrap items-start justify-between gap-2"><div><div className="flex items-center gap-2"><span className="text-sm font-semibold text-slate-900">{item.client_name}</span><AppointmentStatusBadge status={status} /></div><p className="mt-1 text-xs text-slate-500">{formatAppointmentDate(item.appointment_date)}{item.phone ? ` · ${item.phone}` : ""}</p><p className="mt-1 text-xs text-slate-500">{item.address ?? "未填写地址"}</p></div><div className="flex flex-wrap gap-2"><button onClick={() => copyAppointment(item)} className="rounded border border-sky-100 px-2 py-1 text-[11px] text-sky-600 hover:border-sky-300 hover:bg-sky-50 transition-colors">复制信息</button>{confirmingAppointmentId === item.id ? <><button onClick={() => deleteAppointment(item)} className="rounded border border-red-400 bg-red-500 px-2 py-1 text-[11px] font-semibold text-white hover:bg-red-600 transition-colors">确认</button><button onClick={() => setConfirmingAppointmentId(null)} className="rounded border border-slate-200 px-2 py-1 text-[11px] text-slate-500 hover:border-slate-300 transition-colors">取消</button></> : <button onClick={() => setConfirmingAppointmentId(item.id)} className="rounded border border-rose-100 px-2 py-1 text-[11px] text-rose-500 hover:border-rose-300 hover:bg-rose-50 transition-colors">删除</button>}</div></div>{item.description ? <p className="mt-2 rounded-lg bg-slate-50 px-3 py-2 text-xs text-slate-600">{item.description}</p> : null}</div>; }) : <div className="rounded-xl border border-dashed border-slate-200 py-10 text-center text-sm text-slate-400">当前没有预约记录</div>}</div></PanelCard></div></div>;
 }
 
 type StaffSub = "profiles" | "attendance" | "payroll" | "rules";
@@ -5336,60 +4942,6 @@ function EmployeesSection({ employees, setEmployees, attendances, setAttendances
   );
 }
 
-// ─── Quotes ──────────────────────────────────────────────────────────────────
-
-type QuoteSub = "quotes" | "showcase";
-
-function QuotesSection({ clients, quotes, setQuotes, showcases, setShowcases, settings }: { clients: ContactRecord[]; quotes: QuoteRecord[]; setQuotes: React.Dispatch<React.SetStateAction<QuoteRecord[]>>; showcases: ShowcaseRecord[]; setShowcases: React.Dispatch<React.SetStateAction<ShowcaseRecord[]>>; settings: BizSettings; }) {
-  const [sub, setSub] = useState<QuoteSub>("quotes");
-  const today = new Date().toISOString().slice(0, 10);
-  const [quoteDraft, setQuoteDraft] = useState({ client_name: "", title: "", amount: "", valid_until: today, status: "草稿" });
-  const [showcaseDraft, setShowcaseDraft] = useState({ name: "", category: "窗帘", image_count: "", description: "", status: "待整理" });
-
-  function addQuote() {
-    if (!quoteDraft.client_name.trim() || !quoteDraft.title.trim()) return;
-    const matchedClient = findClientByReference(clients, { clientName: quoteDraft.client_name.trim() });
-    setQuotes((prev) => [{
-      id: nextYearScopedId(prev.map((item) => item.id), "QT", new Date().getFullYear()),
-      client_name: quoteDraft.client_name.trim(),
-      client_id: matchedClient?.id,
-      title: quoteDraft.title.trim(),
-      amount: Number(quoteDraft.amount) || 0,
-      created_at: today,
-      valid_until: quoteDraft.valid_until || today,
-      status: quoteDraft.status,
-    }, ...prev]);
-    setQuoteDraft({ client_name: "", title: "", amount: "", valid_until: today, status: "草稿" });
-  }
-
-  function addShowcase() {
-    if (!showcaseDraft.name.trim()) return;
-    setShowcases((prev) => [{ id: nextSequentialId(prev.map((item) => item.id), "GAL"), name: showcaseDraft.name.trim(), category: showcaseDraft.category, image_count: Number(showcaseDraft.image_count) || 0, description: showcaseDraft.description || undefined, created_at: today, status: showcaseDraft.status }, ...prev]);
-    setShowcaseDraft({ name: "", category: "窗帘", image_count: "", description: "", status: "待整理" });
-  }
-
-  const quoteConfigs: Record<QuoteSub, SplitTabularSchemaConfig> = {
-    quotes: {
-      title: "报价单列表",
-      filePrefix: "biz-quotes",
-      exportColumns: ["报价单号", "客户", "标题", "金额", "创建日期", "有效期至", "状态"],
-      printColumns: ["报价单号", "客户", "标题 / 项目", "报价金额", "创建日期", "有效期至", "状态"],
-      exportRows: () => mapRows(quotes, (item) => [item.id, item.client_name, item.title, item.amount, item.created_at, item.valid_until, item.status]),
-      printRows: () => mapRows(quotes, (item) => [item.id, item.client_name, item.title, formatMoney(item.amount), item.created_at, item.valid_until, item.status]),
-    },
-    showcase: {
-      title: "作品展示列表",
-      filePrefix: "biz-showcase",
-      exportColumns: ["作品名称", "类别", "图片数", "描述", "创建日期", "状态"],
-      printColumns: ["作品名称", "类别", "图片数", "描述", "创建日期", "展示状态"],
-      exportRows: () => mapRows(showcases, (item) => [item.name, item.category, item.image_count, item.description ?? "", item.created_at, item.status]),
-      printRows: () => mapRows(showcases, (item) => [item.name, item.category, item.image_count, item.description ?? "-", item.created_at, item.status]),
-    },
-  };
-
-  return <div><SectionHeader eyebrow="Quotes & Showcase" title="报价 & 展示" actions={<ActionBtn tone="primary" onClick={sub === "quotes" ? addQuote : addShowcase}>+ {sub === "quotes" ? "新建报价单" : "新建作品"}</ActionBtn>} /><StatStrip items={[{ label: "草稿", value: String(quotes.filter((item) => item.status === "草稿").length), accent: "text-slate-500" }, { label: "已发出", value: String(quotes.filter((item) => item.status === "已发出").length), accent: "text-blue-600" }, { label: "已成交", value: String(quotes.filter((item) => item.status === "已成交").length), accent: "text-green-600" }, { label: "展示作品", value: String(showcases.length), accent: "text-violet-600" }]} /><SegmentedControl options={[{ key: "quotes", label: "报价单" }, { key: "showcase", label: "作品展示" }]} value={sub} onChange={setSub} />{sub === "quotes" ? <div className="space-y-4"><PanelCard title="新增报价单"><div className="grid gap-2 sm:grid-cols-2 xl:grid-cols-5"><div><input list="quote-client-options" value={quoteDraft.client_name} onChange={(e) => setQuoteDraft((d) => ({ ...d, client_name: e.target.value }))} placeholder="客户" className="h-8 w-full rounded-lg border border-slate-300 bg-white px-3 text-xs text-slate-700 focus:border-blue-400 focus:outline-none" /><datalist id="quote-client-options">{clients.map((item) => <option key={item.id} value={item.name} />)}</datalist></div><SmallInput value={quoteDraft.title} onChange={(v) => setQuoteDraft((d) => ({ ...d, title: v }))} placeholder="标题 / 项目" /><SmallInput value={quoteDraft.amount} onChange={(v) => setQuoteDraft((d) => ({ ...d, amount: v }))} type="number" placeholder="金额" /><SmallInput value={quoteDraft.valid_until} onChange={(v) => setQuoteDraft((d) => ({ ...d, valid_until: v }))} type="date" /><SmallSelect value={quoteDraft.status} onChange={(v) => setQuoteDraft((d) => ({ ...d, status: v }))} options={["草稿", "已发出", "已成交", "已失效"]} /></div></PanelCard><div className="overflow-x-auto rounded-xl border border-slate-200 bg-white"><table className="w-full text-left text-xs"><thead><tr className="border-b border-slate-200 bg-slate-50"><th className="px-4 py-2.5 font-semibold text-slate-600">报价单号</th><th className="px-4 py-2.5 font-semibold text-slate-600">客户</th><th className="px-4 py-2.5 font-semibold text-slate-600">标题 / 项目</th><th className="px-4 py-2.5 font-semibold text-slate-600">报价金额</th><th className="px-4 py-2.5 font-semibold text-slate-600">创建日期</th><th className="px-4 py-2.5 font-semibold text-slate-600">有效期至</th><th className="px-4 py-2.5 font-semibold text-slate-600">状态</th></tr></thead><tbody>{quotes.map((item) => <tr key={item.id} className="border-b border-slate-100 last:border-b-0"><td className="px-4 py-2.5 font-medium text-slate-700">{item.id}</td><td className="px-4 py-2.5 text-slate-700">{item.client_name}</td><td className="px-4 py-2.5 text-slate-500">{item.title}</td><td className="px-4 py-2.5 text-slate-700">{formatMoney(item.amount)}</td><td className="px-4 py-2.5 text-slate-500">{item.created_at}</td><td className="px-4 py-2.5 text-slate-500">{item.valid_until}</td><td className="px-4 py-2.5 text-slate-600">{item.status}</td></tr>)}</tbody></table></div></div> : <div className="space-y-4"><PanelCard title="新增作品展示"><div className="grid gap-2 sm:grid-cols-2 xl:grid-cols-5"><SmallInput value={showcaseDraft.name} onChange={(v) => setShowcaseDraft((d) => ({ ...d, name: v }))} placeholder="作品名称" /><SmallSelect value={showcaseDraft.category} onChange={(v) => setShowcaseDraft((d) => ({ ...d, category: v }))} options={["窗帘", "隔断", "雨棚", "扶手", "其他"]} /><SmallInput value={showcaseDraft.image_count} onChange={(v) => setShowcaseDraft((d) => ({ ...d, image_count: v }))} type="number" placeholder="图片数" /><SmallInput value={showcaseDraft.description} onChange={(v) => setShowcaseDraft((d) => ({ ...d, description: v }))} placeholder="描述" /><SmallSelect value={showcaseDraft.status} onChange={(v) => setShowcaseDraft((d) => ({ ...d, status: v }))} options={["待整理", "已发布", "隐藏"]} /></div></PanelCard><div className="overflow-x-auto rounded-xl border border-slate-200 bg-white"><table className="w-full text-left text-xs"><thead><tr className="border-b border-slate-200 bg-slate-50"><th className="px-4 py-2.5 font-semibold text-slate-600">作品名称</th><th className="px-4 py-2.5 font-semibold text-slate-600">类别</th><th className="px-4 py-2.5 font-semibold text-slate-600">图片数</th><th className="px-4 py-2.5 font-semibold text-slate-600">描述</th><th className="px-4 py-2.5 font-semibold text-slate-600">创建日期</th><th className="px-4 py-2.5 font-semibold text-slate-600">展示状态</th></tr></thead><tbody>{showcases.map((item) => <tr key={item.id} className="border-b border-slate-100 last:border-b-0"><td className="px-4 py-2.5 font-medium text-slate-700">{item.name}</td><td className="px-4 py-2.5 text-slate-600">{item.category}</td><td className="px-4 py-2.5 text-slate-600">{item.image_count}</td><td className="px-4 py-2.5 text-slate-500">{item.description ?? "-"}</td><td className="px-4 py-2.5 text-slate-500">{item.created_at}</td><td className="px-4 py-2.5 text-slate-600">{item.status}</td></tr>)}</tbody></table></div></div>}</div>;
-}
-
 // ─── Settings ────────────────────────────────────────────────────────────────
 
 function SettingsField({
@@ -5606,9 +5158,7 @@ type Section =
   | "overview"
   | "orders"
   | "finance"
-  | "quotes"
   | "clients"
-  | "appointments"
   | "materials"
   | "employees"
   | "settings";
@@ -5623,14 +5173,12 @@ const NAV_GROUPS: Array<{
       { key: "overview", label: "总览", icon: "⊞" },
       { key: "orders", label: "订单管理", icon: "≡" },
       { key: "finance", label: "收支管理", icon: "¥" },
-      { key: "quotes", label: "报价展示", icon: "◇" },
     ],
   },
   {
     label: "资源管理",
     items: [
       { key: "clients", label: "客户档案", icon: "⊙" },
-      { key: "appointments", label: "测量预约", icon: "◷" },
       { key: "materials", label: "物料管理", icon: "◫" },
       { key: "employees", label: "员工管理", icon: "♟" },
     ],
@@ -5651,14 +5199,9 @@ export default function DashboardBizPage() {
   const [expenses, setExpenses] = useState<ExpenseRecord[]>(bizExpenses);
   const [cashEntries, setCashEntries] = useState<CashEntry[]>(bizCashEntries);
   const [materials, setMaterials] = useState<MaterialRecord[]>(bizMaterials);
-  const [purchases, setPurchases] = useState<PurchaseRecord[]>(bizPurchases);
   const [employees, setEmployees] = useState<EmployeeRecord[]>(bizEmployees);
   const [attendances, setAttendances] = useState<AttendanceRecord[]>(bizAttendances);
-  const [appointments, setAppointments] = useState<MeasurementAppointmentRecord[]>(bizAppointments);
-  const [appointmentPrefill, setAppointmentPrefill] = useState<Partial<MeasurementAppointmentRecord> | null>(null);
   const [payrolls, setPayrolls] = useState<PayrollRecord[]>(bizPayrolls);
-  const [quotes, setQuotes] = useState<QuoteRecord[]>(bizQuotes);
-  const [showcases, setShowcases] = useState<ShowcaseRecord[]>(bizShowcases);
   const [printArchives, setPrintArchives] = useState<PrintArchiveRecord[]>(bizPrintArchives);
   const [settings, setSettings] = useState<BizSettings>(bizSettings);
   const [storeRevision, setStoreRevision] = useState("");
@@ -5675,26 +5218,22 @@ export default function DashboardBizPage() {
     expenses,
     cashEntries,
     materials,
-    purchases,
     employees,
     attendances,
-    appointments,
     payrolls,
-    quotes,
-    showcases,
     printArchives,
     settings,
-  }), [storeRevision, orders, clients, suppliers, expenses, cashEntries, materials, purchases, employees, attendances, appointments, payrolls, quotes, showcases, printArchives, settings]);
+  }), [storeRevision, orders, clients, suppliers, expenses, cashEntries, materials, employees, attendances, payrolls, printArchives, settings]);
   const snapshotJson = useMemo(() => serializeBizSnapshot(snapshot), [snapshot]);
   const isDirty = isHydrated && snapshotJson !== savedSnapshotJson;
 
   useEffect(() => {
     if (!isHydrated) return;
     setCashEntries((prev) => {
-      const reconciled = reconcileCashEntries(prev, orders, expenses, purchases);
+      const reconciled = reconcileCashEntries(prev, orders, expenses);
       return sameCashEntryList(prev, reconciled) ? prev : reconciled;
     });
-  }, [isHydrated, orders, expenses, purchases]);
+  }, [isHydrated, orders, expenses]);
 
   useEffect(() => {
     let cancelled = false;
@@ -5713,13 +5252,9 @@ export default function DashboardBizPage() {
         setExpenses(loadedSnapshot.expenses);
         setCashEntries(loadedSnapshot.cashEntries);
         setMaterials(loadedSnapshot.materials);
-        setPurchases(loadedSnapshot.purchases);
         setEmployees(loadedSnapshot.employees);
         setAttendances(loadedSnapshot.attendances);
-        setAppointments(loadedSnapshot.appointments);
         setPayrolls(loadedSnapshot.payrolls);
-        setQuotes(loadedSnapshot.quotes);
-        setShowcases(loadedSnapshot.showcases);
         setPrintArchives(loadedSnapshot.printArchives);
         setSettings(loadedSnapshot.settings);
         setSavedSnapshotJson(serializeBizSnapshot(loadedSnapshot));
@@ -5738,13 +5273,9 @@ export default function DashboardBizPage() {
             setExpenses(backupSnapshot.expenses);
             setCashEntries(backupSnapshot.cashEntries);
             setMaterials(backupSnapshot.materials);
-            setPurchases(backupSnapshot.purchases);
             setEmployees(backupSnapshot.employees);
             setAttendances(backupSnapshot.attendances);
-            setAppointments(backupSnapshot.appointments);
             setPayrolls(backupSnapshot.payrolls);
-            setQuotes(backupSnapshot.quotes);
-            setShowcases(backupSnapshot.showcases);
             setPrintArchives(backupSnapshot.printArchives);
             setSettings(backupSnapshot.settings);
             setSavedSnapshotJson(serializeBizSnapshot(backupSnapshot));
@@ -5756,13 +5287,9 @@ export default function DashboardBizPage() {
               expenses: bizExpenses,
               cashEntries: bizCashEntries,
               materials: bizMaterials,
-              purchases: bizPurchases,
               employees: bizEmployees,
               attendances: bizAttendances,
-              appointments: bizAppointments,
               payrolls: bizPayrolls,
-              quotes: bizQuotes,
-              showcases: bizShowcases,
               printArchives: bizPrintArchives,
               settings: bizSettings,
             });
@@ -5889,7 +5416,6 @@ export default function DashboardBizPage() {
               orderSummary={orderSummary}
               expenses={expenses}
               payrolls={payrolls}
-              quotes={quotes}
               clients={clients}
               suppliers={suppliers}
               materials={materials}
@@ -5914,16 +5440,7 @@ export default function DashboardBizPage() {
               settings={settings}
             />
           )}
-          {section === "quotes" && (
-            <QuotesSection
-              clients={clients}
-              quotes={quotes}
-              setQuotes={setQuotes}
-              showcases={showcases}
-              setShowcases={setShowcases}
-              settings={settings}
-            />
-          )}
+          
           {section === "clients" && (
             <ClientsSection
               clients={clients}
@@ -5932,37 +5449,17 @@ export default function DashboardBizPage() {
               setSuppliers={setSuppliers}
               orders={orders}
               setOrders={setOrders}
-              appointments={appointments}
-              setAppointments={setAppointments}
-              quotes={quotes}
-              setQuotes={setQuotes}
               setCashEntries={setCashEntries}
               materials={materials}
               setMaterials={setMaterials}
-              purchases={purchases}
-              setPurchases={setPurchases}
               settings={settings}
-              onCreateAppointment={(client) => {
-                setAppointmentPrefill({ client_id: client.id, client_name: client.name, phone: client.phone, address: client.address, appointment_date: `${todayIso()}T10:00`, description: "" });
-                setSection("appointments");
-              }}
             />
           )}
-          {section === "appointments" && (
-            <AppointmentsSection
-              appointments={appointments}
-              setAppointments={setAppointments}
-              clients={clients}
-              prefillClient={appointmentPrefill}
-              onPrefillConsumed={() => setAppointmentPrefill(null)}
-            />
-          )}
+          
           {section === "materials" && (
             <MaterialsSection
               materials={materials}
               setMaterials={setMaterials}
-              purchases={purchases}
-              setPurchases={setPurchases}
               suppliers={suppliers}
               orders={orders}
               setExpenses={setExpenses}

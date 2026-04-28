@@ -24,13 +24,13 @@ export type BizStoreSnapshot = {
   expenses: ExpenseRecord[];
   cashEntries: CashEntry[];
   materials: MaterialRecord[];
-  purchases: PurchaseRecord[];
+  purchases?: PurchaseRecord[];
   employees: EmployeeRecord[];
   attendances: AttendanceRecord[];
-  appointments: MeasurementAppointmentRecord[];
+  appointments?: MeasurementAppointmentRecord[];
   payrolls: PayrollRecord[];
-  quotes: QuoteRecord[];
-  showcases: ShowcaseRecord[];
+  quotes?: QuoteRecord[];
+  showcases?: ShowcaseRecord[];
   printArchives: PrintArchiveRecord[];
   settings: BizSettings;
 };
@@ -654,17 +654,19 @@ async function sqliteWrite(snapshot: BizStoreSnapshot): Promise<void> {
     });
 
     // Purchases
-    db.prepare("DELETE FROM purchases").run();
-    const insertPurchase = db.prepare(`
-      INSERT INTO purchases (id, supplier, supplier_id, item_name, quantity, unit, unit_price, total_amount, purchase_date, status, expense_id, updated_at)
-      VALUES (@id, @supplier, @supplier_id, @item_name, @quantity, @unit, @unit_price, @total_amount, @purchase_date, @status, @expense_id, @updated_at)
-    `);
-    for (const p of snapshot.purchases) insertPurchase.run({
-      id: p.id, supplier: p.supplier, supplier_id: p.supplier_id ?? null, item_name: p.item_name, quantity: p.quantity,
-      unit: p.unit, unit_price: p.unit_price, total_amount: p.total_amount,
-      purchase_date: p.purchase_date, status: p.status, expense_id: p.expense_id ?? null,
-      updated_at: new Date().toISOString(),
-    });
+    if (snapshot.purchases) {
+      db.prepare("DELETE FROM purchases").run();
+      const insertPurchase = db.prepare(`
+        INSERT INTO purchases (id, supplier, supplier_id, item_name, quantity, unit, unit_price, total_amount, purchase_date, status, expense_id, updated_at)
+        VALUES (@id, @supplier, @supplier_id, @item_name, @quantity, @unit, @unit_price, @total_amount, @purchase_date, @status, @expense_id, @updated_at)
+      `);
+      for (const p of snapshot.purchases) insertPurchase.run({
+        id: p.id, supplier: p.supplier, supplier_id: p.supplier_id ?? null, item_name: p.item_name, quantity: p.quantity,
+        unit: p.unit, unit_price: p.unit_price, total_amount: p.total_amount,
+        purchase_date: p.purchase_date, status: p.status, expense_id: p.expense_id ?? null,
+        updated_at: new Date().toISOString(),
+      });
+    }
 
     // Employees
     db.prepare("DELETE FROM employees").run();
@@ -702,17 +704,19 @@ async function sqliteWrite(snapshot: BizStoreSnapshot): Promise<void> {
     });
 
     // Appointments
-    db.prepare("DELETE FROM appointments").run();
-    const insertAppointment = db.prepare(`
-      INSERT INTO appointments (id, client_name, client_id, phone, address, appointment_date, description, gcal_event_id, updated_at)
-      VALUES (@id, @client_name, @client_id, @phone, @address, @appointment_date, @description, @gcal_event_id, @updated_at)
-    `);
-    for (const a of snapshot.appointments) insertAppointment.run({
+    if (snapshot.appointments) {
+      db.prepare("DELETE FROM appointments").run();
+      const insertAppointment = db.prepare(`
+        INSERT INTO appointments (id, client_name, client_id, phone, address, appointment_date, description, gcal_event_id, updated_at)
+        VALUES (@id, @client_name, @client_id, @phone, @address, @appointment_date, @description, @gcal_event_id, @updated_at)
+      `);
+      for (const a of snapshot.appointments) insertAppointment.run({
       id: a.id, client_name: a.client_name, client_id: a.client_id ?? null,
       phone: a.phone ?? null, address: a.address ?? null,
       appointment_date: a.appointment_date, description: a.description ?? null,
       gcal_event_id: a.gcal_event_id ?? null, updated_at: new Date().toISOString(),
     });
+    }
 
     // Payrolls
     db.prepare("DELETE FROM payrolls").run();
@@ -737,28 +741,32 @@ async function sqliteWrite(snapshot: BizStoreSnapshot): Promise<void> {
     });
 
     // Quotes
-    db.prepare("DELETE FROM quotes").run();
-    const insertQuote = db.prepare(`
-      INSERT INTO quotes (id, client_name, client_id, title, amount, created_at, valid_until, status, updated_at)
-      VALUES (@id, @client_name, @client_id, @title, @amount, @created_at, @valid_until, @status, @updated_at)
-    `);
-    for (const q of snapshot.quotes) insertQuote.run({
+    if (snapshot.quotes) {
+      db.prepare("DELETE FROM quotes").run();
+      const insertQuote = db.prepare(`
+        INSERT INTO quotes (id, client_name, client_id, title, amount, created_at, valid_until, status, updated_at)
+        VALUES (@id, @client_name, @client_id, @title, @amount, @created_at, @valid_until, @status, @updated_at)
+      `);
+      for (const q of snapshot.quotes) insertQuote.run({
       id: q.id, client_name: q.client_name, client_id: q.client_id ?? null, title: q.title, amount: q.amount,
       created_at: q.created_at, valid_until: q.valid_until, status: q.status,
       updated_at: new Date().toISOString(),
     });
+    }
 
     // Showcases
-    db.prepare("DELETE FROM showcases").run();
-    const insertShowcase = db.prepare(`
-      INSERT INTO showcases (id, name, category, image_count, description, created_at, status, updated_at)
-      VALUES (@id, @name, @category, @image_count, @description, @created_at, @status, @updated_at)
-    `);
-    for (const s of snapshot.showcases) insertShowcase.run({
+    if (snapshot.showcases) {
+      db.prepare("DELETE FROM showcases").run();
+      const insertShowcase = db.prepare(`
+        INSERT INTO showcases (id, name, category, image_count, description, created_at, status, updated_at)
+        VALUES (@id, @name, @category, @image_count, @description, @created_at, @status, @updated_at)
+      `);
+      for (const s of snapshot.showcases) insertShowcase.run({
       id: s.id, name: s.name, category: s.category, image_count: s.image_count ?? 0,
       description: s.description ?? null, created_at: s.created_at, status: s.status,
       updated_at: new Date().toISOString(),
     });
+    }
 
     // Print archives
     db.prepare("DELETE FROM print_archives").run();

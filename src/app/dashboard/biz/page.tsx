@@ -5635,20 +5635,26 @@ function SettingsSection({ settings, setSettings, saveState, isDirty, lastSavedA
             ? `设置已保存成功 · ${lastSavedAt}`
             : "当前设置已同步";
 
+  const saveStatusBar = saveState === "conflict"
+    ? "保存冲突,请刷新后重试"
+    : saveState === "error"
+      ? "保存失败"
+      : isDirty
+        ? "有未保存的更改"
+        : lastSavedAt
+          ? `已保存 · ${lastSavedAt}`
+          : "";
+
   return (
     <div className="space-y-3 xl:space-y-2">
       <SectionHeader
         eyebrow="Configuration"
         title="系统设置"
-        actions={<div className={`rounded-lg border px-3 py-1.5 text-xs font-semibold ${saveTone}`}>{saveText}</div>}
+        actions={saveStatusBar ? <div className="rounded-lg border border-amber-200 bg-amber-50 px-3 py-1.5 text-xs font-semibold text-amber-700">{saveStatusBar}</div> : null}
       />
 
-      <div className={`rounded-xl border px-4 py-3 text-xs font-medium ${saveTone}`}>
-        {saveState === "error" || saveState === "conflict"
-          ? `${saveText},先处理完再继续保存。`
-          : isDirty
-            ? '系统设置不再自动保存,改完后请点页面上方的「保存更改」。'
-            : `${saveText},考勤工资规则已经只保留在员工管理里维护。`}
+      <div className="rounded-xl border border-amber-200 bg-amber-50 px-4 py-3 text-xs font-medium text-amber-700">
+        改完后请点页面上方的「保存」按钮。
       </div>
 
       <div className="rounded-xl border border-gray-200 bg-gray-50 p-3">
@@ -5981,44 +5987,18 @@ export default function DashboardBizPage() {
     }
   }
 
-  const saveTone = saveState === "error" || saveState === "conflict"
-    ? "border-rose-200 bg-rose-50 text-rose-700"
-    : saveState === "saving"
-      ? "border-sky-200 bg-sky-50 text-sky-700"
-      : isDirty
-        ? "border-amber-200 bg-amber-50 text-amber-700"
-        : "border-emerald-200 bg-emerald-50 text-emerald-700";
-  const saveText = saveState === "saving"
-    ? "正在保存..."
-    : saveState === "conflict"
-      ? "保存冲突,请刷新后重试"
-      : saveState === "error"
-        ? "保存失败"
-        : isDirty
-          ? "检测到新改动,请手动保存"
-          : lastSavedAt
-            ? `已保存 · ${lastSavedAt}`
-            : "当前数据已同步";
-  const saveHint = saveState === "error" || saveState === "conflict"
-    ? saveText
-    : isDirty
-      ? "有未保存的改动,点击右侧按钮保存更改。"
-      : "当前页面没有未保存更改。";
+  const isSaving = saveState === "saving";
 
   return (
     <PageSection>
       <DashboardPageHeader
         eyebrow="Owner Backend · Business"
         title="业务管理"
-        description={`订单、财务、客户、物料、员工与设置的统一操作界面。${saveState === "saving" ? " 正在保存..." : saveState === "conflict" ? " 检测到其他页面已改动,请刷新后再继续" : saveState === "error" ? " 保存异常" : isDirty ? " 当前有未保存更改" : lastSavedAt ? ` 已保存 ${lastSavedAt}` : ""}`}
+        description="订单、财务、客户、物料、员工与设置的统一操作界面。"
       />
 
       <div className="mt-3 flex flex-wrap items-center justify-between gap-3 rounded-[18px] border border-gray-200 bg-gray-50 px-4 py-3 shadow-sm">
-        <div>
-          <p className="text-xs font-semibold text-slate-700">手动保存</p>
-          <p className="mt-1 text-xs text-slate-700">{saveHint}</p>
-        </div>
-        <div className="flex items-center gap-2">
+        <div className="flex flex-wrap items-center gap-2">
           <button
             onClick={() => setShowVoided((v) => !v)}
             className={`rounded-lg border px-3 py-1.5 text-xs font-medium transition-colors ${
@@ -6029,8 +6009,12 @@ export default function DashboardBizPage() {
           >
             {showVoided ? "隐藏已作废" : "显示已作废"}
           </button>
-          <div className={`rounded-lg border px-3 py-1.5 text-xs font-semibold ${saveTone}`}>{saveText}</div>
-          <ActionBtn tone={isDirty ? "primary" : "success"} disabled={!isDirty || saveState === "saving"} onClick={persistSnapshot}>{saveState === "saving" ? "保存中..." : "立即保存"}</ActionBtn>
+          {isDirty ? <span className="text-xs text-amber-600">有未保存的更改</span> : null}
+          {saveState === "conflict" ? <span className="text-xs text-rose-600">保存冲突,请刷新后重试</span> : null}
+          {saveState === "error" ? <span className="text-xs text-rose-600">保存失败</span> : null}
+        </div>
+        <div className="flex items-center gap-2">
+          <ActionBtn tone={isDirty ? "primary" : "success"} disabled={!isDirty || isSaving} onClick={persistSnapshot}>{isSaving ? "保存中..." : "保存"}</ActionBtn>
         </div>
       </div>
 

@@ -341,11 +341,11 @@ function printTabularSchema(config: TabularSchemaConfig | SplitTabularSchemaConf
 function buildBizSnapshot(input: Partial<BizStoreSnapshot>): BizStoreSnapshot {
   return {
     revision: input.revision ?? "",
-    orders: input.orders ?? [],
+    orders: (input.orders ?? []).map(normalizeOrderOfficeMethods),
     clients: input.clients ?? [],
     suppliers: input.suppliers ?? [],
-    expenses: input.expenses ?? [],
-    cashEntries: input.cashEntries ?? [],
+    expenses: (input.expenses ?? []).map(normalizeExpenseOfficeMethod),
+    cashEntries: (input.cashEntries ?? []).map(normalizeCashEntryMethod),
     materials: input.materials ?? [],
     employees: input.employees ?? [],
     attendances: input.attendances ?? [],
@@ -734,7 +734,32 @@ function deriveStatus(totalAfterTax: number, amountPaid: number, currentStatus: 
   return "下单";
 }
 
-const PAYMENT_METHODS = ["现金", "支票", "刷卡", "转账"];
+const OFFICE_PAYMENT_METHOD = "现金";
+const PAYMENT_METHODS = [OFFICE_PAYMENT_METHOD, "支票", "刷卡", "转账"];
+
+function normalizeOrderOfficeMethods(order: BizOrder): BizOrder {
+  return {
+    ...order,
+    payment_history: (order.payment_history ?? []).map((record) => ({
+      ...record,
+      method: record.office ? OFFICE_PAYMENT_METHOD : (record.method || OFFICE_PAYMENT_METHOD),
+    })),
+  };
+}
+
+function normalizeExpenseOfficeMethod(expense: ExpenseRecord): ExpenseRecord {
+  return {
+    ...expense,
+    payment_method: expense.office ? OFFICE_PAYMENT_METHOD : (expense.payment_method || OFFICE_PAYMENT_METHOD),
+  };
+}
+
+function normalizeCashEntryMethod(entry: CashEntry): CashEntry {
+  return {
+    ...entry,
+    method: OFFICE_PAYMENT_METHOD,
+  };
+}
 
 function EditField({
   label,
@@ -1357,10 +1382,15 @@ function OrderDetailView({
   const [newPayment, setNewPayment] = useState({
     date: today,
     amount: "",
-    method: "现金",
+    method: OFFICE_PAYMENT_METHOD,
     note: "",
     office: false,
   });
+
+  useEffect(() => {
+    if (!newPayment.office || newPayment.method === OFFICE_PAYMENT_METHOD) return;
+    setNewPayment((p) => ({ ...p, method: OFFICE_PAYMENT_METHOD }));
+  }, [newPayment.office, newPayment.method]);
 
   function update<K extends keyof DraftFields>(key: K, value: DraftFields[K]) {
     setDraft((d) => ({ ...d, [key]: value }));
@@ -1418,7 +1448,7 @@ function OrderDetailView({
     const record: PaymentRecord = {
       date: newPayment.date,
       amount,
-      method: newPayment.method,
+      method: newPayment.office ? OFFICE_PAYMENT_METHOD : newPayment.method,
       note: newPayment.note || undefined,
       type: paymentMode,
       office: newPayment.office,
@@ -1463,7 +1493,7 @@ function OrderDetailView({
         source_id: `${order.order_number}:${newPayment.date}:${amount}:refund`,
       });
     }
-    setNewPayment({ date: today, amount: "", method: "现金", note: "", office: false });
+    setNewPayment({ date: today, amount: "", method: OFFICE_PAYMENT_METHOD, note: "", office: false });
     setShowAddPayment(false);
   }
 
@@ -1754,8 +1784,9 @@ function OrderDetailView({
                     <label className="mb-1 block text-[11px] font-semibold text-slate-700">方式</label>
                     <select
                       value={newPayment.method}
+                      disabled={newPayment.office}
                       onChange={(e) => setNewPayment((p) => ({ ...p, method: e.target.value }))}
-                      className="h-8 w-full rounded-lg border border-slate-300 bg-white px-2 text-xs text-slate-700 focus:border-gray-200 focus:outline-none"
+                      className="h-8 w-full rounded-lg border border-slate-300 bg-white px-2 text-xs text-slate-700 focus:border-gray-200 focus:outline-none disabled:cursor-not-allowed disabled:bg-slate-100"
                     >
                       {PAYMENT_METHODS.map((m) => <option key={m}>{m}</option>)}
                     </select>
@@ -1771,7 +1802,7 @@ function OrderDetailView({
                     />
                   </div>
                 </div>
-                <label className="mt-2 flex items-center gap-2 text-xs text-slate-600"><input type="checkbox" checked={newPayment.office} onChange={(e) => setNewPayment((p) => ({ ...p, office: e.target.checked }))} /> 这笔资金进入/流出办公室</label>
+                <label className="mt-2 flex items-center gap-2 text-xs text-slate-600"><input type="checkbox" checked={newPayment.office} onChange={(e) => setNewPayment((p) => ({ ...p, office: e.target.checked, method: e.target.checked ? OFFICE_PAYMENT_METHOD : p.method }))} /> 这笔资金进入/流出办公室</label>
                 <div className="mt-2 flex gap-2">
                   <button
                     onClick={handleAddPayment}
@@ -1831,7 +1862,7 @@ function NewOrderModal({
     description: editOrder?.description ?? "",
     total_price: editOrder ? String(editOrder.total_after_tax ?? editOrder.total_price ?? "") : "",
     deposit: "",
-    deposit_method: "现金",
+    deposit_method: OFFICE_PAYMENT_METHOD,
     deposit_note: "",
     deposit_office: false,
     preview_image: editOrder?.preview_image ?? "",
@@ -1841,11 +1872,33 @@ function NewOrderModal({
     setFields((f) => ({ ...f, [key]: val }));
   }
 
-  function hydrateClient(name: string) {
-    const matched = findClientByReference(clients, { clientName: name.trim() });
+  useEffect(() => {
+    if (!fields.deposit_office || fields.deposit_method === OFFICE_PAYMENT_METHOD) return;
+    setFields((f) => ({ ...f, deposit_method: OFFICE_PAYMENT_METHOD }));
+  }, [fields.deposit_office, fields.deposit_method]);
+
+  function hydrateClient(name: string, phone?: string) {
+    const matched = findClientByReference(clients, { clientName: name.trim(), phone });
     if (!matched) return;
-    setFields((f) => ({ ...f, client_name: matched.name, phone: matched.phone ?? f.phone, address: matched.address ?? f.address }));
+    setFields((f) => ({
+      ...f,
+      client_name: matched.name,
+      phone: matched.phone ?? phone ?? f.phone,
+      address: matched.address ?? f.address,
+    }));
   }
+
+  useEffect(() => {
+    if (editOrder || !fields.client_name.trim()) return;
+    const matched = findClientByReference(clients, { clientName: fields.client_name.trim(), phone: fields.phone });
+    if (!matched) return;
+    setFields((f) => ({
+      ...f,
+      client_name: matched.name,
+      phone: matched.phone ?? f.phone,
+      address: matched.address ?? f.address,
+    }));
+  }, [editOrder, clients, fields.client_name, fields.phone]);
 
   function handlePreviewUpload(file?: File | null) {
     if (!file) return;
@@ -1897,7 +1950,7 @@ function NewOrderModal({
             {
               date: today,
               amount: deposit,
-              method: fields.deposit_method,
+              method: fields.deposit_office ? OFFICE_PAYMENT_METHOD : fields.deposit_method,
               note: fields.deposit_note || undefined,
               type: "payment",
               office: fields.deposit_office,
@@ -1952,8 +2005,9 @@ function NewOrderModal({
                 list="order-client-options"
                 value={fields.client_name}
                 onChange={(e) => {
-                  set("client_name", e.target.value);
-                  hydrateClient(e.target.value);
+                  const value = e.target.value;
+                  set("client_name", value);
+                  hydrateClient(value, fields.phone);
                 }}
                 className="h-8 w-full rounded-lg border border-slate-300 bg-white px-3 text-xs text-slate-700 focus:border-gray-200 focus:outline-none"
               />
@@ -1964,7 +2018,11 @@ function NewOrderModal({
               <input
                 type="tel"
                 value={fields.phone}
-                onChange={(e) => set("phone", e.target.value)}
+                onChange={(e) => {
+                  const value = e.target.value;
+                  set("phone", value);
+                  hydrateClient(fields.client_name, value);
+                }}
                 className="h-8 w-full rounded-lg border border-slate-300 bg-white px-3 text-xs text-slate-700 focus:border-gray-200 focus:outline-none"
               />
             </div>
@@ -2032,8 +2090,9 @@ function NewOrderModal({
                 <label className="mb-1 block text-[11px] font-semibold text-slate-700">方式</label>
                 <select
                   value={fields.deposit_method}
+                  disabled={fields.deposit_office}
                   onChange={(e) => set("deposit_method", e.target.value)}
-                  className="h-8 w-full rounded-lg border border-slate-300 bg-white px-2 text-xs text-slate-700 focus:border-gray-200 focus:outline-none"
+                  className="h-8 w-full rounded-lg border border-slate-300 bg-white px-2 text-xs text-slate-700 focus:border-gray-200 focus:outline-none disabled:cursor-not-allowed disabled:bg-slate-100"
                 >
                   {PAYMENT_METHODS.map((m) => <option key={m}>{m}</option>)}
                 </select>
@@ -2049,7 +2108,7 @@ function NewOrderModal({
                 />
               </div>
             </div>
-            <label className="mt-3 flex items-center gap-2 text-xs text-slate-600"><input type="checkbox" checked={fields.deposit_office} onChange={(e) => set("deposit_office", e.target.checked)} /> 这笔收入进入办公室</label>
+            <label className="mt-3 flex items-center gap-2 text-xs text-slate-600"><input type="checkbox" checked={fields.deposit_office} onChange={(e) => setFields((f) => ({ ...f, deposit_office: e.target.checked, deposit_method: e.target.checked ? OFFICE_PAYMENT_METHOD : f.deposit_method }))} /> 这笔收入进入办公室</label>
           </div>}
         </div>
         <div className="flex justify-end gap-2 border-t border-gray-200 px-5 py-4">
@@ -2140,6 +2199,7 @@ function OrdersSection({
         type: "收入",
         amount: depositRecord.amount,
         date: depositRecord.date,
+        method: OFFICE_PAYMENT_METHOD,
         note: `${normalizedOrder.order_number} 新单定金`,
         order_number: normalizedOrder.order_number,
         order_id: normalizedOrder.order_number,
@@ -2700,9 +2760,9 @@ function SmallInput({ value, onChange, placeholder, type = "text" }: { value: st
   return <input type={type} value={value} onChange={(e) => onChange(e.target.value)} placeholder={placeholder} className="h-8 w-full rounded-lg border border-slate-300 bg-white px-3 text-xs text-slate-700 focus:border-gray-200 focus:outline-none" />;
 }
 
-function SmallSelect({ value, onChange, options, labels }: { value: string; onChange: (v: string) => void; options: string[]; labels?: Record<string, string>; }) {
+function SmallSelect({ value, onChange, options, labels, disabled = false }: { value: string; onChange: (v: string) => void; options: string[]; labels?: Record<string, string>; disabled?: boolean; }) {
   return (
-    <select value={value} onChange={(e) => onChange(e.target.value)} className="h-8 w-full rounded-lg border border-slate-300 bg-white px-3 text-xs text-slate-700 focus:border-gray-200 focus:outline-none">
+    <select value={value} disabled={disabled} onChange={(e) => onChange(e.target.value)} className="h-8 w-full rounded-lg border border-slate-300 bg-white px-3 text-xs text-slate-700 focus:border-gray-200 focus:outline-none disabled:cursor-not-allowed disabled:bg-slate-100">
       {options.map((option) => <option key={option} value={option}>{labels?.[option] || option || "未选择"}</option>)}
     </select>
   );
@@ -2967,7 +3027,7 @@ function FinanceSection({ orders, setOrders, expenses, setExpenses, cashEntries,
   const [independentIncomePage, setIndependentIncomePage] = useState(1);
   const [showIncomeForm, setShowIncomeForm] = useState(false);
   const [editingIncomeId, setEditingIncomeId] = useState<string | null>(null);
-  const [incomeDraft, setIncomeDraft] = useState({ date: "", amount: "", method: "现金", note: "" });
+  const [incomeDraft, setIncomeDraft] = useState({ date: "", amount: "", method: OFFICE_PAYMENT_METHOD, note: "" });
   const today = new Date().toISOString().slice(0, 10);
   const expenseTypeOptions = useMemo(() => getExpenseTypeOptions(settings), [settings]);
   const officeTargets = useMemo(() => Array.from(new Set([...suppliers.map((item) => item.name), ...employees.map((item) => item.name), ...clients.map((item) => item.name)])), [suppliers, employees, clients]);
@@ -2977,8 +3037,18 @@ function FinanceSection({ orders, setOrders, expenses, setExpenses, cashEntries,
   const [confirmingExpenseId, setConfirmingExpenseId] = useState<string | null>(null);
   const [editingExpenseId, setEditingExpenseId] = useState<string | null>(null);
   const [quickPayTarget, setQuickPayTarget] = useState<string | null>(null);
-  const [quickPayFields, setQuickPayFields] = useState({ date: today, amount: "", method: "现金", note: "", office: false });
+  const [quickPayFields, setQuickPayFields] = useState({ date: today, amount: "", method: OFFICE_PAYMENT_METHOD, note: "", office: false });
   const [expenseFromOffice, setExpenseFromOffice] = useState(false);
+
+  useEffect(() => {
+    if (!quickPayFields.office || quickPayFields.method === OFFICE_PAYMENT_METHOD) return;
+    setQuickPayFields((prev) => ({ ...prev, method: OFFICE_PAYMENT_METHOD }));
+  }, [quickPayFields.office, quickPayFields.method]);
+
+  useEffect(() => {
+    if (!expenseFromOffice || draft.payment_method === OFFICE_PAYMENT_METHOD) return;
+    setDraft((prev) => ({ ...prev, payment_method: OFFICE_PAYMENT_METHOD }));
+  }, [expenseFromOffice, draft.payment_method]);
   const [showOfficeTransferModal, setShowOfficeTransferModal] = useState(false);
   const [officeTransferDraft, setOfficeTransferDraft] = useState({ type: "转入", amount: "", date: today, note: "" });
   const [financeDateStart, setFinanceDateStart] = useState(today);
@@ -3085,7 +3155,7 @@ function FinanceSection({ orders, setOrders, expenses, setExpenses, cashEntries,
     const newRecord: PaymentRecord = {
       date: quickPayFields.date,
       amount,
-      method: quickPayFields.method,
+      method: quickPayFields.office ? OFFICE_PAYMENT_METHOD : quickPayFields.method,
       note: quickPayFields.note || undefined,
       type: "payment",
       office: quickPayFields.office,
@@ -3107,6 +3177,7 @@ function FinanceSection({ orders, setOrders, expenses, setExpenses, cashEntries,
         type: "收入",
         amount,
         date: quickPayFields.date,
+        method: OFFICE_PAYMENT_METHOD,
         note: `${orderNumber} 办公室收款`,
         order_number: orderNumber,
         order_id: orderNumber,
@@ -3115,7 +3186,7 @@ function FinanceSection({ orders, setOrders, expenses, setExpenses, cashEntries,
       }, ...prev]);
     }
     setQuickPayTarget(null);
-    setQuickPayFields({ date: today, amount: "", method: "现金", note: "", office: false });
+    setQuickPayFields({ date: today, amount: "", method: OFFICE_PAYMENT_METHOD, note: "", office: false });
   }
 
   function openEditExpense(item: ExpenseRecord) {
@@ -3136,7 +3207,7 @@ function FinanceSection({ orders, setOrders, expenses, setExpenses, cashEntries,
         detail: draft.detail.trim(),
         amount,
         expense_type: draft.expense_type,
-        payment_method: draft.payment_method,
+        payment_method: expenseFromOffice ? OFFICE_PAYMENT_METHOD : draft.payment_method,
         expense_date: draft.expense_date,
         remark: draft.remark || undefined,
         office: expenseFromOffice,
@@ -3176,7 +3247,7 @@ function FinanceSection({ orders, setOrders, expenses, setExpenses, cashEntries,
         detail: draft.detail.trim(),
         amount,
         expense_type: draft.expense_type,
-        payment_method: draft.payment_method,
+        payment_method: expenseFromOffice ? OFFICE_PAYMENT_METHOD : draft.payment_method,
         expense_date: draft.expense_date,
         remark: draft.remark || undefined,
         office: expenseFromOffice,
@@ -3188,6 +3259,7 @@ function FinanceSection({ orders, setOrders, expenses, setExpenses, cashEntries,
           type: "支出",
           amount,
           date: draft.expense_date,
+          method: OFFICE_PAYMENT_METHOD,
           note: `${record.target} · ${record.detail}`,
           source_type: "expense",
           source_id: expenseId,
@@ -3220,7 +3292,7 @@ function FinanceSection({ orders, setOrders, expenses, setExpenses, cashEntries,
   function addOfficeTransfer() {
     const amount = Number(officeTransferDraft.amount) || 0;
     if (amount <= 0) return;
-    setCashEntries((prev) => [{ id: nextYearScopedId(prev.map((item) => item.id), "CASH", new Date().getFullYear()), type: officeTransferDraft.type, amount, date: officeTransferDraft.date, note: officeTransferDraft.note || undefined, source_type: "office-transfer", source_id: `${officeTransferDraft.type}:${officeTransferDraft.date}:${amount}` }, ...prev]);
+    setCashEntries((prev) => [{ id: nextYearScopedId(prev.map((item) => item.id), "CASH", new Date().getFullYear()), type: officeTransferDraft.type, amount, date: officeTransferDraft.date, method: OFFICE_PAYMENT_METHOD, note: officeTransferDraft.note || undefined, source_type: "office-transfer", source_id: `${officeTransferDraft.type}:${officeTransferDraft.date}:${amount}` }, ...prev]);
     setOfficeTransferDraft({ type: "转入", amount: "", date: today, note: "" });
     setShowOfficeTransferModal(false);
   }
@@ -3341,11 +3413,11 @@ function FinanceSection({ orders, setOrders, expenses, setExpenses, cashEntries,
               <SmallInput value={draft.detail} onChange={(v) => setDraft((d) => ({ ...d, detail: v }))} placeholder="支出明细" />
               <SmallInput value={draft.amount} onChange={(v) => setDraft((d) => ({ ...d, amount: v }))} type="number" placeholder="金额" />
               <SmallSelect value={draft.expense_type} onChange={(v) => setDraft((d) => ({ ...d, expense_type: v }))} options={expenseTypeOptions} />
-              <SmallSelect value={draft.payment_method} onChange={(v) => setDraft((d) => ({ ...d, payment_method: v }))} options={PAYMENT_METHODS} />
+              <SmallSelect value={draft.payment_method} onChange={(v) => setDraft((d) => ({ ...d, payment_method: v }))} options={PAYMENT_METHODS} disabled={expenseFromOffice} />
               <SmallInput value={draft.expense_date} onChange={(v) => setDraft((d) => ({ ...d, expense_date: v }))} type="date" />
             </div>
             <div className="mt-2"><SmallInput value={draft.remark} onChange={(v) => setDraft((d) => ({ ...d, remark: v }))} placeholder="备注(可选)" /></div>
-            <label className="mt-3 flex items-center gap-2 text-xs text-slate-600"><input type="checkbox" checked={expenseFromOffice} onChange={(e) => setExpenseFromOffice(e.target.checked)} /> 这笔支出从办公室抽屉里出</label>
+            <label className="mt-3 flex items-center gap-2 text-xs text-slate-600"><input type="checkbox" checked={expenseFromOffice} onChange={(e) => { const checked = e.target.checked; setExpenseFromOffice(checked); if (checked) setDraft((d) => ({ ...d, payment_method: OFFICE_PAYMENT_METHOD })); }} /> 这笔支出从办公室抽屉里出</label>
             <div className="mt-5 flex justify-end gap-2">
               <ActionBtn onClick={() => { setShowExpenseModal(false); setEditingExpenseId(null); }}>取消</ActionBtn>
               <ActionBtn tone="primary" onClick={addExpense}>确认录入</ActionBtn>
@@ -3362,13 +3434,13 @@ function FinanceSection({ orders, setOrders, expenses, setExpenses, cashEntries,
           const amt = Number(incomeDraft.amount);
           if (!amt || amt <= 0 || !incomeDraft.date) return;
           if (editingIncomeId) {
-            setCashEntries((prev) => prev.map(e => e.id === editingIncomeId ? { ...e, amount: amt, date: incomeDraft.date, method: incomeDraft.method, note: incomeDraft.note || undefined } : e));
+            setCashEntries((prev) => prev.map(e => e.id === editingIncomeId ? { ...e, amount: amt, date: incomeDraft.date, method: OFFICE_PAYMENT_METHOD, note: incomeDraft.note || undefined } : e));
             setEditingIncomeId(null);
           } else {
-            setCashEntries((prev) => [{ id: nextYearScopedId(prev.map(e => e.id), "CASH", new Date().getFullYear()), type: "收入", amount: amt, date: incomeDraft.date, method: incomeDraft.method, note: incomeDraft.note || undefined, source_type: "independent" }, ...prev]);
+            setCashEntries((prev) => [{ id: nextYearScopedId(prev.map(e => e.id), "CASH", new Date().getFullYear()), type: "收入", amount: amt, date: incomeDraft.date, method: OFFICE_PAYMENT_METHOD, note: incomeDraft.note || undefined, source_type: "independent" }, ...prev]);
           }
           setShowIncomeForm(false);
-          setIncomeDraft({ date: today, amount: "", method: "现金", note: "" });
+          setIncomeDraft({ date: today, amount: "", method: OFFICE_PAYMENT_METHOD, note: "" });
         }
         function handleDeleteIncome(id: string) {
           setCashEntries((prev) => prev.filter(e => e.id !== id));
@@ -3376,12 +3448,12 @@ function FinanceSection({ orders, setOrders, expenses, setExpenses, cashEntries,
         }
         function handleEditIncome(entry: typeof cashEntries[0]) {
           setEditingIncomeId(entry.id);
-          setIncomeDraft({ date: entry.date, amount: String(entry.amount), method: entry.method ?? "现金", note: entry.note ?? "" });
+          setIncomeDraft({ date: entry.date, amount: String(entry.amount), method: OFFICE_PAYMENT_METHOD, note: entry.note ?? "" });
           setShowIncomeForm(true);
         }
         function openNewIncomeForm() {
           setEditingIncomeId(null);
-          setIncomeDraft({ date: today, amount: "", method: "现金", note: "" });
+          setIncomeDraft({ date: today, amount: "", method: OFFICE_PAYMENT_METHOD, note: "" });
           setShowIncomeForm(true);
         }
         return (
@@ -3399,7 +3471,7 @@ function FinanceSection({ orders, setOrders, expenses, setExpenses, cashEntries,
                   </div>
                   <div>
                     <label className="mb-1 block text-[11px] font-medium text-slate-500">方式</label>
-                    <select value={incomeDraft.method} onChange={e => setIncomeDraft(p => ({ ...p, method: e.target.value }))} className="w-full rounded-lg border border-slate-200 px-3 py-1.5 text-xs outline-none focus:border-gray-200"><option value="现金">现金</option><option value="微信">微信</option><option value="支付宝">支付宝</option><option value="POS">POS</option><option value="转账">转账</option></select>
+                    <input type="text" value={OFFICE_PAYMENT_METHOD} readOnly className="w-full rounded-lg border border-slate-200 bg-slate-100 px-3 py-1.5 text-xs text-slate-500 outline-none" />
                   </div>
                   <div>
                     <label className="mb-1 block text-[11px] font-medium text-slate-500">备注</label>
@@ -3408,7 +3480,7 @@ function FinanceSection({ orders, setOrders, expenses, setExpenses, cashEntries,
                 </div>
                 <div className="flex items-center gap-2">
                   <button onClick={handleSaveIncome} disabled={!incomeDraft.amount || Number(incomeDraft.amount) <= 0 || !incomeDraft.date} className="rounded-lg bg-gray-500 px-4 py-1.5 text-xs font-medium text-slate-700 hover:bg-gray-100 disabled:cursor-not-allowed disabled:opacity-40 transition-colors">{editingIncomeId ? "保存修改" : "添加"}</button>
-                  <button onClick={() => { setShowIncomeForm(false); setEditingIncomeId(null); setIncomeDraft({ date: today, amount: "", method: "现金", note: "" }); }} className="rounded-lg border border-slate-200 px-4 py-1.5 text-xs text-slate-600 hover:bg-slate-50 transition-colors">取消</button>
+                  <button onClick={() => { setShowIncomeForm(false); setEditingIncomeId(null); setIncomeDraft({ date: today, amount: "", method: OFFICE_PAYMENT_METHOD, note: "" }); }} className="rounded-lg border border-slate-200 px-4 py-1.5 text-xs text-slate-600 hover:bg-slate-50 transition-colors">取消</button>
                 </div>
               </div>
             )}
@@ -3504,7 +3576,7 @@ function FinanceSection({ orders, setOrders, expenses, setExpenses, cashEntries,
                                   setQuickPayTarget(null);
                                 } else {
                                   setQuickPayTarget(o.order_number);
-                                  setQuickPayFields({ date: today, amount: String(o.balance ?? ""), method: "现金", note: "", office: false });
+                                  setQuickPayFields({ date: today, amount: String(o.balance ?? ""), method: OFFICE_PAYMENT_METHOD, note: "", office: false });
                                 }
                               }}
                               className={`rounded border px-2 py-0.5 text-[11px] font-semibold transition-colors ${isExpanded ? "border-slate-300 bg-slate-100 text-slate-600" : "border-emerald-400 bg-emerald-50 text-emerald-700 hover:bg-emerald-100"}`}
@@ -3542,8 +3614,9 @@ function FinanceSection({ orders, setOrders, expenses, setExpenses, cashEntries,
                                   <label className="mb-1 block text-[11px] font-semibold text-slate-500">方式</label>
                                   <select
                                     value={quickPayFields.method}
+                                    disabled={quickPayFields.office}
                                     onChange={(e) => setQuickPayFields((prev) => ({ ...prev, method: e.target.value }))}
-                                    className="h-8 rounded-lg border border-slate-300 bg-white px-2 text-xs text-slate-700 focus:border-emerald-400 focus:outline-none"
+                                    className="h-8 rounded-lg border border-slate-300 bg-white px-2 text-xs text-slate-700 focus:border-emerald-400 focus:outline-none disabled:cursor-not-allowed disabled:bg-slate-100"
                                   >
                                     {PAYMENT_METHODS.map((m) => <option key={m}>{m}</option>)}
                                   </select>
@@ -3558,7 +3631,7 @@ function FinanceSection({ orders, setOrders, expenses, setExpenses, cashEntries,
                                     className="h-8 w-full rounded-lg border border-slate-300 bg-white px-2 text-xs text-slate-700 focus:border-emerald-400 focus:outline-none"
                                   />
                                 </div>
-                                <label className="flex items-center gap-2 text-xs text-slate-600"><input type="checkbox" checked={quickPayFields.office} onChange={(e) => setQuickPayFields((prev) => ({ ...prev, office: e.target.checked }))} /> 进入办公室</label>
+                                <label className="flex items-center gap-2 text-xs text-slate-600"><input type="checkbox" checked={quickPayFields.office} onChange={(e) => setQuickPayFields((prev) => ({ ...prev, office: e.target.checked, method: e.target.checked ? OFFICE_PAYMENT_METHOD : prev.method }))} /> 进入办公室</label>
                                 <div className="flex gap-2">
                                   <button
                                     onClick={() => handleQuickPay(o.order_number)}
@@ -3678,7 +3751,12 @@ function ClientsSection({ clients, setClients, suppliers, setSuppliers, orders, 
   const [editingAppointment, setEditingAppointment] = useState<MeasurementAppointmentRecord | null>(null);
   const [appointmentDraft, setAppointmentDraft] = useState({ appointment_date: new Date().toISOString().slice(0, 10), address: '', description: '' });
   const [selectedClientId, setSelectedClientId] = useState<string>(clients[0]?.id ?? "");
-  const [quickCollectDraft, setQuickCollectDraft] = useState({ orderNumber: "", amount: "", date: today, method: "现金", note: "", office: false });
+  const [quickCollectDraft, setQuickCollectDraft] = useState({ orderNumber: "", amount: "", date: today, method: OFFICE_PAYMENT_METHOD, note: "", office: false });
+
+  useEffect(() => {
+    if (!quickCollectDraft.office || quickCollectDraft.method === OFFICE_PAYMENT_METHOD) return;
+    setQuickCollectDraft((prev) => ({ ...prev, method: OFFICE_PAYMENT_METHOD }));
+  }, [quickCollectDraft.office, quickCollectDraft.method]);
   const contactConfigs: Record<ContactSub, SplitTabularSchemaConfig> = {
     clients: {
       title: "Client Directory",
@@ -3941,7 +4019,7 @@ function ClientsSection({ clients, setClients, suppliers, setSuppliers, orders, 
     const paymentRecord: PaymentRecord = {
       date: quickCollectDraft.date,
       amount: Number(amount.toFixed(2)),
-      method: quickCollectDraft.method,
+      method: quickCollectDraft.office ? OFFICE_PAYMENT_METHOD : quickCollectDraft.method,
       note: quickCollectDraft.note.trim() || (amount >= currentBalance ? "客户中心收清尾款" : "客户中心录入收款"),
       type: "payment",
       office: quickCollectDraft.office,
@@ -3971,6 +4049,7 @@ function ClientsSection({ clients, setClients, suppliers, setSuppliers, orders, 
         type: "收入",
         amount: Number(amount.toFixed(2)),
         date: quickCollectDraft.date,
+        method: OFFICE_PAYMENT_METHOD,
         note: `${selectedClient.name} ${selectedCollectOrder.order_number} 收款`,
         order_number: selectedCollectOrder.order_number,
         order_id: selectedCollectOrder.order_number,
@@ -3983,6 +4062,7 @@ function ClientsSection({ clients, setClients, suppliers, setSuppliers, orders, 
       orderNumber: "",
       amount: "",
       date: today,
+      method: OFFICE_PAYMENT_METHOD,
       note: "",
       office: false,
     }));
@@ -4250,7 +4330,7 @@ function ClientsSection({ clients, setClients, suppliers, setSuppliers, orders, 
                               </div>
                               <div>
                                 <label className="mb-1 block text-[11px] font-semibold text-slate-700">方式</label>
-                                <select value={quickCollectDraft.method} onChange={(e) => setQuickCollectDraft((prev) => ({ ...prev, method: e.target.value }))} className="h-9 w-full rounded-lg border border-slate-300 bg-white px-3 text-xs text-slate-700">
+                                <select value={quickCollectDraft.method} disabled={quickCollectDraft.office} onChange={(e) => setQuickCollectDraft((prev) => ({ ...prev, method: e.target.value }))} className="h-9 w-full rounded-lg border border-slate-300 bg-white px-3 text-xs text-slate-700 disabled:cursor-not-allowed disabled:bg-slate-100">
                                   {PAYMENT_METHODS.map((m) => <option key={m}>{m}</option>)}
                                 </select>
                               </div>
@@ -4258,7 +4338,7 @@ function ClientsSection({ clients, setClients, suppliers, setSuppliers, orders, 
                             <div className="grid gap-2 lg:grid-cols-[1fr_auto]">
                               <div className="space-y-2">
                                 <input type="text" value={quickCollectDraft.note} onChange={(e) => setQuickCollectDraft((prev) => ({ ...prev, note: e.target.value }))} className="h-9 w-full rounded-lg border border-slate-300 bg-white px-3 text-xs text-slate-700" placeholder="备注,比如送货时收尾款" />
-                                <label className="flex items-center gap-2 text-xs text-slate-600"><input type="checkbox" checked={quickCollectDraft.office} onChange={(e) => setQuickCollectDraft((prev) => ({ ...prev, office: e.target.checked }))} /> 进入办公室</label>
+                                <label className="flex items-center gap-2 text-xs text-slate-600"><input type="checkbox" checked={quickCollectDraft.office} onChange={(e) => setQuickCollectDraft((prev) => ({ ...prev, office: e.target.checked, method: e.target.checked ? OFFICE_PAYMENT_METHOD : prev.method }))} /> 进入办公室</label>
                               </div>
                               <div className="flex flex-wrap gap-2">
                                 <ActionBtn onClick={() => applyQuickCollectPreset("half")}>填一半</ActionBtn>

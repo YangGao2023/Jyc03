@@ -1443,6 +1443,7 @@ function OrderDetailView({
         date: newPayment.date,
         note: `${order.order_number} 办公室收款`,
         order_number: order.order_number,
+        order_id: order.order_number,
         source_type: "order-payment",
         source_id: `${order.order_number}:${newPayment.date}:${amount}:payment`,
       });
@@ -1455,6 +1456,7 @@ function OrderDetailView({
         date: newPayment.date,
         note: `${order.order_number} 办公室退款`,
         order_number: order.order_number,
+        order_id: order.order_number,
         source_type: "order-refund",
         source_id: `${order.order_number}:${newPayment.date}:${amount}:refund`,
       });
@@ -2138,6 +2140,7 @@ function OrdersSection({
         date: depositRecord.date,
         note: `${normalizedOrder.order_number} 新单定金`,
         order_number: normalizedOrder.order_number,
+        order_id: normalizedOrder.order_number,
         source_type: "order-deposit",
         source_id: `${normalizedOrder.order_number}:deposit`,
       }, ...prev]);
@@ -3088,6 +3091,7 @@ function FinanceSection({ orders, setOrders, expenses, setExpenses, cashEntries,
         date: quickPayFields.date,
         note: `${orderNumber} 办公室收款`,
         order_number: orderNumber,
+        order_id: orderNumber,
         source_type: "order-payment",
         source_id: `${orderNumber}:${quickPayFields.date}:${amount}:quick-pay`,
       }, ...prev]);
@@ -3560,7 +3564,7 @@ function FinanceSection({ orders, setOrders, expenses, setExpenses, cashEntries,
 type ContactSub = "clients" | "suppliers";
 type ClientDetailTab = "overview" | "orders" | "appointments" | "activity";
 
-function ClientsSection({ clients, setClients, suppliers, setSuppliers, orders, setOrders, appointments, setAppointments, setCashEntries, materials, setMaterials, settings }: { clients: ContactRecord[]; setClients: React.Dispatch<React.SetStateAction<ContactRecord[]>>; suppliers: SupplierRecord[]; setSuppliers: React.Dispatch<React.SetStateAction<SupplierRecord[]>>; orders: BizOrder[]; setOrders: React.Dispatch<React.SetStateAction<BizOrder[]>>; appointments: MeasurementAppointmentRecord[]; setAppointments: React.Dispatch<React.SetStateAction<MeasurementAppointmentRecord[]>>; setCashEntries: React.Dispatch<React.SetStateAction<CashEntry[]>>; materials: MaterialRecord[]; setMaterials: React.Dispatch<React.SetStateAction<MaterialRecord[]>>; settings: BizSettings; }) {
+function ClientsSection({ clients, setClients, suppliers, setSuppliers, orders, setOrders, appointments, setAppointments, setCashEntries, setExpenses, materials, setMaterials, settings }: { clients: ContactRecord[]; setClients: React.Dispatch<React.SetStateAction<ContactRecord[]>>; suppliers: SupplierRecord[]; setSuppliers: React.Dispatch<React.SetStateAction<SupplierRecord[]>>; orders: BizOrder[]; setOrders: React.Dispatch<React.SetStateAction<BizOrder[]>>; appointments: MeasurementAppointmentRecord[]; setAppointments: React.Dispatch<React.SetStateAction<MeasurementAppointmentRecord[]>>; setCashEntries: React.Dispatch<React.SetStateAction<CashEntry[]>>; setExpenses: React.Dispatch<React.SetStateAction<ExpenseRecord[]>>; materials: MaterialRecord[]; setMaterials: React.Dispatch<React.SetStateAction<MaterialRecord[]>>; settings: BizSettings; }) {
   const [sub, setSub] = useState<ContactSub>("clients");
   const today = new Date().toISOString().slice(0, 10);
   const [clientDraft, setClientDraft] = useState({ name: "", contact: "", phone: "", wechat: "", address: "", note: "" });
@@ -3826,6 +3830,8 @@ function ClientsSection({ clients, setClients, suppliers, setSuppliers, orders, 
 
   function handleClientOrderDelete(orderNumber: string) {
     setOrders((prev) => prev.filter((o) => o.order_number !== orderNumber));
+    setCashEntries((prev) => prev.filter((item) => !cashEntryReferencesOrder(item, orderNumber)));
+    setExpenses((prev) => prev.filter((item) => !expenseReferencesOrder(item, orderNumber)));
     setDeleteOrderConfirm(null);
   }
 
@@ -3882,6 +3888,7 @@ function ClientsSection({ clients, setClients, suppliers, setSuppliers, orders, 
         date: quickCollectDraft.date,
         note: `${selectedClient.name} ${selectedCollectOrder.order_number} 收款`,
         order_number: selectedCollectOrder.order_number,
+        order_id: selectedCollectOrder.order_number,
         source_type: "order-payment",
         source_id: `${selectedCollectOrder.order_number}:${quickCollectDraft.date}:${Number(amount.toFixed(2))}:client-center`,
       }, ...prev]);
@@ -5837,6 +5844,7 @@ export default function DashboardBizPage() {
               appointments={appointments}
               setAppointments={setAppointments}
               setCashEntries={setCashEntries}
+              setExpenses={setExpenses}
               materials={materials}
               setMaterials={setMaterials}
               settings={settings}

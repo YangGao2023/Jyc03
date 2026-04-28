@@ -263,6 +263,7 @@ function normalizeSnapshot(snapshot: Partial<BizStoreSnapshot>): BizStoreSnapsho
       ? snapshot.cashEntries.map((item) => ({
           ...item,
           method: "现金",
+          office: item.source_type === "office-transfer" ? true : Boolean(item.office),
         }))
       : [],
     materials,
@@ -349,6 +350,7 @@ async function sqliteRead(): Promise<BizStoreSnapshot> {
     amount: Number(r.amount ?? 0),
     date: String(r.date),
     note: nullStr(r.note) ?? undefined,
+    office: Boolean(r.office),
     order_number: nullStr(r.order_number) ?? undefined,
     source_type: nullStr(r.source_type) ?? undefined,
     source_id: nullStr(r.source_id) ?? undefined,
@@ -651,8 +653,8 @@ async function sqliteWrite(snapshot: BizStoreSnapshot): Promise<void> {
     // Cash entries
     db.prepare("DELETE FROM cash_entries").run();
     const insertCash = db.prepare(`
-      INSERT INTO cash_entries (id, type, amount, date, note, order_number, source_type, source_id, updated_at)
-      VALUES (@id, @type, @amount, @date, @note, @order_number, @source_type, @source_id, @updated_at)
+      INSERT INTO cash_entries (id, type, amount, date, note, office, order_number, source_type, source_id, updated_at)
+      VALUES (@id, @type, @amount, @date, @note, @office, @order_number, @source_type, @source_id, @updated_at)
     `);
     for (const c of snapshot.cashEntries) insertCash.run({
       id: c.id,
@@ -660,6 +662,7 @@ async function sqliteWrite(snapshot: BizStoreSnapshot): Promise<void> {
       amount: c.amount,
       date: c.date,
       note: c.note ?? null,
+      office: c.office ? 1 : 0,
       order_number: c.order_number ?? null,
       source_type: c.source_type ?? null,
       source_id: c.source_id ?? null, voided: c.voided ? 1 : 0,

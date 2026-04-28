@@ -134,6 +134,7 @@ function migrate(db: Database.Database) {
       amount REAL NOT NULL DEFAULT 0,
       date TEXT NOT NULL,
       note TEXT,
+      office INTEGER DEFAULT 0,
       order_number TEXT,
       source_type TEXT,
       source_id TEXT,
@@ -292,6 +293,7 @@ function migrate(db: Database.Database) {
   ensureColumn(db, "expenses", "source_type", "TEXT");
   ensureColumn(db, "expenses", "source_id", "TEXT");
   ensureColumn(db, "cash_entries", "order_number", "TEXT");
+  ensureColumn(db, "cash_entries", "office", "INTEGER DEFAULT 0");
   ensureColumn(db, "expenses", "voided", "INTEGER DEFAULT 0");
   ensureColumn(db, "cash_entries", "voided", "INTEGER DEFAULT 0");
   ensureColumn(db, "cash_entries", "source_type", "TEXT");

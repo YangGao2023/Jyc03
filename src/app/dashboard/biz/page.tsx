@@ -106,23 +106,28 @@ function reconcileCashEntries(
     }
   }
 
-  return cashEntries.filter((entry) => {
+  return cashEntries.flatMap((entry) => {
+    if (entry.source_type === "office-transfer") {
+      return [{ ...entry, office: true }];
+    }
+
     if (entry.source_type === "expense") {
-      return Boolean(entry.source_id && officeExpenseIds.has(entry.source_id));
+      const isOffice = Boolean(entry.source_id && officeExpenseIds.has(entry.source_id));
+      return isOffice ? [{ ...entry, office: true }] : [];
     }
 
     if (entry.source_type === "order-payment" || entry.source_type === "order-refund" || entry.source_type === "order-deposit") {
       const orderNumber = entry.order_number?.trim();
-      if (!orderNumber) return false;
+      if (!orderNumber) return [];
       const expectedType = entry.source_type === "order-refund" ? "refund" : "payment";
       const key = buildOrderCashMatchKey(orderNumber, expectedType, entry.date, entry.amount);
       const remaining = orderPaymentCounts.get(key) ?? 0;
-      if (remaining <= 0) return false;
+      if (remaining <= 0) return [];
       orderPaymentCounts.set(key, remaining - 1);
-      return true;
+      return [{ ...entry, office: true }];
     }
 
-    return true;
+    return [{ ...entry, office: Boolean(entry.office) }];
   });
 }
 
@@ -136,9 +141,13 @@ function sameCashEntryList(left: CashEntry[], right: CashEntry[]) {
       && item.amount === other.amount
       && item.date === other.date
       && item.note === other.note
+      && item.method === other.method
+      && item.office === other.office
       && item.order_number === other.order_number
       && item.source_type === other.source_type
-      && item.source_id === other.source_id;
+      && item.source_id === other.source_id
+      && item.order_id === other.order_id
+      && item.voided === other.voided;
   });
 }
 
@@ -758,6 +767,7 @@ function normalizeCashEntryMethod(entry: CashEntry): CashEntry {
   return {
     ...entry,
     method: OFFICE_PAYMENT_METHOD,
+    office: entry.source_type === "office-transfer" ? true : Boolean(entry.office),
   };
 }
 
@@ -1475,6 +1485,7 @@ function OrderDetailView({
         amount,
         date: newPayment.date,
         note: `${order.order_number} 办公室收款`,
+        office: true,
         order_number: order.order_number,
         order_id: order.order_number,
         source_type: "order-payment",
@@ -1488,6 +1499,7 @@ function OrderDetailView({
         amount,
         date: newPayment.date,
         note: `${order.order_number} 办公室退款`,
+        office: true,
         order_number: order.order_number,
         order_id: order.order_number,
         source_type: "order-refund",
@@ -2202,6 +2214,7 @@ function OrdersSection({
         date: depositRecord.date,
         method: OFFICE_PAYMENT_METHOD,
         note: `${normalizedOrder.order_number} 新单定金`,
+        office: true,
         order_number: normalizedOrder.order_number,
         order_id: normalizedOrder.order_number,
         source_type: "order-deposit",
@@ -3061,7 +3074,8 @@ function FinanceSection({ orders, setOrders, expenses, setExpenses, cashEntries,
   const paymentRows = orders.flatMap((order) => (order.payment_history ?? []).map((record, index) => ({ order, record, key: `${order.order_number}-${index}` })));
   const filteredPaymentRows = paymentRows.filter(({ record }) => isDateInRange(record.date, financeDateStart, financeDateEnd));
   const filteredExpenses = expenses.filter((item) => isDateInRange(item.expense_date, financeDateStart, financeDateEnd));
-  const filteredCashEntries = cashEntries.filter((item) => isDateInRange(item.date, financeDateStart, financeDateEnd));
+  const officeCashEntries = reconcileCashEntries(cashEntries, orders, expenses).filter((item) => item.office);
+  const filteredCashEntries = officeCashEntries.filter((item) => isDateInRange(item.date, financeDateStart, financeDateEnd));
   const payrollOverlapsFinanceRange = (month: string) => {
     if (!month) return false;
     const monthStart = `${month}-01`;
@@ -3189,6 +3203,7 @@ function FinanceSection({ orders, setOrders, expenses, setExpenses, cashEntries,
         date: quickPayFields.date,
         method: OFFICE_PAYMENT_METHOD,
         note: `${orderNumber} 办公室收款`,
+        office: true,
         order_number: orderNumber,
         order_id: orderNumber,
         source_type: "order-payment",
@@ -3236,6 +3251,7 @@ function FinanceSection({ orders, setOrders, expenses, setExpenses, cashEntries,
                 amount,
                 date: draft.expense_date,
                 note: `${nextExpense.target} · ${nextExpense.detail}`,
+                office: true,
               }
             : item);
         }
@@ -3245,6 +3261,7 @@ function FinanceSection({ orders, setOrders, expenses, setExpenses, cashEntries,
           amount,
           date: draft.expense_date,
           note: `${nextExpense.target} · ${nextExpense.detail}`,
+          office: true,
           source_type: "expense",
           source_id: editingExpenseId,
         }, ...prev];
@@ -3271,6 +3288,7 @@ function FinanceSection({ orders, setOrders, expenses, setExpenses, cashEntries,
           date: draft.expense_date,
           method: OFFICE_PAYMENT_METHOD,
           note: `${record.target} · ${record.detail}`,
+          office: true,
           source_type: "expense",
           source_id: expenseId,
         }, ...prev]);
@@ -3302,7 +3320,7 @@ function FinanceSection({ orders, setOrders, expenses, setExpenses, cashEntries,
   function addOfficeTransfer() {
     const amount = Number(officeTransferDraft.amount) || 0;
     if (amount <= 0) return;
-    setCashEntries((prev) => [{ id: nextYearScopedId(prev.map((item) => item.id), "CASH", new Date().getFullYear()), type: officeTransferDraft.type, amount, date: officeTransferDraft.date, method: OFFICE_PAYMENT_METHOD, note: officeTransferDraft.note || undefined, source_type: "office-transfer", source_id: `${officeTransferDraft.type}:${officeTransferDraft.date}:${amount}` }, ...prev]);
+    setCashEntries((prev) => [{ id: nextYearScopedId(prev.map((item) => item.id), "CASH", new Date().getFullYear()), type: officeTransferDraft.type, amount, date: officeTransferDraft.date, method: OFFICE_PAYMENT_METHOD, note: officeTransferDraft.note || undefined, office: true, source_type: "office-transfer", source_id: `${officeTransferDraft.type}:${officeTransferDraft.date}:${amount}` }, ...prev]);
     setOfficeTransferDraft({ type: "转入", amount: "", date: today, note: "" });
     setShowOfficeTransferModal(false);
   }
@@ -4061,6 +4079,7 @@ function ClientsSection({ clients, setClients, suppliers, setSuppliers, orders, 
         date: quickCollectDraft.date,
         method: OFFICE_PAYMENT_METHOD,
         note: `${selectedClient.name} ${selectedCollectOrder.order_number} 收款`,
+        office: true,
         order_number: selectedCollectOrder.order_number,
         order_id: selectedCollectOrder.order_number,
         source_type: "order-payment",

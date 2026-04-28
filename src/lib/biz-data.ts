@@ -94,6 +94,7 @@ export type CashEntry = {
   date: string;
   note?: string;
   method?: string;
+  office?: boolean;
   order_number?: string;
   source_type?: string;
   source_id?: string;

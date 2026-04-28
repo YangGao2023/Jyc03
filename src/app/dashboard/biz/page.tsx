@@ -392,8 +392,8 @@ function calcUsdCost(factoryPriceRmb: number, weight?: number) {
 
 function PageSection({ children }: { children: React.ReactNode }) {
   return (
-    <div className="rounded-[30px] border border-white/10 bg-[linear-gradient(180deg,_rgba(15,23,42,0.98),_rgba(3,7,18,0.98))] p-3 shadow-2xl">
-      <div className="rounded-[24px] border border-white/10 bg-white/5 p-3">
+    <div className="rounded-[30px] border border-blue-800/40 bg-[linear-gradient(180deg,_#1e3a5f,_#172554)] p-3 shadow-2xl">
+      <div className="rounded-[24px] border border-blue-700/40 bg-blue-900/30 p-3">
         {children}
       </div>
     </div>
@@ -404,7 +404,7 @@ function DisabledBtn({ children }: { children: React.ReactNode }) {
   return (
     <button
       disabled
-      className="flex items-center gap-1.5 rounded-lg border border-slate-300 bg-white px-3 py-1.5 text-xs font-medium text-slate-500 opacity-60 cursor-not-allowed"
+      className="flex items-center gap-1.5 rounded-lg border border-slate-300 bg-white px-3 py-1.5 text-xs font-medium text-blue-300 opacity-60 cursor-not-allowed"
     >
       {children}
     </button>
@@ -447,13 +447,13 @@ function StatStrip({
   items: Array<{ label: string; value: string; accent?: string }>;
 }) {
   return (
-    <div className="mb-3 flex flex-wrap divide-x divide-slate-100 overflow-hidden rounded-xl border border-slate-200 bg-white">
+    <div className="mb-3 flex flex-wrap divide-x divide-blue-800 overflow-hidden rounded-xl border border-blue-700 bg-blue-900">
       {items.map((item) => (
         <div key={item.label} className="flex min-w-[96px] flex-col px-4 py-2">
           <span className={`text-lg font-bold ${item.accent ?? "text-slate-800"}`}>
             {item.value}
           </span>
-          <span className="mt-0.5 text-[10px] text-slate-500">{item.label}</span>
+          <span className="mt-0.5 text-[10px] text-blue-300">{item.label}</span>
         </div>
       ))}
     </div>
@@ -488,12 +488,12 @@ function EmptyTable({
   message?: string;
 }) {
   return (
-    <div className="overflow-x-auto rounded-xl border border-slate-200 bg-white">
+    <div className="overflow-x-auto rounded-xl border border-blue-700 bg-blue-900">
       <table className="w-full text-left text-xs">
         <thead>
-          <tr className="border-b border-slate-200 bg-slate-50">
+          <tr className="border-b border-blue-700 bg-blue-800">
             {cols.map((c) => (
-              <th key={c} className="whitespace-nowrap px-4 py-2 font-semibold text-slate-600">
+              <th key={c} className="whitespace-nowrap px-4 py-2 font-semibold text-blue-200">
                 {c}
               </th>
             ))}
@@ -501,7 +501,7 @@ function EmptyTable({
         </thead>
         <tbody>
           <tr>
-            <td colSpan={cols.length || 1} className="py-10 text-center text-xs text-slate-400">
+            <td colSpan={cols.length || 1} className="py-10 text-center text-xs text-blue-400">
               {message}
             </td>
           </tr>
@@ -660,9 +660,9 @@ function OverviewSection({
             <div className="mb-3 flex items-center justify-between">
               <div className="flex items-center gap-2">
                 <span className={`h-2 w-2 rounded-full ${d.dot}`} />
-                <span className="text-sm font-semibold text-slate-800">{d.title}</span>
+                <span className="text-sm font-semibold text-white">{d.title}</span>
               </div>
-              <span className="text-xs text-slate-400 transition-colors group-hover:text-slate-600">
+              <span className="text-xs text-blue-400 transition-colors group-hover:text-blue-200">
                 {d.sub} →
               </span>
             </div>
@@ -670,7 +670,7 @@ function OverviewSection({
               {d.stats.map((s) => (
                 <div key={s.label}>
                   <p className={`text-xl font-bold ${s.accent ?? "text-slate-700"}`}>{s.value}</p>
-                  <p className="text-[11px] text-slate-500">{s.label}</p>
+                  <p className="text-[11px] text-blue-300">{s.label}</p>
                 </div>
               ))}
             </div>
@@ -679,11 +679,11 @@ function OverviewSection({
       </div>
 
       {/* Quick-links strip */}
-      <div className="mt-5 rounded-xl border border-slate-200 bg-white">
-        <div className="border-b border-slate-100 px-4 py-2">
-          <p className="text-xs font-semibold text-slate-500">快捷入口</p>
+      <div className="mt-5 rounded-xl border border-blue-700 bg-blue-900">
+        <div className="border-b border-blue-800 px-4 py-2">
+          <p className="text-xs font-semibold text-blue-300">快捷入口</p>
         </div>
-        <div className="flex flex-wrap divide-x divide-slate-100">
+        <div className="flex flex-wrap divide-x divide-blue-800">
           {[
             { label: "新建定制单", section: "orders" },
             { label: "新建批发单", section: "orders" },
@@ -694,7 +694,7 @@ function OverviewSection({
             <button
               key={q.label}
               onClick={() => onNavigate(q.section)}
-              className="px-5 py-3 text-xs font-medium text-slate-600 hover:bg-slate-50 hover:text-slate-900 transition-colors"
+              className="px-5 py-3 text-xs font-medium text-blue-200 hover:bg-slate-50 hover:text-white transition-colors"
             >
               {q.label}
             </button>
@@ -750,20 +750,20 @@ function EditField({
 }) {
   return (
     <div>
-      <label className="mb-1 block text-[11px] font-semibold text-slate-500">{label}</label>
+      <label className="mb-1 block text-[11px] font-semibold text-blue-300">{label}</label>
       {multiline ? (
         <textarea
           value={value}
           onChange={(e) => onChange(e.target.value)}
           rows={3}
-          className="w-full rounded-lg border border-slate-300 bg-white px-3 py-2 text-xs text-slate-700 focus:border-blue-400 focus:outline-none resize-none"
+          className="w-full rounded-lg border border-slate-300 bg-white px-3 py-2 text-xs text-blue-100 focus:border-blue-300 focus:outline-none resize-none"
         />
       ) : (
         <input
           type={type}
           value={value}
           onChange={(e) => onChange(e.target.value)}
-          className="h-8 w-full rounded-lg border border-slate-300 bg-white px-3 text-xs text-slate-700 focus:border-blue-400 focus:outline-none"
+          className="h-8 w-full rounded-lg border border-slate-300 bg-white px-3 text-xs text-blue-100 focus:border-blue-300 focus:outline-none"
         />
       )}
     </div>
@@ -779,8 +779,8 @@ function ReadonlyDisplay({
 }) {
   return (
     <div>
-      <label className="mb-1 block text-[11px] font-semibold text-slate-500">{label}</label>
-      <div className="flex min-h-[32px] items-center rounded-lg border border-slate-200 bg-slate-50 px-3 py-1.5 text-xs text-slate-700">
+      <label className="mb-1 block text-[11px] font-semibold text-blue-300">{label}</label>
+      <div className="flex min-h-[32px] items-center rounded-lg border border-slate-200 bg-slate-50 px-3 py-1.5 text-xs text-blue-100">
         {children}
       </div>
     </div>
@@ -805,7 +805,7 @@ function StatusBadge({ status }: { status: string }) {
 function PaymentHistoryTable({ records }: { records: PaymentRecord[] }) {
   if (!records.length) {
     return (
-      <div className="rounded-lg border border-slate-200 bg-white py-6 text-center text-xs text-slate-400">
+      <div className="rounded-lg border border-blue-700 bg-blue-900 py-6 text-center text-xs text-blue-400">
         暂无收款记录
       </div>
     );
@@ -814,22 +814,22 @@ function PaymentHistoryTable({ records }: { records: PaymentRecord[] }) {
     <div className="overflow-x-auto rounded-lg border border-slate-200">
       <table className="w-full text-left text-xs">
         <thead>
-          <tr className="border-b border-slate-200 bg-slate-50">
-            <th className="px-3 py-2 font-semibold text-slate-600">日期</th>
-            <th className="px-3 py-2 font-semibold text-slate-600">金额</th>
-            <th className="px-3 py-2 font-semibold text-slate-600">方式</th>
-            <th className="px-3 py-2 font-semibold text-slate-600">类型</th>
-            <th className="px-3 py-2 font-semibold text-slate-600">备注</th>
+          <tr className="border-b border-blue-700 bg-blue-800">
+            <th className="px-3 py-2 font-semibold text-blue-200">日期</th>
+            <th className="px-3 py-2 font-semibold text-blue-200">金额</th>
+            <th className="px-3 py-2 font-semibold text-blue-200">方式</th>
+            <th className="px-3 py-2 font-semibold text-blue-200">类型</th>
+            <th className="px-3 py-2 font-semibold text-blue-200">备注</th>
           </tr>
         </thead>
         <tbody>
           {records.map((r, i) => (
-            <tr key={i} className="border-b border-slate-100 last:border-b-0">
-              <td className="px-3 py-2 text-slate-600">{r.date}</td>
+            <tr key={i} className="border-b border-blue-800 last:border-b-0">
+              <td className="px-3 py-2 text-blue-200">{r.date}</td>
               <td className={`px-3 py-2 font-medium ${r.type === "refund" ? "text-red-600" : "text-green-600"}`}>
                 {r.type === "refund" ? "-" : "+"}{formatMoney(r.amount)}
               </td>
-              <td className="px-3 py-2 text-slate-600">{r.method}</td>
+              <td className="px-3 py-2 text-blue-200">{r.method}</td>
               <td className="px-3 py-2">
                 <span className={`rounded-full px-2 py-0.5 text-[11px] font-medium ${
                   r.type === "refund" ? "bg-red-50 text-red-600" : "bg-green-50 text-green-700"
@@ -837,7 +837,7 @@ function PaymentHistoryTable({ records }: { records: PaymentRecord[] }) {
                   {r.type === "refund" ? "退款" : "收款"}
                 </span>
               </td>
-              <td className="px-3 py-2 text-slate-500">{r.note ?? "-"}</td>
+              <td className="px-3 py-2 text-blue-300">{r.note ?? "-"}</td>
             </tr>
           ))}
         </tbody>
@@ -849,7 +849,7 @@ function PaymentHistoryTable({ records }: { records: PaymentRecord[] }) {
 function MaterialRowsTable({ rows }: { rows: MaterialRow[] }) {
   if (!rows.length) {
     return (
-      <div className="rounded-lg border border-slate-200 bg-white py-6 text-center text-xs text-slate-400">
+      <div className="rounded-lg border border-blue-700 bg-blue-900 py-6 text-center text-xs text-blue-400">
         暂无物料记录
       </div>
     );
@@ -859,31 +859,31 @@ function MaterialRowsTable({ rows }: { rows: MaterialRow[] }) {
     <div className="overflow-x-auto rounded-lg border border-slate-200">
       <table className="w-full text-left text-xs">
         <thead>
-          <tr className="border-b border-slate-200 bg-slate-50">
-            <th className="px-3 py-2 font-semibold text-slate-600">品名</th>
-            <th className="px-3 py-2 font-semibold text-slate-600">规格</th>
-            <th className="px-3 py-2 font-semibold text-slate-600">数量</th>
-            <th className="px-3 py-2 font-semibold text-slate-600">单位</th>
-            <th className="px-3 py-2 font-semibold text-slate-600">单价</th>
-            <th className="px-3 py-2 font-semibold text-slate-600">小计</th>
+          <tr className="border-b border-blue-700 bg-blue-800">
+            <th className="px-3 py-2 font-semibold text-blue-200">品名</th>
+            <th className="px-3 py-2 font-semibold text-blue-200">规格</th>
+            <th className="px-3 py-2 font-semibold text-blue-200">数量</th>
+            <th className="px-3 py-2 font-semibold text-blue-200">单位</th>
+            <th className="px-3 py-2 font-semibold text-blue-200">单价</th>
+            <th className="px-3 py-2 font-semibold text-blue-200">小计</th>
           </tr>
         </thead>
         <tbody>
           {rows.map((r, i) => (
-            <tr key={i} className="border-b border-slate-100 last:border-b-0">
-              <td className="px-3 py-2 font-medium text-slate-800">{r.name}</td>
-              <td className="px-3 py-2 text-slate-600">{r.spec ?? "-"}</td>
-              <td className="px-3 py-2 text-slate-700">{r.qty}</td>
-              <td className="px-3 py-2 text-slate-600">{r.unit}</td>
-              <td className="px-3 py-2 text-slate-700">{formatMoney(r.unit_price)}</td>
-              <td className="px-3 py-2 font-medium text-slate-800">{formatMoney(r.qty * r.unit_price)}</td>
+            <tr key={i} className="border-b border-blue-800 last:border-b-0">
+              <td className="px-3 py-2 font-medium text-white">{r.name}</td>
+              <td className="px-3 py-2 text-blue-200">{r.spec ?? "-"}</td>
+              <td className="px-3 py-2 text-blue-100">{r.qty}</td>
+              <td className="px-3 py-2 text-blue-200">{r.unit}</td>
+              <td className="px-3 py-2 text-blue-100">{formatMoney(r.unit_price)}</td>
+              <td className="px-3 py-2 font-medium text-white">{formatMoney(r.qty * r.unit_price)}</td>
             </tr>
           ))}
           <tr className="bg-slate-50">
-            <td colSpan={5} className="px-3 py-2 text-right text-xs font-semibold text-slate-600">
+            <td colSpan={5} className="px-3 py-2 text-right text-xs font-semibold text-blue-200">
               物料小计 / Subtotal
             </td>
-            <td className="px-3 py-2 font-bold text-slate-900">{formatMoney(subtotal)}</td>
+            <td className="px-3 py-2 font-bold text-white">{formatMoney(subtotal)}</td>
           </tr>
         </tbody>
       </table>
@@ -923,32 +923,32 @@ function EditableMaterialRows({
       <div className="overflow-x-auto rounded-lg border border-slate-200">
         <table className="w-full text-left text-xs">
           <thead>
-            <tr className="border-b border-slate-200 bg-slate-50">
-              <th className="px-2 py-2 font-semibold text-slate-600">品名</th>
-              <th className="px-2 py-2 font-semibold text-slate-600">规格</th>
-              <th className="px-2 py-2 font-semibold text-slate-600 w-16">数量</th>
-              <th className="px-2 py-2 font-semibold text-slate-600 w-14">单位</th>
-              <th className="px-2 py-2 font-semibold text-slate-600 w-20">单价</th>
-              <th className="px-2 py-2 font-semibold text-slate-600 w-20">小计</th>
-              <th className="px-2 py-2 font-semibold text-slate-600 w-16">图片</th>
+            <tr className="border-b border-blue-700 bg-blue-800">
+              <th className="px-2 py-2 font-semibold text-blue-200">品名</th>
+              <th className="px-2 py-2 font-semibold text-blue-200">规格</th>
+              <th className="px-2 py-2 font-semibold text-blue-200 w-16">数量</th>
+              <th className="px-2 py-2 font-semibold text-blue-200 w-14">单位</th>
+              <th className="px-2 py-2 font-semibold text-blue-200 w-20">单价</th>
+              <th className="px-2 py-2 font-semibold text-blue-200 w-20">小计</th>
+              <th className="px-2 py-2 font-semibold text-blue-200 w-16">图片</th>
               <th className="px-2 py-2 w-8"></th>
             </tr>
           </thead>
           <tbody>
             {rows.map((r, i) => (
-              <tr key={i} className="border-b border-slate-100">
+              <tr key={i} className="border-b border-blue-800">
                 <td className="px-2 py-1.5">
                   <input
                     value={r.name}
                     onChange={(e) => updateRow(i, "name", e.target.value)}
-                    className="h-7 w-full min-w-[100px] rounded border border-slate-300 px-2 text-xs focus:border-blue-400 focus:outline-none"
+                    className="h-7 w-full min-w-[100px] rounded border border-slate-300 px-2 text-xs focus:border-blue-300 focus:outline-none"
                   />
                 </td>
                 <td className="px-2 py-1.5">
                   <input
                     value={r.spec ?? ""}
                     onChange={(e) => updateRow(i, "spec", e.target.value)}
-                    className="h-7 w-full min-w-[80px] rounded border border-slate-300 px-2 text-xs focus:border-blue-400 focus:outline-none"
+                    className="h-7 w-full min-w-[80px] rounded border border-slate-300 px-2 text-xs focus:border-blue-300 focus:outline-none"
                   />
                 </td>
                 <td className="px-2 py-1.5">
@@ -957,14 +957,14 @@ function EditableMaterialRows({
                     min={0}
                     value={r.qty}
                     onChange={(e) => updateRow(i, "qty", Number(e.target.value) || 0)}
-                    className="h-7 w-16 rounded border border-slate-300 px-2 text-xs focus:border-blue-400 focus:outline-none"
+                    className="h-7 w-16 rounded border border-slate-300 px-2 text-xs focus:border-blue-300 focus:outline-none"
                   />
                 </td>
                 <td className="px-2 py-1.5">
                   <input
                     value={r.unit}
                     onChange={(e) => updateRow(i, "unit", e.target.value)}
-                    className="h-7 w-14 rounded border border-slate-300 px-2 text-xs focus:border-blue-400 focus:outline-none"
+                    className="h-7 w-14 rounded border border-slate-300 px-2 text-xs focus:border-blue-300 focus:outline-none"
                   />
                 </td>
                 <td className="px-2 py-1.5">
@@ -974,10 +974,10 @@ function EditableMaterialRows({
                     step={0.01}
                     value={r.unit_price}
                     onChange={(e) => updateRow(i, "unit_price", Number(e.target.value) || 0)}
-                    className="h-7 w-20 rounded border border-slate-300 px-2 text-xs focus:border-blue-400 focus:outline-none"
+                    className="h-7 w-20 rounded border border-slate-300 px-2 text-xs focus:border-blue-300 focus:outline-none"
                   />
                 </td>
-                <td className="px-2 py-1.5 font-medium text-slate-800 whitespace-nowrap">
+                <td className="px-2 py-1.5 font-medium text-white whitespace-nowrap">
                   {formatMoney(r.qty * r.unit_price)}
                 </td>
                 <td className="px-2 py-1.5">
@@ -985,7 +985,7 @@ function EditableMaterialRows({
                     {r.image ? (
                       <img src={r.image} alt="" className="h-full w-full object-cover" />
                     ) : (
-                      <span className="flex h-full w-full items-center justify-center text-[10px] text-slate-400">+图</span>
+                      <span className="flex h-full w-full items-center justify-center text-[10px] text-blue-400">+图</span>
                     )}
                     <input
                       type="file"
@@ -1007,10 +1007,10 @@ function EditableMaterialRows({
             ))}
             {rows.length > 0 && (
               <tr className="bg-slate-50">
-                <td colSpan={5} className="px-2 py-2 text-right text-xs font-semibold text-slate-600">
+                <td colSpan={5} className="px-2 py-2 text-right text-xs font-semibold text-blue-200">
                   物料小计 / Subtotal
                 </td>
-                <td className="px-2 py-2 font-bold text-slate-900">{formatMoney(subtotal)}</td>
+                <td className="px-2 py-2 font-bold text-white">{formatMoney(subtotal)}</td>
                 <td colSpan={2} />
               </tr>
             )}
@@ -1019,7 +1019,7 @@ function EditableMaterialRows({
       </div>
       <button
         onClick={addRow}
-        className="mt-2 w-full rounded-lg border border-dashed border-slate-300 py-2 text-xs text-slate-500 hover:border-blue-400 hover:text-blue-600 transition-colors"
+        className="mt-2 w-full rounded-lg border border-dashed border-slate-300 py-2 text-xs text-blue-300 hover:border-blue-400 hover:text-blue-600 transition-colors"
       >
         + 添加物料行
       </button>
@@ -1036,7 +1036,7 @@ function PrintArchiveList({
 }) {
   if (!records.length) {
     return (
-      <div className="rounded-lg border border-dashed border-slate-200 bg-slate-50 py-8 text-center text-xs text-slate-400">
+      <div className="rounded-lg border border-dashed border-slate-200 bg-slate-50 py-8 text-center text-xs text-blue-400">
         还没有保存的打印单
       </div>
     );
@@ -1049,16 +1049,16 @@ function PrintArchiveList({
           <div className="flex flex-wrap items-start justify-between gap-2">
             <div>
               <div className="flex items-center gap-2">
-                <span className="text-xs font-semibold text-slate-900">{record.title}</span>
-                <span className="rounded-full bg-slate-200 px-2 py-0.5 text-[10px] font-semibold text-slate-600">
+                <span className="text-xs font-semibold text-white">{record.title}</span>
+                <span className="rounded-full bg-slate-200 px-2 py-0.5 text-[10px] font-semibold text-blue-200">
                   {formatPrintTypeLabel(record.print_type)}
                 </span>
               </div>
-              <p className="mt-1 text-[11px] text-slate-500">{record.created_at.slice(0, 16).replace("T", " ")}{record.summary ? ` · ${record.summary}` : ""}</p>
+              <p className="mt-1 text-[11px] text-blue-300">{record.created_at.slice(0, 16).replace("T", " ")}{record.summary ? ` · ${record.summary}` : ""}</p>
             </div>
             <div className="flex flex-wrap gap-2">
               <button onClick={() => onReprint(record)} className="rounded border border-blue-200 bg-white px-2 py-1 text-[11px] font-medium text-blue-700 hover:bg-blue-50 transition-colors">再次打印</button>
-              <button onClick={() => downloadHtmlFile(record.file_name, record.html)} className="rounded border border-slate-200 bg-white px-2 py-1 text-[11px] font-medium text-slate-600 hover:border-slate-300 transition-colors">下载 HTML</button>
+              <button onClick={() => downloadHtmlFile(record.file_name, record.html)} className="rounded border border-blue-700 bg-blue-900 px-2 py-1 text-[11px] font-medium text-blue-200 hover:border-slate-300 transition-colors">下载 HTML</button>
             </div>
           </div>
         </div>
@@ -1469,12 +1469,12 @@ function OrderDetailView({
       <div className="mb-5 flex flex-wrap items-center gap-3">
         <button
           onClick={onBack}
-          className="flex items-center gap-1.5 rounded-lg border border-slate-200 bg-white px-3 py-1.5 text-xs font-medium text-slate-600 hover:border-slate-300 hover:text-slate-900 transition-colors"
+          className="flex items-center gap-1.5 rounded-lg border border-blue-700 bg-blue-900 px-3 py-1.5 text-xs font-medium text-blue-200 hover:border-slate-300 hover:text-white transition-colors"
         >
           ← 返回列表
         </button>
         <div className="flex flex-wrap items-center gap-2">
-          <span className="text-sm font-bold text-slate-900">{order.order_number}</span>
+          <span className="text-sm font-bold text-white">{order.order_number}</span>
           <span
             className={`rounded-full px-2.5 py-0.5 text-[11px] font-semibold ${
               isCustom ? "bg-blue-100 text-blue-700" : "bg-indigo-100 text-indigo-700"
@@ -1502,7 +1502,7 @@ function OrderDetailView({
           {order.status !== "已关闭" && (
             <button
               onClick={() => onSave({ ...buildUpdated(), status: "已关闭" })}
-              className="flex items-center gap-1.5 rounded-lg border border-slate-300 bg-white px-3 py-1.5 text-xs font-medium text-slate-500 hover:border-red-300 hover:text-red-600 transition-colors"
+              className="flex items-center gap-1.5 rounded-lg border border-slate-300 bg-white px-3 py-1.5 text-xs font-medium text-blue-300 hover:border-red-300 hover:text-red-600 transition-colors"
             >
               关闭订单
             </button>
@@ -1519,8 +1519,8 @@ function OrderDetailView({
       {/* Main content stack */}
       <div className="space-y-4">
         {/* Top summary: client info */}
-        <div className="rounded-xl border border-slate-200 bg-white p-3">
-          <h3 className="mb-3 border-b border-slate-100 pb-2 text-xs font-semibold uppercase tracking-wider text-slate-400">
+        <div className="rounded-xl border border-blue-700 bg-blue-900 p-3">
+          <h3 className="mb-3 border-b border-blue-800 pb-2 text-xs font-semibold uppercase tracking-wider text-blue-400">
             客户信息
           </h3>
           <div className="grid gap-3 sm:grid-cols-3">
@@ -1550,8 +1550,8 @@ function OrderDetailView({
         </div>
 
         {/* Description section */}
-        <div className="rounded-xl border border-slate-200 bg-white p-3">
-          <h3 className="mb-3 border-b border-slate-100 pb-2 text-xs font-semibold uppercase tracking-wider text-slate-400">
+        <div className="rounded-xl border border-blue-700 bg-blue-900 p-3">
+          <h3 className="mb-3 border-b border-blue-800 pb-2 text-xs font-semibold uppercase tracking-wider text-blue-400">
             工程说明
           </h3>
           <div className={isCustom ? "flex gap-4" : ""}>
@@ -1581,7 +1581,7 @@ function OrderDetailView({
             {/* 款式图片 — custom orders only */}
             {isCustom && (
               <div className="shrink-0">
-                <p className="mb-1 text-[11px] font-semibold text-slate-500">款式图片</p>
+                <p className="mb-1 text-[11px] font-semibold text-blue-300">款式图片</p>
                 <label className="group relative block h-[160px] w-[120px] cursor-pointer overflow-hidden rounded-lg border border-slate-200 bg-slate-50">
                   {draft.preview_image ? (
                     <img
@@ -1590,7 +1590,7 @@ function OrderDetailView({
                       className="h-full w-full object-cover"
                     />
                   ) : (
-                    <div className="flex h-full w-full items-center justify-center text-[11px] font-medium text-slate-400 text-center px-2">
+                    <div className="flex h-full w-full items-center justify-center text-[11px] font-medium text-blue-400 text-center px-2">
                       暂无图片
                     </div>
                   )}
@@ -1610,7 +1610,7 @@ function OrderDetailView({
                   <button
                     type="button"
                     onClick={() => update("preview_image", "")}
-                    className="mt-1.5 w-full rounded border border-slate-200 py-1 text-[11px] text-slate-500 hover:border-red-300 hover:text-red-500 transition-colors"
+                    className="mt-1.5 w-full rounded border border-slate-200 py-1 text-[11px] text-blue-300 hover:border-red-300 hover:text-red-500 transition-colors"
                   >
                     移除
                   </button>
@@ -1624,14 +1624,14 @@ function OrderDetailView({
         {/* Bottom: 金额结算 + 收款记录 */}
         <div className="grid gap-4 lg:grid-cols-[300px_1fr]">
           {/* 金额结算 */}
-          <div className="rounded-xl border border-slate-200 bg-white p-3">
-            <h3 className="mb-3 border-b border-slate-100 pb-2 text-xs font-semibold uppercase tracking-wider text-slate-400">
+          <div className="rounded-xl border border-blue-700 bg-blue-900 p-3">
+            <h3 className="mb-3 border-b border-blue-800 pb-2 text-xs font-semibold uppercase tracking-wider text-blue-400">
               金额结算
             </h3>
             <div className="space-y-3">
               <div>
-                <label className="mb-1 block text-[11px] font-semibold text-slate-500">
-                  总价 {!isCustom && <span className="font-normal text-slate-400">(物料自动同步)</span>}
+                <label className="mb-1 block text-[11px] font-semibold text-blue-300">
+                  总价 {!isCustom && <span className="font-normal text-blue-400">(物料自动同步)</span>}
                 </label>
                 <input
                   type="number"
@@ -1639,12 +1639,12 @@ function OrderDetailView({
                   step={0.01}
                   value={draft.total_price}
                   onChange={(e) => update("total_price", Number(e.target.value) || 0)}
-                  className="h-8 w-full rounded-lg border border-slate-300 bg-white px-3 text-xs text-slate-700 focus:border-blue-400 focus:outline-none"
+                  className="h-8 w-full rounded-lg border border-slate-300 bg-white px-3 text-xs text-blue-100 focus:border-blue-300 focus:outline-none"
                 />
               </div>
               <div className="grid grid-cols-2 gap-2">
                 <div>
-                  <label className="mb-1 block text-[11px] font-semibold text-slate-500">税率 %</label>
+                  <label className="mb-1 block text-[11px] font-semibold text-blue-300">税率 %</label>
                   <input
                     type="number"
                     min={0}
@@ -1652,24 +1652,24 @@ function OrderDetailView({
                     step={0.1}
                     value={draft.tax_rate}
                     onChange={(e) => update("tax_rate", Number(e.target.value) || 0)}
-                    className="h-8 w-full rounded-lg border border-slate-300 bg-white px-3 text-xs text-slate-700 focus:border-blue-400 focus:outline-none"
+                    className="h-8 w-full rounded-lg border border-slate-300 bg-white px-3 text-xs text-blue-100 focus:border-blue-300 focus:outline-none"
                   />
                 </div>
                 <div>
-                  <label className="mb-1 block text-[11px] font-semibold text-slate-500">折扣 $</label>
+                  <label className="mb-1 block text-[11px] font-semibold text-blue-300">折扣 $</label>
                   <input
                     type="number"
                     min={0}
                     step={0.01}
                     value={draft.discount}
                     onChange={(e) => update("discount", Number(e.target.value) || 0)}
-                    className="h-8 w-full rounded-lg border border-slate-300 bg-white px-3 text-xs text-slate-700 focus:border-blue-400 focus:outline-none"
+                    className="h-8 w-full rounded-lg border border-slate-300 bg-white px-3 text-xs text-blue-100 focus:border-blue-300 focus:outline-none"
                   />
                 </div>
               </div>
               {(draft.tax_rate > 0 || draft.discount > 0) && (
                 <ReadonlyDisplay label="税后合计">
-                  <span className="font-semibold text-slate-800">
+                  <span className="font-semibold text-white">
                     {formatMoney(calcTotalAfterTax(draft.total_price, draft.tax_rate, draft.discount))}
                   </span>
                 </ReadonlyDisplay>
@@ -1685,7 +1685,7 @@ function OrderDetailView({
                 </span>
               </ReadonlyDisplay>
               <div>
-                <label className="mb-1 block text-[11px] font-semibold text-slate-500">状态</label>
+                <label className="mb-1 block text-[11px] font-semibold text-blue-300">状态</label>
                 <div className="flex min-h-[32px] items-center rounded-lg border border-slate-200 bg-slate-50 px-3">
                   <StatusBadge status={order.status ?? "下单"} />
                 </div>
@@ -1697,9 +1697,9 @@ function OrderDetailView({
           </div>
 
           {/* 收款记录 */}
-          <div className="rounded-xl border border-slate-200 bg-white p-3">
-            <div className="mb-3 flex items-center justify-between border-b border-slate-100 pb-2">
-              <h3 className="text-xs font-semibold uppercase tracking-wider text-slate-400">收款记录</h3>
+          <div className="rounded-xl border border-blue-700 bg-blue-900 p-3">
+            <div className="mb-3 flex items-center justify-between border-b border-blue-800 pb-2">
+              <h3 className="text-xs font-semibold uppercase tracking-wider text-blue-400">收款记录</h3>
               <div className="flex gap-2">
                 <button
                   onClick={() => {
@@ -1726,16 +1726,16 @@ function OrderDetailView({
               <div className={`mb-3 rounded-lg p-3 ${paymentMode === "payment" ? "border border-blue-100 bg-blue-50/50" : "border border-rose-100 bg-rose-50/50"}`}>
                 <div className="grid gap-2 sm:grid-cols-2 lg:grid-cols-4">
                   <div>
-                    <label className="mb-1 block text-[11px] font-semibold text-slate-500">日期</label>
+                    <label className="mb-1 block text-[11px] font-semibold text-blue-300">日期</label>
                     <input
                       type="date"
                       value={newPayment.date}
                       onChange={(e) => setNewPayment((p) => ({ ...p, date: e.target.value }))}
-                      className="h-8 w-full rounded-lg border border-slate-300 bg-white px-2 text-xs text-slate-700 focus:border-blue-400 focus:outline-none"
+                      className="h-8 w-full rounded-lg border border-slate-300 bg-white px-2 text-xs text-blue-100 focus:border-blue-300 focus:outline-none"
                     />
                   </div>
                   <div>
-                    <label className="mb-1 block text-[11px] font-semibold text-slate-500">金额</label>
+                    <label className="mb-1 block text-[11px] font-semibold text-blue-300">金额</label>
                     <input
                       type="number"
                       min={0}
@@ -1743,31 +1743,31 @@ function OrderDetailView({
                       placeholder="0.00"
                       value={newPayment.amount}
                       onChange={(e) => setNewPayment((p) => ({ ...p, amount: e.target.value }))}
-                      className="h-8 w-full rounded-lg border border-slate-300 bg-white px-2 text-xs text-slate-700 focus:border-blue-400 focus:outline-none"
+                      className="h-8 w-full rounded-lg border border-slate-300 bg-white px-2 text-xs text-blue-100 focus:border-blue-300 focus:outline-none"
                     />
                   </div>
                   <div>
-                    <label className="mb-1 block text-[11px] font-semibold text-slate-500">方式</label>
+                    <label className="mb-1 block text-[11px] font-semibold text-blue-300">方式</label>
                     <select
                       value={newPayment.method}
                       onChange={(e) => setNewPayment((p) => ({ ...p, method: e.target.value }))}
-                      className="h-8 w-full rounded-lg border border-slate-300 bg-white px-2 text-xs text-slate-700 focus:border-blue-400 focus:outline-none"
+                      className="h-8 w-full rounded-lg border border-slate-300 bg-white px-2 text-xs text-blue-100 focus:border-blue-300 focus:outline-none"
                     >
                       {PAYMENT_METHODS.map((m) => <option key={m}>{m}</option>)}
                     </select>
                   </div>
                   <div>
-                    <label className="mb-1 block text-[11px] font-semibold text-slate-500">备注</label>
+                    <label className="mb-1 block text-[11px] font-semibold text-blue-300">备注</label>
                     <input
                       type="text"
                       placeholder="可选备注"
                       value={newPayment.note}
                       onChange={(e) => setNewPayment((p) => ({ ...p, note: e.target.value }))}
-                      className="h-8 w-full rounded-lg border border-slate-300 bg-white px-2 text-xs text-slate-700 focus:border-blue-400 focus:outline-none"
+                      className="h-8 w-full rounded-lg border border-slate-300 bg-white px-2 text-xs text-blue-100 focus:border-blue-300 focus:outline-none"
                     />
                   </div>
                 </div>
-                <label className="mt-2 flex items-center gap-2 text-xs text-slate-600"><input type="checkbox" checked={newPayment.office} onChange={(e) => setNewPayment((p) => ({ ...p, office: e.target.checked }))} /> 这笔资金进入/流出办公室</label>
+                <label className="mt-2 flex items-center gap-2 text-xs text-blue-200"><input type="checkbox" checked={newPayment.office} onChange={(e) => setNewPayment((p) => ({ ...p, office: e.target.checked }))} /> 这笔资金进入/流出办公室</label>
                 <div className="mt-2 flex gap-2">
                   <button
                     onClick={handleAddPayment}
@@ -1780,7 +1780,7 @@ function OrderDetailView({
                       setShowAddPayment(false);
                       setPaymentMode("payment");
                     }}
-                    className="rounded-lg border border-slate-300 bg-white px-3 py-1.5 text-xs font-medium text-slate-600 hover:border-slate-400 transition-colors"
+                    className="rounded-lg border border-slate-300 bg-white px-3 py-1.5 text-xs font-medium text-blue-200 hover:border-slate-400 transition-colors"
                   >
                     取消
                   </button>
@@ -1925,14 +1925,14 @@ function NewOrderModal({
 
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 p-3">
-      <div className="w-full max-w-lg rounded-2xl border border-slate-200 bg-white shadow-2xl">
-        <div className="flex items-center justify-between border-b border-slate-100 px-5 py-4">
-          <h2 className="text-sm font-bold text-slate-900">
+      <div className="w-full max-w-lg rounded-2xl border border-blue-700 bg-blue-900 shadow-2xl">
+        <div className="flex items-center justify-between border-b border-blue-800 px-5 py-4">
+          <h2 className="text-sm font-bold text-white">
             {editOrder ? `编辑 ${editOrder.order_number}` : `新建${type}`}
           </h2>
           <button
             onClick={onClose}
-            className="rounded border border-slate-200 px-2 py-1 text-xs text-slate-500 hover:border-slate-400 hover:text-slate-700 transition-colors"
+            className="rounded border border-slate-200 px-2 py-1 text-xs text-blue-300 hover:border-slate-400 hover:text-blue-100 transition-colors"
           >
             ✕
           </button>
@@ -1940,7 +1940,7 @@ function NewOrderModal({
         <div className="space-y-3 p-5">
           <div className="grid gap-3 sm:grid-cols-2">
             <div>
-              <label className="mb-1 block text-[11px] font-semibold text-slate-500">
+              <label className="mb-1 block text-[11px] font-semibold text-blue-300">
                 客户名称 *
               </label>
               <input
@@ -1951,40 +1951,40 @@ function NewOrderModal({
                   set("client_name", e.target.value);
                   hydrateClient(e.target.value);
                 }}
-                className="h-8 w-full rounded-lg border border-slate-300 bg-white px-3 text-xs text-slate-700 focus:border-blue-400 focus:outline-none"
+                className="h-8 w-full rounded-lg border border-slate-300 bg-white px-3 text-xs text-blue-100 focus:border-blue-300 focus:outline-none"
               />
               <datalist id="order-client-options">{clients.map((item) => <option key={item.id} value={item.name} />)}</datalist>
             </div>
             <div>
-              <label className="mb-1 block text-[11px] font-semibold text-slate-500">联系电话</label>
+              <label className="mb-1 block text-[11px] font-semibold text-blue-300">联系电话</label>
               <input
                 type="tel"
                 value={fields.phone}
                 onChange={(e) => set("phone", e.target.value)}
-                className="h-8 w-full rounded-lg border border-slate-300 bg-white px-3 text-xs text-slate-700 focus:border-blue-400 focus:outline-none"
+                className="h-8 w-full rounded-lg border border-slate-300 bg-white px-3 text-xs text-blue-100 focus:border-blue-300 focus:outline-none"
               />
             </div>
           </div>
           <div>
-            <label className="mb-1 block text-[11px] font-semibold text-slate-500">地址</label>
+            <label className="mb-1 block text-[11px] font-semibold text-blue-300">地址</label>
             <input
               type="text"
               value={fields.address}
               onChange={(e) => set("address", e.target.value)}
-              className="h-8 w-full rounded-lg border border-slate-300 bg-white px-3 text-xs text-slate-700 focus:border-blue-400 focus:outline-none"
+              className="h-8 w-full rounded-lg border border-slate-300 bg-white px-3 text-xs text-blue-100 focus:border-blue-300 focus:outline-none"
             />
           </div>
           <div>
-            <label className="mb-1 block text-[11px] font-semibold text-slate-500">说明</label>
+            <label className="mb-1 block text-[11px] font-semibold text-blue-300">说明</label>
             <textarea
               value={fields.description}
               onChange={(e) => set("description", e.target.value)}
               rows={2}
-              className="w-full rounded-lg border border-slate-300 bg-white px-3 py-2 text-xs text-slate-700 focus:border-blue-400 focus:outline-none resize-none"
+              className="w-full rounded-lg border border-slate-300 bg-white px-3 py-2 text-xs text-blue-100 focus:border-blue-300 focus:outline-none resize-none"
             />
           </div>
           <div>
-            <label className="mb-1 block text-[11px] font-semibold text-slate-500">总价</label>
+            <label className="mb-1 block text-[11px] font-semibold text-blue-300">总价</label>
             <input
               type="number"
               min={0}
@@ -1992,28 +1992,28 @@ function NewOrderModal({
               placeholder="0.00"
               value={fields.total_price}
               onChange={(e) => set("total_price", e.target.value)}
-              className="h-8 w-full rounded-lg border border-slate-300 bg-white px-3 text-xs text-slate-700 focus:border-blue-400 focus:outline-none"
+              className="h-8 w-full rounded-lg border border-slate-300 bg-white px-3 text-xs text-blue-100 focus:border-blue-300 focus:outline-none"
             />
           </div>
           {type === "定制单" && (
             <div className="rounded-lg border border-slate-200 bg-slate-50 p-3">
-              <p className="mb-2 text-[11px] font-semibold uppercase tracking-wider text-slate-400">参考图片</p>
+              <p className="mb-2 text-[11px] font-semibold uppercase tracking-wider text-blue-400">参考图片</p>
               <div className="flex items-center gap-3">
-                <label className="flex h-24 w-24 cursor-pointer items-center justify-center overflow-hidden rounded-lg border border-slate-200 bg-white text-[11px] text-slate-400">
+                <label className="flex h-24 w-24 cursor-pointer items-center justify-center overflow-hidden rounded-lg border border-blue-700 bg-blue-900 text-[11px] text-blue-400">
                   {fields.preview_image ? <img src={fields.preview_image} alt="预览" className="h-full w-full object-cover" /> : "上传图片"}
                   <input type="file" accept="image/*" className="hidden" onChange={(e) => handlePreviewUpload(e.target.files?.[0])} />
                 </label>
-                <div className="flex-1 text-[11px] text-slate-500">新建定制单时就可以先放一张参考图，后面进订单详情还能继续替换。</div>
+                <div className="flex-1 text-[11px] text-blue-300">新建定制单时就可以先放一张参考图，后面进订单详情还能继续替换。</div>
               </div>
             </div>
           )}
           {!editOrder && <div className="rounded-lg border border-slate-200 bg-slate-50 p-3">
-            <p className="mb-2 text-[11px] font-semibold uppercase tracking-wider text-slate-400">
+            <p className="mb-2 text-[11px] font-semibold uppercase tracking-wider text-blue-400">
               首付 / 定金（可选）
             </p>
             <div className="grid gap-2 sm:grid-cols-3">
               <div>
-                <label className="mb-1 block text-[11px] font-semibold text-slate-500">金额</label>
+                <label className="mb-1 block text-[11px] font-semibold text-blue-300">金额</label>
                 <input
                   type="number"
                   min={0}
@@ -2021,37 +2021,37 @@ function NewOrderModal({
                   placeholder="0.00"
                   value={fields.deposit}
                   onChange={(e) => set("deposit", e.target.value)}
-                  className="h-8 w-full rounded-lg border border-slate-300 bg-white px-2 text-xs text-slate-700 focus:border-blue-400 focus:outline-none"
+                  className="h-8 w-full rounded-lg border border-slate-300 bg-white px-2 text-xs text-blue-100 focus:border-blue-300 focus:outline-none"
                 />
               </div>
               <div>
-                <label className="mb-1 block text-[11px] font-semibold text-slate-500">方式</label>
+                <label className="mb-1 block text-[11px] font-semibold text-blue-300">方式</label>
                 <select
                   value={fields.deposit_method}
                   onChange={(e) => set("deposit_method", e.target.value)}
-                  className="h-8 w-full rounded-lg border border-slate-300 bg-white px-2 text-xs text-slate-700 focus:border-blue-400 focus:outline-none"
+                  className="h-8 w-full rounded-lg border border-slate-300 bg-white px-2 text-xs text-blue-100 focus:border-blue-300 focus:outline-none"
                 >
                   {PAYMENT_METHODS.map((m) => <option key={m}>{m}</option>)}
                 </select>
               </div>
               <div>
-                <label className="mb-1 block text-[11px] font-semibold text-slate-500">备注</label>
+                <label className="mb-1 block text-[11px] font-semibold text-blue-300">备注</label>
                 <input
                   type="text"
                   placeholder="定金备注"
                   value={fields.deposit_note}
                   onChange={(e) => set("deposit_note", e.target.value)}
-                  className="h-8 w-full rounded-lg border border-slate-300 bg-white px-2 text-xs text-slate-700 focus:border-blue-400 focus:outline-none"
+                  className="h-8 w-full rounded-lg border border-slate-300 bg-white px-2 text-xs text-blue-100 focus:border-blue-300 focus:outline-none"
                 />
               </div>
             </div>
-            <label className="mt-3 flex items-center gap-2 text-xs text-slate-600"><input type="checkbox" checked={fields.deposit_office} onChange={(e) => set("deposit_office", e.target.checked)} /> 这笔收入进入办公室</label>
+            <label className="mt-3 flex items-center gap-2 text-xs text-blue-200"><input type="checkbox" checked={fields.deposit_office} onChange={(e) => set("deposit_office", e.target.checked)} /> 这笔收入进入办公室</label>
           </div>}
         </div>
-        <div className="flex justify-end gap-2 border-t border-slate-100 px-5 py-4">
+        <div className="flex justify-end gap-2 border-t border-blue-800 px-5 py-4">
           <button
             onClick={onClose}
-            className="rounded-lg border border-slate-300 bg-white px-4 py-2 text-xs font-medium text-slate-600 hover:border-slate-400 transition-colors"
+            className="rounded-lg border border-slate-300 bg-white px-4 py-2 text-xs font-medium text-blue-200 hover:border-slate-400 transition-colors"
           >
             取消
           </button>
@@ -2345,7 +2345,7 @@ function OrdersSection({
             </button>
             <button
               onClick={() => setCreateType("批发单")}
-              className="flex items-center gap-1.5 rounded-lg border border-slate-300 bg-white px-3 py-1.5 text-xs font-medium text-slate-600 hover:border-slate-400 hover:text-slate-900 transition-colors"
+              className="flex items-center gap-1.5 rounded-lg border border-slate-300 bg-white px-3 py-1.5 text-xs font-medium text-blue-200 hover:border-slate-400 hover:text-white transition-colors"
             >
               + 新建批发单
             </button>
@@ -2363,23 +2363,23 @@ function OrdersSection({
         ]}
       />
 
-      <div className="mb-4 flex flex-col gap-3 rounded-xl border border-slate-200 bg-white px-3 py-3">
+      <div className="mb-4 flex flex-col gap-3 rounded-xl border border-blue-700 bg-blue-900 px-3 py-3">
         <div className="flex flex-wrap items-center gap-2">
           <div className="relative min-w-[180px] flex-1 max-w-xs">
-            <span className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-400 text-xs">⌕</span>
+            <span className="absolute left-3 top-1/2 -translate-y-1/2 text-blue-400 text-xs">⌕</span>
             <input
               value={search}
               onChange={(e) => setSearch(e.target.value)}
               placeholder="搜索订单号 / 客户名称…"
-              className="h-8 w-full rounded-lg border border-slate-300 bg-white pl-8 pr-3 text-xs text-slate-700"
+              className="h-8 w-full rounded-lg border border-slate-300 bg-white pl-8 pr-3 text-xs text-blue-100"
             />
           </div>
           <div className="flex items-center gap-1.5">
-            <span className="text-xs text-slate-500">类别</span>
+            <span className="text-xs text-blue-300">类别</span>
             <select
               value={typeFilter}
               onChange={(e) => setTypeFilter(e.target.value)}
-              className="h-8 rounded-lg border border-slate-300 bg-white px-2 text-xs text-slate-700"
+              className="h-8 rounded-lg border border-slate-300 bg-white px-2 text-xs text-blue-100"
             >
               <option>全部</option>
               <option>定制单</option>
@@ -2387,11 +2387,11 @@ function OrdersSection({
             </select>
           </div>
           <div className="flex items-center gap-1.5">
-            <span className="text-xs text-slate-500">状态</span>
+            <span className="text-xs text-blue-300">状态</span>
             <select
               value={statusFilter}
               onChange={(e) => setStatusFilter(e.target.value)}
-              className="h-8 rounded-lg border border-slate-300 bg-white px-2 text-xs text-slate-700"
+              className="h-8 rounded-lg border border-slate-300 bg-white px-2 text-xs text-blue-100"
             >
               <option>全部</option>
               <option>下单</option>
@@ -2401,7 +2401,7 @@ function OrdersSection({
             </select>
           </div>
           <div className="flex items-center gap-1.5">
-            <span className="text-xs text-slate-500">日期</span>
+            <span className="text-xs text-blue-300">日期</span>
             <select
               value={dateFilter}
               onChange={(e) => {
@@ -2412,7 +2412,7 @@ function OrdersSection({
                   setDateTo("");
                 }
               }}
-              className="h-8 rounded-lg border border-slate-300 bg-white px-2 text-xs text-slate-700"
+              className="h-8 rounded-lg border border-slate-300 bg-white px-2 text-xs text-blue-100"
             >
               <option>全部</option>
               <option>今天</option>
@@ -2424,7 +2424,7 @@ function OrdersSection({
               <option>自定义</option>
             </select>
           </div>
-          <label className="flex items-center gap-2 rounded-lg border border-slate-200 px-2.5 py-1.5 text-xs text-slate-600">
+          <label className="flex items-center gap-2 rounded-lg border border-slate-200 px-2.5 py-1.5 text-xs text-blue-200">
             <input
               type="checkbox"
               checked={showOnlyBalance}
@@ -2442,17 +2442,17 @@ function OrdersSection({
               setDateTo("");
               setShowOnlyBalance(false);
             }}
-            className="rounded border border-slate-200 px-2 py-1 text-xs text-slate-400 hover:border-red-300 hover:text-red-500 transition-colors"
+            className="rounded border border-slate-200 px-2 py-1 text-xs text-blue-400 hover:border-red-300 hover:text-red-500 transition-colors"
           >
             ✕ 重置
           </button>
         </div>
         {dateFilter === "自定义" && (
-          <div className="flex flex-wrap items-center gap-2 text-xs text-slate-500">
+          <div className="flex flex-wrap items-center gap-2 text-xs text-blue-300">
             <span>日期范围</span>
-            <input type="date" value={dateFrom} onChange={(e) => setDateFrom(e.target.value)} className="h-8 rounded-lg border border-slate-300 bg-white px-2 text-xs text-slate-700" />
+            <input type="date" value={dateFrom} onChange={(e) => setDateFrom(e.target.value)} className="h-8 rounded-lg border border-slate-300 bg-white px-2 text-xs text-blue-100" />
             <span>至</span>
-            <input type="date" value={dateTo} onChange={(e) => setDateTo(e.target.value)} className="h-8 rounded-lg border border-slate-300 bg-white px-2 text-xs text-slate-700" />
+            <input type="date" value={dateTo} onChange={(e) => setDateTo(e.target.value)} className="h-8 rounded-lg border border-slate-300 bg-white px-2 text-xs text-blue-100" />
           </div>
         )}
         {selectedOrders.length > 0 && (
@@ -2469,10 +2469,10 @@ function OrdersSection({
         )}
       </div>
 
-      <div className="overflow-x-auto rounded-xl border border-slate-200 bg-white">
+      <div className="overflow-x-auto rounded-xl border border-blue-700 bg-blue-900">
         <table className="w-full text-left text-xs">
           <thead>
-            <tr className="border-b border-slate-200 bg-slate-50">
+            <tr className="border-b border-blue-700 bg-blue-800">
               <th className="w-9 px-3 py-2">
                 <input
                   type="checkbox"
@@ -2482,7 +2482,7 @@ function OrdersSection({
                 />
               </th>
               {orderListColumns.map((col) => (
-                <th key={col} className="whitespace-nowrap px-3 py-2 font-semibold text-slate-600">
+                <th key={col} className="whitespace-nowrap px-3 py-2 font-semibold text-blue-200">
                   {col}
                 </th>
               ))}
@@ -2494,7 +2494,7 @@ function OrdersSection({
                 return (
                 <tr
                   key={order.order_number}
-                  className="border-b border-slate-100 last:border-b-0 hover:bg-slate-50/60 transition-colors"
+                  className="border-b border-blue-800 last:border-b-0 hover:bg-slate-50/60 transition-colors"
                 >
                   <td className="px-3 py-2 align-top">
                     <input
@@ -2504,7 +2504,7 @@ function OrdersSection({
                       className="cursor-pointer"
                     />
                   </td>
-                  <td className="px-3 py-2 font-medium text-slate-700">
+                  <td className="px-3 py-2 font-medium text-blue-100">
                     {order.order_number}
                   </td>
                   <td className="px-3 py-2">
@@ -2518,12 +2518,12 @@ function OrdersSection({
                       {order.order_type}
                     </span>
                   </td>
-                  <td className="px-3 py-2 text-slate-700">{order.client_name}</td>
-                  <td className="max-w-[220px] truncate px-3 py-2 text-slate-500">
+                  <td className="px-3 py-2 text-blue-100">{order.client_name}</td>
+                  <td className="max-w-[220px] truncate px-3 py-2 text-blue-300">
                     {order.description || "-"}
                   </td>
-                  <td className="px-3 py-2 text-slate-700">{formatMoney(order.total_after_tax ?? order.total_price ?? 0)}</td>
-                  <td className="px-3 py-2 text-slate-500">{order.order_date || "-"}</td>
+                  <td className="px-3 py-2 text-blue-100">{formatMoney(order.total_after_tax ?? order.total_price ?? 0)}</td>
+                  <td className="px-3 py-2 text-blue-300">{order.order_date || "-"}</td>
                   <td className="px-3 py-2">
                     <StatusBadge status={order.status ?? "下单"} />
                   </td>
@@ -2534,7 +2534,7 @@ function OrdersSection({
                     <div className="flex items-center gap-1">
                       <button
                         onClick={() => setSelectedOrder(order)}
-                        className="rounded border border-slate-200 px-2 py-0.5 text-xs text-slate-600 hover:border-blue-300 hover:text-blue-600 transition-colors"
+                        className="rounded border border-slate-200 px-2 py-0.5 text-xs text-blue-200 hover:border-blue-300 hover:text-blue-600 transition-colors"
                       >
                         查看
                       </button>
@@ -2548,7 +2548,7 @@ function OrdersSection({
                           </button>
                           <button
                             onClick={() => setDeleteConfirm(null)}
-                            className="rounded border border-slate-200 px-2 py-0.5 text-xs text-slate-500 hover:border-slate-300 transition-colors"
+                            className="rounded border border-slate-200 px-2 py-0.5 text-xs text-blue-300 hover:border-slate-300 transition-colors"
                           >
                             取消
                           </button>
@@ -2569,7 +2569,7 @@ function OrdersSection({
               <tr>
                 <td
                   colSpan={orderListColumns.length + 2}
-                  className="py-10 text-center text-xs text-slate-400"
+                  className="py-10 text-center text-xs text-blue-400"
                 >
                   当前没有可显示的订单数据
                 </td>
@@ -2580,7 +2580,7 @@ function OrdersSection({
       </div>
 
       {filteredOrders.length > 0 ? (
-        <div className="mt-3 flex flex-wrap items-center justify-between gap-3 text-xs text-slate-500">
+        <div className="mt-3 flex flex-wrap items-center justify-between gap-3 text-xs text-blue-300">
           <div>第 {orderPage} / {orderPageCount} 页，共 {filteredOrders.length} 条订单</div>
           <div className="flex items-center gap-2">
             <button
@@ -2734,9 +2734,9 @@ function InlineConfirmDialog({
 
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center bg-slate-950/45 px-4">
-      <div className="w-full max-w-md rounded-2xl border border-slate-200 bg-white p-5 shadow-2xl">
-        <h3 className="text-base font-semibold text-slate-900">{title}</h3>
-        <p className="mt-2 text-xs leading-5 text-slate-500">{description}</p>
+      <div className="w-full max-w-md rounded-2xl border border-blue-700 bg-blue-900 p-5 shadow-2xl">
+        <h3 className="text-base font-semibold text-white">{title}</h3>
+        <p className="mt-2 text-xs leading-5 text-blue-300">{description}</p>
         <div className="mt-5 flex justify-end gap-2">
           <ActionBtn onClick={onCancel}>取消</ActionBtn>
           <ActionBtn tone={confirmTone} onClick={onConfirm}>
@@ -3928,13 +3928,13 @@ function ClientsSection({ clients, setClients, suppliers, setSuppliers, orders, 
 
       {showClientModal && (
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-slate-950/45 px-4">
-          <div className="w-full max-w-3xl rounded-2xl border border-slate-200 bg-white p-5 shadow-2xl">
+          <div className="w-full max-w-3xl rounded-2xl border border-blue-700 bg-blue-900 p-5 shadow-2xl">
             <div className="mb-4 flex items-start justify-between gap-3">
               <div>
-                <h3 className="text-base font-semibold text-slate-900">{editingClientId ? "编辑客户" : "新建客户"}</h3>
-                <p className="mt-1 text-xs text-slate-500">客户资料现在支持直接新增和编辑。</p>
+                <h3 className="text-base font-semibold text-white">{editingClientId ? "编辑客户" : "新建客户"}</h3>
+                <p className="mt-1 text-xs text-blue-300">客户资料现在支持直接新增和编辑。</p>
               </div>
-              <button onClick={() => setShowClientModal(false)} className="rounded-lg border border-slate-200 px-2.5 py-1 text-xs text-slate-500 hover:border-slate-300 hover:text-slate-700 transition-colors">关闭</button>
+              <button onClick={() => setShowClientModal(false)} className="rounded-lg border border-slate-200 px-2.5 py-1 text-xs text-blue-300 hover:border-slate-300 hover:text-blue-100 transition-colors">关闭</button>
             </div>
             <div className="grid gap-2 sm:grid-cols-2 xl:grid-cols-3">
               <SmallInput value={clientDraft.name} onChange={(v) => setClientDraft((d) => ({ ...d, name: v }))} placeholder="客户名称" />
@@ -3954,13 +3954,13 @@ function ClientsSection({ clients, setClients, suppliers, setSuppliers, orders, 
 
       {showSupplierModal && (
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-slate-950/45 px-4">
-          <div className="w-full max-w-3xl rounded-2xl border border-slate-200 bg-white p-5 shadow-2xl">
+          <div className="w-full max-w-3xl rounded-2xl border border-blue-700 bg-blue-900 p-5 shadow-2xl">
             <div className="mb-4 flex items-start justify-between gap-3">
               <div>
-                <h3 className="text-base font-semibold text-slate-900">{editingSupplierId ? "编辑供应商" : "新建供应商"}</h3>
-                <p className="mt-1 text-xs text-slate-500">供应商资料现在也支持直接新增和编辑。</p>
+                <h3 className="text-base font-semibold text-white">{editingSupplierId ? "编辑供应商" : "新建供应商"}</h3>
+                <p className="mt-1 text-xs text-blue-300">供应商资料现在也支持直接新增和编辑。</p>
               </div>
-              <button onClick={() => setShowSupplierModal(false)} className="rounded-lg border border-slate-200 px-2.5 py-1 text-xs text-slate-500 hover:border-slate-300 hover:text-slate-700 transition-colors">关闭</button>
+              <button onClick={() => setShowSupplierModal(false)} className="rounded-lg border border-slate-200 px-2.5 py-1 text-xs text-blue-300 hover:border-slate-300 hover:text-blue-100 transition-colors">关闭</button>
             </div>
             <div className="grid gap-2 sm:grid-cols-2 xl:grid-cols-4">
               <SmallInput value={supplierDraft.name} onChange={(v) => setSupplierDraft((d) => ({ ...d, name: v }))} placeholder="供应商名称" />
@@ -3987,8 +3987,8 @@ function ClientsSection({ clients, setClients, suppliers, setSuppliers, orders, 
             <PanelCard title="客户列表" note="点开一个客户后，就能在这里直接看订单、预约、收款情况、联系人和地址。">
               <div className="space-y-3">
                 <div className="relative">
-                  <span className="absolute left-3 top-1/2 -translate-y-1/2 text-xs text-slate-400">⌕</span>
-                  <input value={clientSearch} onChange={(e) => setClientSearch(e.target.value)} placeholder="搜索客户 / 电话 / 地址" className="h-9 w-full rounded-lg border border-slate-300 bg-white pl-8 pr-3 text-xs text-slate-700" />
+                  <span className="absolute left-3 top-1/2 -translate-y-1/2 text-xs text-blue-400">⌕</span>
+                  <input value={clientSearch} onChange={(e) => setClientSearch(e.target.value)} placeholder="搜索客户 / 电话 / 地址" className="h-9 w-full rounded-lg border border-slate-300 bg-white pl-8 pr-3 text-xs text-blue-100" />
                 </div>
                 <div className="max-h-[420px] space-y-2 overflow-y-auto pr-1 xl:max-h-[calc(100vh-22rem)]">
                   {pagedClients.length ? pagedClients.map((item) => {
@@ -3996,27 +3996,27 @@ function ClientsSection({ clients, setClients, suppliers, setSuppliers, orders, 
                     const itemBalance = itemOrders.reduce((sum, order) => sum + (order.balance ?? 0), 0);
                     const isActive = selectedClient?.id === item.id;
                     return (
-                      <button key={item.id} onClick={() => selectClient(item.id)} className={`w-full rounded-xl border p-3 text-left transition-colors ${isActive ? "border-sky-300 bg-sky-50" : "border-slate-200 bg-white hover:border-slate-300 hover:bg-slate-50"}`}>
+                      <button key={item.id} onClick={() => selectClient(item.id)} className={`w-full rounded-xl border p-3 text-left transition-colors ${isActive ? "border-sky-300 bg-sky-50" : "border-blue-700 bg-blue-900 hover:border-blue-600 hover:bg-blue-800"}`}>
                         <div className="flex items-center justify-between gap-3">
                           <div>
                             <div className="flex items-center gap-2">
-                              <span className="text-xs font-semibold text-slate-900">{item.name}</span>
+                              <span className="text-xs font-semibold text-white">{item.name}</span>
                               {item.is_vip ? <span className="rounded-full bg-amber-50 px-2 py-0.5 text-[11px] font-semibold text-amber-700">VIP</span> : null}
                             </div>
-                            <p className="mt-1 text-[11px] text-slate-500">{item.phone ?? item.contact ?? "暂未填写联系方式"}</p>
+                            <p className="mt-1 text-[11px] text-blue-300">{item.phone ?? item.contact ?? "暂未填写联系方式"}</p>
                           </div>
                           <span className={`rounded-full px-2 py-0.5 text-[11px] font-semibold ${itemBalance > 0 ? "bg-amber-50 text-amber-700" : "bg-emerald-50 text-emerald-700"}`}>
                             {itemBalance > 0 ? `欠款 ${formatMoney(itemBalance)}` : "已结清"}
                           </span>
                         </div>
-                        <div className="mt-2 flex flex-wrap gap-3 text-[11px] text-slate-500">
+                        <div className="mt-2 flex flex-wrap gap-3 text-[11px] text-blue-300">
                           <span>{itemOrders.length} 个订单</span>
                         </div>
                       </button>
                     );
-                  }) : <div className="rounded-xl border border-dashed border-slate-200 py-10 text-center text-xs text-slate-400">没有匹配到客户</div>}
+                  }) : <div className="rounded-xl border border-dashed border-slate-200 py-10 text-center text-xs text-blue-400">没有匹配到客户</div>}
                 </div>
-                <div className="flex items-center justify-between text-xs text-slate-500">
+                <div className="flex items-center justify-between text-xs text-blue-300">
                   <span>第 {clientPage} / {clientPageCount} 页，共 {filteredClients.length} 个客户</span>
                   <div className="flex gap-2">
                     <ActionBtn onClick={() => setClientPage((prev) => Math.max(1, prev - 1))}>上一页</ActionBtn>
@@ -4032,13 +4032,13 @@ function ClientsSection({ clients, setClients, suppliers, setSuppliers, orders, 
                   <div className="flex flex-wrap items-start justify-between gap-3 rounded-xl border border-slate-200 bg-slate-50 p-3">
                     <div>
                       <div className="flex items-center gap-2">
-                        <h3 className="text-base font-semibold text-slate-900">{selectedClient.name}</h3>
+                        <h3 className="text-base font-semibold text-white">{selectedClient.name}</h3>
                         {selectedClient.is_vip ? <span className="rounded-full bg-sky-100 px-2 py-0.5 text-[11px] font-semibold text-sky-700">VIP客户</span> : null}
                         {clientBalance > 0 ? <span className="rounded-full bg-amber-50 px-2 py-0.5 text-[11px] font-semibold text-amber-700">待跟进</span> : null}
                       </div>
-                      <p className="mt-1 text-xs text-slate-500">联系人 {selectedClient.contact ?? "-"}，电话 {selectedClient.phone ?? "-"}</p>
-                      <p className="mt-1 text-xs text-slate-500">地址 {selectedClient.address ?? "未填写"}</p>
-                      <p className="mt-1 text-xs text-slate-500">微信/邮箱 {selectedClient.wechat ?? selectedClient.email ?? "未填写"}</p>
+                      <p className="mt-1 text-xs text-blue-300">联系人 {selectedClient.contact ?? "-"}，电话 {selectedClient.phone ?? "-"}</p>
+                      <p className="mt-1 text-xs text-blue-300">地址 {selectedClient.address ?? "未填写"}</p>
+                      <p className="mt-1 text-xs text-blue-300">微信/邮箱 {selectedClient.wechat ?? selectedClient.email ?? "未填写"}</p>
                     </div>
                     <div className="flex flex-wrap gap-2">
                       <ActionBtn onClick={() => toggleVip(selectedClient.id)}>{selectedClient.is_vip ? "取消VIP" : "设为VIP"}</ActionBtn>
@@ -4046,7 +4046,7 @@ function ClientsSection({ clients, setClients, suppliers, setSuppliers, orders, 
                       {confirmingClientId === selectedClient.id ? (
                         <>
                           <button onClick={() => deleteClient(selectedClient)} className="rounded-lg border border-red-500 bg-red-500 px-3 py-1.5 text-xs font-semibold text-white hover:bg-red-600 transition-colors">确认删除</button>
-                          <button onClick={() => setConfirmingClientId(null)} className="rounded-lg border border-slate-200 px-3 py-1.5 text-xs text-slate-500 hover:border-slate-300 transition-colors">取消</button>
+                          <button onClick={() => setConfirmingClientId(null)} className="rounded-lg border border-slate-200 px-3 py-1.5 text-xs text-blue-300 hover:border-slate-300 transition-colors">取消</button>
                         </>
                       ) : (
                         <ActionBtn tone="danger" onClick={() => setConfirmingClientId(selectedClient.id)}>删除客户</ActionBtn>
@@ -4077,31 +4077,31 @@ function ClientsSection({ clients, setClients, suppliers, setSuppliers, orders, 
                   <div className="min-h-0 flex-1 overflow-y-auto pr-1">
                     {clientDetailTab === "overview" ? (
                       <div className="grid gap-3 lg:grid-cols-3">
-                    <div className="rounded-xl border border-slate-200 bg-white p-3">
-                      <p className="text-[11px] uppercase tracking-[0.2em] text-slate-400">联系资料</p>
+                    <div className="rounded-xl border border-blue-700 bg-blue-900 p-3">
+                      <p className="text-[11px] uppercase tracking-[0.2em] text-blue-400">联系资料</p>
                       <div className="mt-3 space-y-2 text-xs">
-                        <div className="flex items-start justify-between gap-3"><span className="text-slate-500">主要联系人</span><span className="max-w-[190px] text-right font-medium text-slate-900">{selectedClient.contact ?? selectedClient.name}</span></div>
-                        <div className="flex items-start justify-between gap-3"><span className="text-slate-500">电话</span><span className="max-w-[190px] text-right font-medium text-slate-900">{selectedClient.phone ?? "-"}</span></div>
-                        <div className="flex items-start justify-between gap-3"><span className="text-slate-500">微信 / 邮箱</span><span className="max-w-[190px] text-right font-medium text-slate-900">{selectedClient.wechat ?? selectedClient.email ?? "-"}</span></div>
-                        <div className="flex items-start justify-between gap-3"><span className="text-slate-500">地址</span><span className="max-w-[190px] text-right text-slate-900">{selectedClient.address ?? "未填写"}</span></div>
+                        <div className="flex items-start justify-between gap-3"><span className="text-blue-300">主要联系人</span><span className="max-w-[190px] text-right font-medium text-white">{selectedClient.contact ?? selectedClient.name}</span></div>
+                        <div className="flex items-start justify-between gap-3"><span className="text-blue-300">电话</span><span className="max-w-[190px] text-right font-medium text-white">{selectedClient.phone ?? "-"}</span></div>
+                        <div className="flex items-start justify-between gap-3"><span className="text-blue-300">微信 / 邮箱</span><span className="max-w-[190px] text-right font-medium text-white">{selectedClient.wechat ?? selectedClient.email ?? "-"}</span></div>
+                        <div className="flex items-start justify-between gap-3"><span className="text-blue-300">地址</span><span className="max-w-[190px] text-right text-white">{selectedClient.address ?? "未填写"}</span></div>
                       </div>
                     </div>
 
-                    <div className="rounded-xl border border-slate-200 bg-white p-3">
-                      <p className="text-[11px] uppercase tracking-[0.2em] text-slate-400">业务状态</p>
+                    <div className="rounded-xl border border-blue-700 bg-blue-900 p-3">
+                      <p className="text-[11px] uppercase tracking-[0.2em] text-blue-400">业务状态</p>
                       <div className="mt-3 space-y-2 text-xs">
-                        <div className="flex items-center justify-between"><span className="text-slate-500">最近下单</span><span className="font-medium text-slate-900">{clientLastOrder}</span></div>
-                        <div className="flex items-center justify-between"><span className="text-slate-500">备注</span><span className="max-w-[180px] text-right text-slate-900">{selectedClient.note ?? "-"}</span></div>
+                        <div className="flex items-center justify-between"><span className="text-blue-300">最近下单</span><span className="font-medium text-white">{clientLastOrder}</span></div>
+                        <div className="flex items-center justify-between"><span className="text-blue-300">备注</span><span className="max-w-[180px] text-right text-white">{selectedClient.note ?? "-"}</span></div>
                       </div>
                     </div>
 
-                    <div className="rounded-xl border border-slate-200 bg-white p-3">
-                      <p className="text-[11px] uppercase tracking-[0.2em] text-slate-400">收款情况</p>
+                    <div className="rounded-xl border border-blue-700 bg-blue-900 p-3">
+                      <p className="text-[11px] uppercase tracking-[0.2em] text-blue-400">收款情况</p>
                       <div className="mt-3 space-y-2 text-xs">
-                        <div className="flex items-center justify-between"><span className="text-slate-500">未收余款</span><span className={`font-semibold ${clientBalance > 0 ? "text-amber-600" : "text-emerald-600"}`}>{formatMoney(clientBalance)}</span></div>
-                        <div className="flex items-center justify-between"><span className="text-slate-500">未结清订单</span><span className="font-medium text-slate-900">{clientOrderCountWithBalance}</span></div>
-                        <div className="flex items-center justify-between"><span className="text-slate-500">最近收款</span><span className="max-w-[180px] text-right font-medium text-slate-900">{clientLastPayment ? `${clientLastPayment.date} · ${formatMoney(clientLastPayment.amount)}` : "暂无收款"}</span></div>
-                        <div className="flex items-center justify-between"><span className="text-slate-500">客户档案余额</span><span className="font-medium text-slate-900">{formatMoney(selectedClient.balance ?? clientBalance)}</span></div>
+                        <div className="flex items-center justify-between"><span className="text-blue-300">未收余款</span><span className={`font-semibold ${clientBalance > 0 ? "text-amber-600" : "text-emerald-600"}`}>{formatMoney(clientBalance)}</span></div>
+                        <div className="flex items-center justify-between"><span className="text-blue-300">未结清订单</span><span className="font-medium text-white">{clientOrderCountWithBalance}</span></div>
+                        <div className="flex items-center justify-between"><span className="text-blue-300">最近收款</span><span className="max-w-[180px] text-right font-medium text-white">{clientLastPayment ? `${clientLastPayment.date} · ${formatMoney(clientLastPayment.amount)}` : "暂无收款"}</span></div>
+                        <div className="flex items-center justify-between"><span className="text-blue-300">客户档案余额</span><span className="font-medium text-white">{formatMoney(selectedClient.balance ?? clientBalance)}</span></div>
                       </div>
                     </div>
                   </div>
@@ -4123,11 +4123,11 @@ function ClientsSection({ clients, setClients, suppliers, setSuppliers, orders, 
                     {clientDetailTab === "orders" ? (
                       <div className="grid gap-3 xl:grid-cols-[1.15fr_0.85fr]">
                     <div className="space-y-4">
-                      <div className="rounded-xl border border-slate-200 bg-white p-3">
+                      <div className="rounded-xl border border-blue-700 bg-blue-900 p-3">
                         <div className="mb-3 flex items-center justify-between">
                           <div>
-                            <p className="text-xs font-semibold text-slate-900">快速收款</p>
-                            <p className="text-[11px] text-slate-400">选中未结清订单，录一次收款，就会立即同步客户余额。</p>
+                            <p className="text-xs font-semibold text-white">快速收款</p>
+                            <p className="text-[11px] text-blue-400">选中未结清订单，录一次收款，就会立即同步客户余额。</p>
                           </div>
                           <span className={`rounded-full px-2 py-0.5 text-[11px] font-semibold ${receivableOrders.length ? "bg-amber-50 text-amber-700" : "bg-emerald-50 text-emerald-700"}`}>
                             {receivableOrders.length ? `${receivableOrders.length} 个未结清` : "全部结清"}
@@ -4137,33 +4137,33 @@ function ClientsSection({ clients, setClients, suppliers, setSuppliers, orders, 
                           <div className="space-y-3">
                             <div className="grid gap-2 sm:grid-cols-2 xl:grid-cols-4">
                               <div>
-                                <label className="mb-1 block text-[11px] font-semibold text-slate-500">订单</label>
+                                <label className="mb-1 block text-[11px] font-semibold text-blue-300">订单</label>
                                 <select value={quickCollectDraft.orderNumber} onChange={(e) => {
                                   const nextOrder = receivableOrders.find((item) => item.order_number === e.target.value);
                                   setQuickCollectDraft((prev) => ({ ...prev, orderNumber: e.target.value, amount: nextOrder ? String(nextOrder.balance ?? "") : prev.amount }));
-                                }} className="h-9 w-full rounded-lg border border-slate-300 bg-white px-3 text-xs text-slate-700">
+                                }} className="h-9 w-full rounded-lg border border-slate-300 bg-white px-3 text-xs text-blue-100">
                                   {receivableOrders.map((item) => <option key={item.order_number} value={item.order_number}>{item.order_number} · {formatMoney(item.balance ?? 0)}</option>)}
                                 </select>
                               </div>
                               <div>
-                                <label className="mb-1 block text-[11px] font-semibold text-slate-500">金额</label>
-                                <input type="number" min={0} step={0.01} value={quickCollectDraft.amount} onChange={(e) => setQuickCollectDraft((prev) => ({ ...prev, amount: e.target.value }))} className="h-9 w-full rounded-lg border border-slate-300 bg-white px-3 text-xs text-slate-700" placeholder="0.00" />
+                                <label className="mb-1 block text-[11px] font-semibold text-blue-300">金额</label>
+                                <input type="number" min={0} step={0.01} value={quickCollectDraft.amount} onChange={(e) => setQuickCollectDraft((prev) => ({ ...prev, amount: e.target.value }))} className="h-9 w-full rounded-lg border border-slate-300 bg-white px-3 text-xs text-blue-100" placeholder="0.00" />
                               </div>
                               <div>
-                                <label className="mb-1 block text-[11px] font-semibold text-slate-500">日期</label>
-                                <input type="date" value={quickCollectDraft.date} onChange={(e) => setQuickCollectDraft((prev) => ({ ...prev, date: e.target.value }))} className="h-9 w-full rounded-lg border border-slate-300 bg-white px-3 text-xs text-slate-700" />
+                                <label className="mb-1 block text-[11px] font-semibold text-blue-300">日期</label>
+                                <input type="date" value={quickCollectDraft.date} onChange={(e) => setQuickCollectDraft((prev) => ({ ...prev, date: e.target.value }))} className="h-9 w-full rounded-lg border border-slate-300 bg-white px-3 text-xs text-blue-100" />
                               </div>
                               <div>
-                                <label className="mb-1 block text-[11px] font-semibold text-slate-500">方式</label>
-                                <select value={quickCollectDraft.method} onChange={(e) => setQuickCollectDraft((prev) => ({ ...prev, method: e.target.value }))} className="h-9 w-full rounded-lg border border-slate-300 bg-white px-3 text-xs text-slate-700">
+                                <label className="mb-1 block text-[11px] font-semibold text-blue-300">方式</label>
+                                <select value={quickCollectDraft.method} onChange={(e) => setQuickCollectDraft((prev) => ({ ...prev, method: e.target.value }))} className="h-9 w-full rounded-lg border border-slate-300 bg-white px-3 text-xs text-blue-100">
                                   {PAYMENT_METHODS.map((m) => <option key={m}>{m}</option>)}
                                 </select>
                               </div>
                             </div>
                             <div className="grid gap-2 lg:grid-cols-[1fr_auto]">
                               <div className="space-y-2">
-                                <input type="text" value={quickCollectDraft.note} onChange={(e) => setQuickCollectDraft((prev) => ({ ...prev, note: e.target.value }))} className="h-9 w-full rounded-lg border border-slate-300 bg-white px-3 text-xs text-slate-700" placeholder="备注，比如送货时收尾款" />
-                                <label className="flex items-center gap-2 text-xs text-slate-600"><input type="checkbox" checked={quickCollectDraft.office} onChange={(e) => setQuickCollectDraft((prev) => ({ ...prev, office: e.target.checked }))} /> 进入办公室</label>
+                                <input type="text" value={quickCollectDraft.note} onChange={(e) => setQuickCollectDraft((prev) => ({ ...prev, note: e.target.value }))} className="h-9 w-full rounded-lg border border-slate-300 bg-white px-3 text-xs text-blue-100" placeholder="备注，比如送货时收尾款" />
+                                <label className="flex items-center gap-2 text-xs text-blue-200"><input type="checkbox" checked={quickCollectDraft.office} onChange={(e) => setQuickCollectDraft((prev) => ({ ...prev, office: e.target.checked }))} /> 进入办公室</label>
                               </div>
                               <div className="flex flex-wrap gap-2">
                                 <ActionBtn onClick={() => applyQuickCollectPreset("half")}>填一半</ActionBtn>
@@ -4181,19 +4181,19 @@ function ClientsSection({ clients, setClients, suppliers, setSuppliers, orders, 
                             ) : null}
                             <div className="space-y-2">
                               {pagedReceivableOrders.map((item) => (
-                                <button key={item.order_number} onClick={() => applyQuickCollectPreset("balance", item)} className={`flex w-full items-center justify-between rounded-xl border px-3 py-2 text-left text-xs transition-colors ${selectedCollectOrder?.order_number === item.order_number ? "border-sky-300 bg-sky-50" : "border-slate-200 bg-slate-50 hover:border-slate-300 hover:bg-white"}`}>
+                                <button key={item.order_number} onClick={() => applyQuickCollectPreset("balance", item)} className={`flex w-full items-center justify-between rounded-xl border px-3 py-2 text-left text-xs transition-colors ${selectedCollectOrder?.order_number === item.order_number ? "border-sky-300 bg-sky-50" : "border-blue-700 bg-blue-800 hover:border-blue-600 hover:bg-blue-900"}`}>
                                   <div>
-                                    <p className="font-semibold text-slate-800">{item.order_number}</p>
-                                    <p className="mt-1 text-[11px] text-slate-500">{item.order_date ?? "-"} · {item.status ?? "-"}</p>
+                                    <p className="font-semibold text-white">{item.order_number}</p>
+                                    <p className="mt-1 text-[11px] text-blue-300">{item.order_date ?? "-"} · {item.status ?? "-"}</p>
                                   </div>
                                   <div className="text-right">
                                     <p className="font-semibold text-amber-600">{formatMoney(item.balance ?? 0)}</p>
-                                    <p className="mt-1 text-[11px] text-slate-500">点一下填满全部余款</p>
+                                    <p className="mt-1 text-[11px] text-blue-300">点一下填满全部余款</p>
                                   </div>
                                 </button>
                               ))}
                               {clientReceivablePageCount > 1 && (
-                                <div className="flex items-center justify-between pt-1 text-xs text-slate-500">
+                                <div className="flex items-center justify-between pt-1 text-xs text-blue-300">
                                   <span>第 {clientReceivablePage} / {clientReceivablePageCount} 页</span>
                                   <div className="flex gap-1">
                                     <ActionBtn onClick={() => setClientReceivablePage((p) => Math.max(1, p - 1))} disabled={clientReceivablePage <= 1}>上一页</ActionBtn>
@@ -4206,54 +4206,54 @@ function ClientsSection({ clients, setClients, suppliers, setSuppliers, orders, 
                         ) : <div className="rounded-xl border border-dashed border-slate-200 py-10 text-center text-xs text-emerald-600">这个客户当前没有未收款订单</div>}
                       </div>
 
-                      <div className="rounded-xl border border-slate-200 bg-white p-3">
+                      <div className="rounded-xl border border-blue-700 bg-blue-900 p-3">
                         <div className="mb-3 flex items-center justify-between gap-2">
-                          <p className="text-xs font-semibold text-slate-900">关联订单</p>
+                          <p className="text-xs font-semibold text-white">关联订单</p>
                           <div className="flex items-center gap-2">
-                            <span className="text-[11px] text-slate-400">状态与金额联动</span>
-                            <button onClick={() => setNewOrderTypeForClient("定制单")} className="rounded-md border border-slate-300 bg-white px-2 py-1 text-[11px] font-semibold text-slate-600 hover:border-slate-400 hover:text-slate-900 transition-colors">+ 新建订单</button>
+                            <span className="text-[11px] text-blue-400">状态与金额联动</span>
+                            <button onClick={() => setNewOrderTypeForClient("定制单")} className="rounded-md border border-slate-300 bg-white px-2 py-1 text-[11px] font-semibold text-blue-200 hover:border-slate-400 hover:text-white transition-colors">+ 新建订单</button>
                           </div>
                         </div>
                         {selectedClientOrders.length ? (
                           <div className="overflow-x-auto">
                             <table className="w-full text-left text-xs">
                               <thead>
-                                <tr className="border-b border-slate-200 bg-slate-50">
-                                  <th className="px-3 py-2 font-semibold text-slate-600">订单号</th>
-                                  <th className="px-3 py-2 font-semibold text-slate-600">类型</th>
-                                  <th className="px-3 py-2 font-semibold text-slate-600">日期</th>
-                                  <th className="px-3 py-2 font-semibold text-slate-600">总额</th>
-                                  <th className="px-3 py-2 font-semibold text-slate-600">已收</th>
-                                  <th className="px-3 py-2 font-semibold text-slate-600">余款</th>
-                                  <th className="px-3 py-2 font-semibold text-slate-600">图片</th>
-                                  <th className="px-3 py-2 font-semibold text-slate-600">操作</th>
+                                <tr className="border-b border-blue-700 bg-blue-800">
+                                  <th className="px-3 py-2 font-semibold text-blue-200">订单号</th>
+                                  <th className="px-3 py-2 font-semibold text-blue-200">类型</th>
+                                  <th className="px-3 py-2 font-semibold text-blue-200">日期</th>
+                                  <th className="px-3 py-2 font-semibold text-blue-200">总额</th>
+                                  <th className="px-3 py-2 font-semibold text-blue-200">已收</th>
+                                  <th className="px-3 py-2 font-semibold text-blue-200">余款</th>
+                                  <th className="px-3 py-2 font-semibold text-blue-200">图片</th>
+                                  <th className="px-3 py-2 font-semibold text-blue-200">操作</th>
                                 </tr>
                               </thead>
                               <tbody>
                                 {pagedClientOrders.map((item) => (
-                                  <tr key={item.order_number} className="border-b border-slate-100 last:border-b-0">
-                                    <td className="px-3 py-2 font-medium text-slate-700">{item.order_number}</td>
-                                    <td className="px-3 py-2 text-slate-600">{item.order_type}</td>
-                                    <td className="px-3 py-2 text-slate-500">{item.order_date ?? "-"}</td>
-                                    <td className="px-3 py-2 text-slate-700">{formatMoney(item.total_after_tax ?? item.total_price ?? 0)}</td>
+                                  <tr key={item.order_number} className="border-b border-blue-800 last:border-b-0">
+                                    <td className="px-3 py-2 font-medium text-blue-100">{item.order_number}</td>
+                                    <td className="px-3 py-2 text-blue-200">{item.order_type}</td>
+                                    <td className="px-3 py-2 text-blue-300">{item.order_date ?? "-"}</td>
+                                    <td className="px-3 py-2 text-blue-100">{formatMoney(item.total_after_tax ?? item.total_price ?? 0)}</td>
                                     <td className="px-3 py-2 text-emerald-600">{formatMoney(item.amount_paid ?? 0)}</td>
                                     <td className={`px-3 py-2 font-semibold ${(item.balance ?? 0) > 0 ? "text-amber-600" : "text-slate-700"}`}>{formatMoney(item.balance ?? 0)}</td>
                                     <td className="px-3 py-2">
                                       {(item.order_images ?? []).length > 0 ? (
-                                        <button onClick={() => setLightboxImage((item.order_images ?? [])[0]!)} className="rounded border border-slate-200 bg-slate-50 px-2 py-1 text-[11px] text-slate-600 hover:border-slate-300 hover:bg-white transition-colors">查看</button>
-                                      ) : <span className="text-[11px] text-slate-400">-</span>}
+                                        <button onClick={() => setLightboxImage((item.order_images ?? [])[0]!)} className="rounded border border-slate-200 bg-slate-50 px-2 py-1 text-[11px] text-blue-200 hover:border-slate-300 hover:bg-blue-800 transition-colors">查看</button>
+                                      ) : <span className="text-[11px] text-blue-400">-</span>}
                                     </td>
                                     <td className="px-3 py-2">
                                       <div className="flex flex-wrap items-center gap-1">
                                         {(item.balance ?? 0) > 0 ? <button onClick={() => applyQuickCollectPreset("balance", item)} className="rounded-md border border-amber-200 bg-amber-50 px-2 py-1 text-[11px] font-semibold text-amber-700 hover:bg-amber-100">收清</button> : <span className="text-[11px] text-emerald-600">已结清</span>}
-                                        <button onClick={() => setEditOrderForClient(item)} className="rounded-md border border-slate-200 bg-white px-2 py-1 text-[11px] font-semibold text-slate-600 hover:border-slate-400 transition-colors">编辑</button>
+                                        <button onClick={() => setEditOrderForClient(item)} className="rounded-md border border-blue-700 bg-blue-900 px-2 py-1 text-[11px] font-semibold text-blue-200 hover:border-slate-400 transition-colors">编辑</button>
                                         {deleteOrderConfirm === item.order_number ? (
                                           <>
                                             <button onClick={() => handleClientOrderDelete(item.order_number)} className="rounded-md border border-red-400 bg-red-50 px-2 py-1 text-[11px] font-semibold text-red-700 hover:bg-red-100">确认</button>
-                                            <button onClick={() => setDeleteOrderConfirm(null)} className="rounded-md border border-slate-200 px-2 py-1 text-[11px] text-slate-500 hover:border-slate-300">取消</button>
+                                            <button onClick={() => setDeleteOrderConfirm(null)} className="rounded-md border border-slate-200 px-2 py-1 text-[11px] text-blue-300 hover:border-slate-300">取消</button>
                                           </>
                                         ) : (
-                                          <button onClick={() => setDeleteOrderConfirm(item.order_number)} className="rounded-md border border-slate-200 bg-white px-2 py-1 text-[11px] text-slate-500 hover:border-rose-300 hover:text-rose-600 transition-colors">删除</button>
+                                          <button onClick={() => setDeleteOrderConfirm(item.order_number)} className="rounded-md border border-blue-700 bg-blue-900 px-2 py-1 text-[11px] text-blue-300 hover:border-rose-300 hover:text-rose-600 transition-colors">删除</button>
                                         )}
                                       </div>
                                     </td>
@@ -4262,7 +4262,7 @@ function ClientsSection({ clients, setClients, suppliers, setSuppliers, orders, 
                               </tbody>
                             </table>
                             {clientOrdersPageCount > 1 && (
-                              <div className="flex items-center justify-between border-t border-slate-100 px-3 py-2 text-xs text-slate-500">
+                              <div className="flex items-center justify-between border-t border-blue-800 px-3 py-2 text-xs text-blue-300">
                                 <span>第 {clientOrdersPage} / {clientOrdersPageCount} 页，共 {selectedClientOrders.length} 条</span>
                                 <div className="flex gap-1">
                                   <ActionBtn onClick={() => setClientOrdersPage((p) => Math.max(1, p - 1))} disabled={clientOrdersPage <= 1}>上一页</ActionBtn>
@@ -4271,29 +4271,29 @@ function ClientsSection({ clients, setClients, suppliers, setSuppliers, orders, 
                               </div>
                             )}
                           </div>
-                        ) : <div className="rounded-xl border border-dashed border-slate-200 py-10 text-center text-xs text-slate-400">这个客户还没有关联订单</div>}
+                        ) : <div className="rounded-xl border border-dashed border-slate-200 py-10 text-center text-xs text-blue-400">这个客户还没有关联订单</div>}
                       </div>
                     </div>
 
-                    <div className="rounded-xl border border-slate-200 bg-white p-3">
+                    <div className="rounded-xl border border-blue-700 bg-blue-900 p-3">
                       <div className="mb-3 flex items-center justify-between">
-                        <p className="text-xs font-semibold text-slate-900">最近收款</p>
-                        <span className="text-[11px] text-slate-400">从关联订单里自动汇总</span>
+                        <p className="text-xs font-semibold text-white">最近收款</p>
+                        <span className="text-[11px] text-blue-400">从关联订单里自动汇总</span>
                       </div>
                       {clientRecentPayments.length ? (
                         <div className="space-y-2">
                           {pagedClientPayments.map((item, index) => (
                             <div key={`${item.order_number}-${item.date}-${index}`} className="rounded-lg border border-slate-200 px-3 py-2">
                               <div className="flex items-center justify-between gap-2">
-                                <span className="text-xs font-medium text-slate-800">{item.order_number}</span>
+                                <span className="text-xs font-medium text-white">{item.order_number}</span>
                                 <span className={`text-xs font-semibold ${item.type === "refund" ? "text-rose-600" : "text-emerald-600"}`}>{item.type === "refund" ? "退款" : "收款"} {formatMoney(item.amount)}</span>
                               </div>
-                              <p className="mt-1 text-[11px] text-slate-500">{item.date} · {item.method} · {item.order_status}</p>
-                              <p className="mt-1 text-[11px] text-slate-400">{item.note ?? "无备注"}</p>
+                              <p className="mt-1 text-[11px] text-blue-300">{item.date} · {item.method} · {item.order_status}</p>
+                              <p className="mt-1 text-[11px] text-blue-400">{item.note ?? "无备注"}</p>
                             </div>
                           ))}
                           {clientPaymentsPageCount > 1 && (
-                            <div className="flex items-center justify-between pt-1 text-xs text-slate-500">
+                            <div className="flex items-center justify-between pt-1 text-xs text-blue-300">
                               <span>第 {clientPaymentsPage} / {clientPaymentsPageCount} 页</span>
                               <div className="flex gap-1">
                                 <ActionBtn onClick={() => setClientPaymentsPage((p) => Math.max(1, p - 1))} disabled={clientPaymentsPage <= 1}>上一页</ActionBtn>
@@ -4302,7 +4302,7 @@ function ClientsSection({ clients, setClients, suppliers, setSuppliers, orders, 
                             </div>
                           )}
                         </div>
-                      ) : <div className="rounded-xl border border-dashed border-slate-200 py-10 text-center text-xs text-slate-400">暂时还没有收款记录</div>}
+                      ) : <div className="rounded-xl border border-dashed border-slate-200 py-10 text-center text-xs text-blue-400">暂时还没有收款记录</div>}
                     </div>
                   </div>
                     ) : null}
@@ -4310,36 +4310,36 @@ function ClientsSection({ clients, setClients, suppliers, setSuppliers, orders, 
                     {clientDetailTab === "appointments" ? (
                       <div className="space-y-3">
                         <div className="flex items-center justify-between">
-                          <p className="text-xs font-semibold text-slate-900">量衣预约</p>
-                          <button onClick={() => { setEditingAppointment(null); setAppointmentDraft({ appointment_date: new Date().toISOString().slice(0, 10), address: '', description: '' }); setShowAppointmentModal(true); }} className="rounded-md border border-slate-300 bg-white px-2 py-1 text-[11px] font-semibold text-slate-600 hover:border-slate-400 hover:text-slate-900 transition-colors">+ 新建预约</button>
+                          <p className="text-xs font-semibold text-white">量衣预约</p>
+                          <button onClick={() => { setEditingAppointment(null); setAppointmentDraft({ appointment_date: new Date().toISOString().slice(0, 10), address: '', description: '' }); setShowAppointmentModal(true); }} className="rounded-md border border-slate-300 bg-white px-2 py-1 text-[11px] font-semibold text-blue-200 hover:border-slate-400 hover:text-white transition-colors">+ 新建预约</button>
                         </div>
                         {selectedClientAppointments.length ? (
-                          <div className="overflow-x-auto rounded-xl border border-slate-200 bg-white">
+                          <div className="overflow-x-auto rounded-xl border border-blue-700 bg-blue-900">
                             <table className="w-full text-left text-xs">
                               <thead>
-                                <tr className="border-b border-slate-200 bg-slate-50">
-                                  <th className="px-3 py-2 font-semibold text-slate-600">日期</th>
-                                  <th className="px-3 py-2 font-semibold text-slate-600">地址</th>
-                                  <th className="px-3 py-2 font-semibold text-slate-600">描述</th>
-                                  <th className="px-3 py-2 font-semibold text-slate-600">操作</th>
+                                <tr className="border-b border-blue-700 bg-blue-800">
+                                  <th className="px-3 py-2 font-semibold text-blue-200">日期</th>
+                                  <th className="px-3 py-2 font-semibold text-blue-200">地址</th>
+                                  <th className="px-3 py-2 font-semibold text-blue-200">描述</th>
+                                  <th className="px-3 py-2 font-semibold text-blue-200">操作</th>
                                 </tr>
                               </thead>
                               <tbody>
                                 {pagedClientAppointments.map((item) => (
-                                  <tr key={item.id} className="border-b border-slate-100 last:border-b-0">
-                                    <td className="px-3 py-2 text-slate-500">{item.appointment_date}</td>
-                                    <td className="px-3 py-2 text-slate-600">{item.address ?? "-"}</td>
-                                    <td className="px-3 py-2 text-slate-500">{item.description ?? "-"}</td>
+                                  <tr key={item.id} className="border-b border-blue-800 last:border-b-0">
+                                    <td className="px-3 py-2 text-blue-300">{item.appointment_date}</td>
+                                    <td className="px-3 py-2 text-blue-200">{item.address ?? "-"}</td>
+                                    <td className="px-3 py-2 text-blue-300">{item.description ?? "-"}</td>
                                     <td className="px-3 py-2">
                                       <div className="flex flex-wrap items-center gap-1">
-                                        <button onClick={() => { setEditingAppointment(item); setAppointmentDraft({ appointment_date: item.appointment_date, address: item.address ?? '', description: item.description ?? '' }); setShowAppointmentModal(true); }} className="rounded-md border border-slate-200 bg-white px-2 py-1 text-[11px] font-semibold text-slate-600 hover:border-slate-400 transition-colors">编辑</button>
+                                        <button onClick={() => { setEditingAppointment(item); setAppointmentDraft({ appointment_date: item.appointment_date, address: item.address ?? '', description: item.description ?? '' }); setShowAppointmentModal(true); }} className="rounded-md border border-blue-700 bg-blue-900 px-2 py-1 text-[11px] font-semibold text-blue-200 hover:border-slate-400 transition-colors">编辑</button>
                                         {confirmingDeleteAppointmentId === item.id ? (
                                           <>
                                             <button onClick={() => { setAppointments((prev) => prev.filter((a) => a.id !== item.id)); setConfirmingDeleteAppointmentId(null); }} className="rounded-md border border-red-400 bg-red-50 px-2 py-1 text-[11px] font-semibold text-red-700 hover:bg-red-100">确认</button>
-                                            <button onClick={() => setConfirmingDeleteAppointmentId(null)} className="rounded-md border border-slate-200 px-2 py-1 text-[11px] text-slate-500 hover:border-slate-300">取消</button>
+                                            <button onClick={() => setConfirmingDeleteAppointmentId(null)} className="rounded-md border border-slate-200 px-2 py-1 text-[11px] text-blue-300 hover:border-slate-300">取消</button>
                                           </>
                                         ) : (
-                                          <button onClick={() => setConfirmingDeleteAppointmentId(item.id)} className="rounded-md border border-slate-200 bg-white px-2 py-1 text-[11px] text-slate-500 hover:border-rose-300 hover:text-rose-600 transition-colors">删除</button>
+                                          <button onClick={() => setConfirmingDeleteAppointmentId(item.id)} className="rounded-md border border-blue-700 bg-blue-900 px-2 py-1 text-[11px] text-blue-300 hover:border-rose-300 hover:text-rose-600 transition-colors">删除</button>
                                         )}
                                       </div>
                                     </td>
@@ -4348,7 +4348,7 @@ function ClientsSection({ clients, setClients, suppliers, setSuppliers, orders, 
                               </tbody>
                             </table>
                             {clientAppointmentsPageCount > 1 && (
-                              <div className="flex items-center justify-between border-t border-slate-100 px-3 py-2 text-xs text-slate-500">
+                              <div className="flex items-center justify-between border-t border-blue-800 px-3 py-2 text-xs text-blue-300">
                                 <span>第 {clientAppointmentsPage} / {clientAppointmentsPageCount} 页，共 {selectedClientAppointments.length} 条</span>
                                 <div className="flex gap-1">
                                   <ActionBtn onClick={() => setClientAppointmentsPage((p) => Math.max(1, p - 1))} disabled={clientAppointmentsPage <= 1}>上一页</ActionBtn>
@@ -4357,26 +4357,26 @@ function ClientsSection({ clients, setClients, suppliers, setSuppliers, orders, 
                               </div>
                             )}
                           </div>
-                        ) : <div className="rounded-xl border border-dashed border-slate-200 py-10 text-center text-xs text-slate-400">这个客户还没有量衣预约记录</div>}
+                        ) : <div className="rounded-xl border border-dashed border-slate-200 py-10 text-center text-xs text-blue-400">这个客户还没有量衣预约记录</div>}
                         {showAppointmentModal && (
                           <div className="fixed inset-0 z-50 flex items-center justify-center bg-slate-950/45 px-4">
-                            <div className="w-full max-w-md rounded-2xl border border-slate-200 bg-white p-5 shadow-2xl">
+                            <div className="w-full max-w-md rounded-2xl border border-blue-700 bg-blue-900 p-5 shadow-2xl">
                               <div className="mb-4 flex items-start justify-between gap-3">
-                                <h3 className="text-base font-semibold text-slate-900">{editingAppointment ? "编辑预约" : "新建预约"}</h3>
-                                <button onClick={() => setShowAppointmentModal(false)} className="rounded-lg border border-slate-200 px-2.5 py-1 text-xs text-slate-500 hover:border-slate-300 hover:text-slate-700 transition-colors">关闭</button>
+                                <h3 className="text-base font-semibold text-white">{editingAppointment ? "编辑预约" : "新建预约"}</h3>
+                                <button onClick={() => setShowAppointmentModal(false)} className="rounded-lg border border-slate-200 px-2.5 py-1 text-xs text-blue-300 hover:border-slate-300 hover:text-blue-100 transition-colors">关闭</button>
                               </div>
                               <div className="space-y-3">
                                 <div>
-                                  <label className="mb-1 block text-[11px] font-semibold text-slate-500">日期</label>
-                                  <input type="date" value={appointmentDraft.appointment_date} onChange={(e) => setAppointmentDraft((d) => ({ ...d, appointment_date: e.target.value }))} className="h-9 w-full rounded-lg border border-slate-300 bg-white px-3 text-xs text-slate-700" />
+                                  <label className="mb-1 block text-[11px] font-semibold text-blue-300">日期</label>
+                                  <input type="date" value={appointmentDraft.appointment_date} onChange={(e) => setAppointmentDraft((d) => ({ ...d, appointment_date: e.target.value }))} className="h-9 w-full rounded-lg border border-slate-300 bg-white px-3 text-xs text-blue-100" />
                                 </div>
                                 <div>
-                                  <label className="mb-1 block text-[11px] font-semibold text-slate-500">地址</label>
-                                  <input type="text" value={appointmentDraft.address} onChange={(e) => setAppointmentDraft((d) => ({ ...d, address: e.target.value }))} className="h-9 w-full rounded-lg border border-slate-300 bg-white px-3 text-xs text-slate-700" placeholder="量衣地址" />
+                                  <label className="mb-1 block text-[11px] font-semibold text-blue-300">地址</label>
+                                  <input type="text" value={appointmentDraft.address} onChange={(e) => setAppointmentDraft((d) => ({ ...d, address: e.target.value }))} className="h-9 w-full rounded-lg border border-slate-300 bg-white px-3 text-xs text-blue-100" placeholder="量衣地址" />
                                 </div>
                                 <div>
-                                  <label className="mb-1 block text-[11px] font-semibold text-slate-500">描述</label>
-                                  <input type="text" value={appointmentDraft.description} onChange={(e) => setAppointmentDraft((d) => ({ ...d, description: e.target.value }))} className="h-9 w-full rounded-lg border border-slate-300 bg-white px-3 text-xs text-slate-700" placeholder="备注说明" />
+                                  <label className="mb-1 block text-[11px] font-semibold text-blue-300">描述</label>
+                                  <input type="text" value={appointmentDraft.description} onChange={(e) => setAppointmentDraft((d) => ({ ...d, description: e.target.value }))} className="h-9 w-full rounded-lg border border-slate-300 bg-white px-3 text-xs text-blue-100" placeholder="备注说明" />
                                 </div>
                               </div>
                               <div className="mt-5 flex justify-end gap-2">
@@ -4401,10 +4401,10 @@ function ClientsSection({ clients, setClients, suppliers, setSuppliers, orders, 
 
                     {clientDetailTab === "activity" ? (
                       <div className="grid gap-3">
-                    <div className="rounded-xl border border-slate-200 bg-white p-3">
+                    <div className="rounded-xl border border-blue-700 bg-blue-900 p-3">
                       <div className="mb-3 flex items-center justify-between">
-                        <p className="text-xs font-semibold text-slate-900">业务时间线</p>
-                        <span className="text-[11px] text-slate-400">订单、收款放在一起看</span>
+                        <p className="text-xs font-semibold text-white">业务时间线</p>
+                        <span className="text-[11px] text-blue-400">订单、收款放在一起看</span>
                       </div>
                       {clientBusinessFeed.length ? (
                         <div className="space-y-2">
@@ -4412,13 +4412,13 @@ function ClientsSection({ clients, setClients, suppliers, setSuppliers, orders, 
                             <div key={item.key} className="rounded-lg border border-slate-200 px-3 py-2">
                               <div className="flex items-center justify-between gap-2">
                                 <span className={`text-xs font-semibold ${item.tone}`}>{item.label}</span>
-                                <span className="text-[11px] text-slate-400">{item.date}</span>
+                                <span className="text-[11px] text-blue-400">{item.date}</span>
                               </div>
-                              <p className="mt-1 text-[11px] text-slate-500">{item.detail}</p>
+                              <p className="mt-1 text-[11px] text-blue-300">{item.detail}</p>
                             </div>
                           ))}
                           {clientFeedPageCount > 1 && (
-                            <div className="flex items-center justify-between pt-1 text-xs text-slate-500">
+                            <div className="flex items-center justify-between pt-1 text-xs text-blue-300">
                               <span>第 {clientFeedPage} / {clientFeedPageCount} 页</span>
                               <div className="flex gap-1">
                                 <ActionBtn onClick={() => setClientFeedPage((p) => Math.max(1, p - 1))} disabled={clientFeedPage <= 1}>上一页</ActionBtn>
@@ -4427,47 +4427,47 @@ function ClientsSection({ clients, setClients, suppliers, setSuppliers, orders, 
                             </div>
                           )}
                         </div>
-                      ) : <div className="rounded-xl border border-dashed border-slate-200 py-10 text-center text-xs text-slate-400">暂时还没有关联动态</div>}
+                      ) : <div className="rounded-xl border border-dashed border-slate-200 py-10 text-center text-xs text-blue-400">暂时还没有关联动态</div>}
                     </div>
                       </div>
                     ) : null}
                   </div>
                 </div>
-              ) : <div className="rounded-xl border border-dashed border-slate-200 py-16 text-center text-xs text-slate-400">请先在左侧选择一个客户，再看详情</div>}
+              ) : <div className="rounded-xl border border-dashed border-slate-200 py-16 text-center text-xs text-blue-400">请先在左侧选择一个客户，再看详情</div>}
             </PanelCard>
           </div>
         </div>
       ) : (
         <div className="space-y-3 xl:space-y-2">
-          <div className="overflow-x-auto rounded-xl border border-slate-200 bg-white xl:max-h-[calc(100vh-18rem)] xl:overflow-y-auto">
+          <div className="overflow-x-auto rounded-xl border border-blue-700 bg-blue-900 xl:max-h-[calc(100vh-18rem)] xl:overflow-y-auto">
             <table className="w-full text-left text-xs">
               <thead>
-                <tr className="border-b border-slate-200 bg-slate-50">
-                  <th className="px-4 py-2 font-semibold text-slate-600">供应商名称</th>
-                  <th className="px-4 py-2 font-semibold text-slate-600">分类</th>
-                  <th className="px-4 py-2 font-semibold text-slate-600">联系人</th>
-                  <th className="px-4 py-2 font-semibold text-slate-600">电话</th>
-                  <th className="px-4 py-2 font-semibold text-slate-600">Email</th>
-                  <th className="px-4 py-2 font-semibold text-slate-600">网站</th>
-                  <th className="px-4 py-2 font-semibold text-slate-600">地址</th>
-                  <th className="px-4 py-2 font-semibold text-slate-600">最近采购</th>
-                  <th className="px-4 py-2 font-semibold text-slate-600">操作</th>
+                <tr className="border-b border-blue-700 bg-blue-800">
+                  <th className="px-4 py-2 font-semibold text-blue-200">供应商名称</th>
+                  <th className="px-4 py-2 font-semibold text-blue-200">分类</th>
+                  <th className="px-4 py-2 font-semibold text-blue-200">联系人</th>
+                  <th className="px-4 py-2 font-semibold text-blue-200">电话</th>
+                  <th className="px-4 py-2 font-semibold text-blue-200">Email</th>
+                  <th className="px-4 py-2 font-semibold text-blue-200">网站</th>
+                  <th className="px-4 py-2 font-semibold text-blue-200">地址</th>
+                  <th className="px-4 py-2 font-semibold text-blue-200">最近采购</th>
+                  <th className="px-4 py-2 font-semibold text-blue-200">操作</th>
                 </tr>
               </thead>
               <tbody>
                 {pagedSuppliers.map((item) => (
-                  <tr key={item.id} className="border-b border-slate-100 last:border-b-0">
-                    <td className="px-4 py-2 font-medium text-slate-700">{item.name}</td>
-                    <td className="px-4 py-2 text-slate-600">{item.category ?? "-"}</td>
-                    <td className="px-4 py-2 text-slate-600">{item.contact_person ?? "-"}</td>
-                    <td className="px-4 py-2 text-slate-600">{item.phone ?? "-"}</td>
-                    <td className="px-4 py-2 text-slate-600">{item.email ?? "-"}</td>
-                    <td className="px-4 py-2 text-slate-600">{item.website ?? "-"}</td>
-                    <td className="px-4 py-2 text-slate-500">{item.address ?? "-"}</td>
+                  <tr key={item.id} className="border-b border-blue-800 last:border-b-0">
+                    <td className="px-4 py-2 font-medium text-blue-100">{item.name}</td>
+                    <td className="px-4 py-2 text-blue-200">{item.category ?? "-"}</td>
+                    <td className="px-4 py-2 text-blue-200">{item.contact_person ?? "-"}</td>
+                    <td className="px-4 py-2 text-blue-200">{item.phone ?? "-"}</td>
+                    <td className="px-4 py-2 text-blue-200">{item.email ?? "-"}</td>
+                    <td className="px-4 py-2 text-blue-200">{item.website ?? "-"}</td>
+                    <td className="px-4 py-2 text-blue-300">{item.address ?? "-"}</td>
                     <td className="px-4 py-2">
                       <div className="flex flex-wrap gap-2">
-                        <button onClick={() => openEditSupplier(item)} className="rounded border border-slate-200 px-2 py-1 text-[11px] text-slate-600 hover:border-slate-300 hover:bg-slate-50 transition-colors">编辑</button>
-                        {confirmingSupplierId === item.id ? <><button onClick={() => deleteSupplier(item)} className="rounded border border-red-400 bg-red-500 px-2 py-1 text-[11px] font-semibold text-white hover:bg-red-600 transition-colors">确认</button><button onClick={() => setConfirmingSupplierId(null)} className="rounded border border-slate-200 px-2 py-1 text-[11px] text-slate-500 hover:border-slate-300 transition-colors">取消</button></> : <button onClick={() => setConfirmingSupplierId(item.id)} className="rounded border border-rose-100 px-2 py-1 text-[11px] text-rose-500 hover:border-rose-300 hover:bg-rose-50 transition-colors">删除</button>}
+                        <button onClick={() => openEditSupplier(item)} className="rounded border border-slate-200 px-2 py-1 text-[11px] text-blue-200 hover:border-slate-300 hover:bg-slate-50 transition-colors">编辑</button>
+                        {confirmingSupplierId === item.id ? <><button onClick={() => deleteSupplier(item)} className="rounded border border-red-400 bg-red-500 px-2 py-1 text-[11px] font-semibold text-white hover:bg-red-600 transition-colors">确认</button><button onClick={() => setConfirmingSupplierId(null)} className="rounded border border-slate-200 px-2 py-1 text-[11px] text-blue-300 hover:border-slate-300 transition-colors">取消</button></> : <button onClick={() => setConfirmingSupplierId(item.id)} className="rounded border border-rose-100 px-2 py-1 text-[11px] text-rose-500 hover:border-rose-300 hover:bg-rose-50 transition-colors">删除</button>}
                       </div>
                     </td>
                   </tr>
@@ -4475,14 +4475,14 @@ function ClientsSection({ clients, setClients, suppliers, setSuppliers, orders, 
               </tbody>
             </table>
           </div>
-          <div className="flex flex-wrap items-center justify-between gap-3 rounded-xl border border-slate-200 bg-white px-4 py-3 text-xs text-slate-600"><span>第 {suppliersPage} / {suppliersPageCount} 页，共 {suppliers.length} 条供应商</span><div className="flex items-center gap-2"><button type="button" onClick={() => setSuppliersPage((p) => Math.max(1, p - 1))} disabled={suppliersPage <= 1} className="rounded-lg border border-slate-200 px-3 py-1.5 disabled:cursor-not-allowed disabled:opacity-40">上一页</button><button type="button" onClick={() => setSuppliersPage((p) => Math.min(suppliersPageCount, p + 1))} disabled={suppliersPage >= suppliersPageCount} className="rounded-lg border border-slate-200 px-3 py-1.5 disabled:cursor-not-allowed disabled:opacity-40">下一页</button></div></div>
+          <div className="flex flex-wrap items-center justify-between gap-3 rounded-xl border border-blue-700 bg-blue-900 px-4 py-3 text-xs text-blue-200"><span>第 {suppliersPage} / {suppliersPageCount} 页，共 {suppliers.length} 条供应商</span><div className="flex items-center gap-2"><button type="button" onClick={() => setSuppliersPage((p) => Math.max(1, p - 1))} disabled={suppliersPage <= 1} className="rounded-lg border border-slate-200 px-3 py-1.5 disabled:cursor-not-allowed disabled:opacity-40">上一页</button><button type="button" onClick={() => setSuppliersPage((p) => Math.min(suppliersPageCount, p + 1))} disabled={suppliersPage >= suppliersPageCount} className="rounded-lg border border-slate-200 px-3 py-1.5 disabled:cursor-not-allowed disabled:opacity-40">下一页</button></div></div>
         </div>
       )}
       {lightboxImage && (
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/70" onClick={() => setLightboxImage(null)}>
           <div className="relative max-h-[90vh] max-w-[90vw]" onClick={(e) => e.stopPropagation()}>
             <img src={`/legacy-materials/${lightboxImage}`} alt="order image" className="max-h-[85vh] max-w-[85vw] rounded-xl border-4 border-white object-contain shadow-2xl" />
-            <button onClick={() => setLightboxImage(null)} className="absolute -right-3 -top-3 flex h-8 w-8 items-center justify-center rounded-full bg-white text-sm font-bold text-slate-700 shadow-lg hover:bg-slate-100">X</button>
+            <button onClick={() => setLightboxImage(null)} className="absolute -right-3 -top-3 flex h-8 w-8 items-center justify-center rounded-full bg-white text-sm font-bold text-blue-100 shadow-lg hover:bg-blue-700">X</button>
           </div>
         </div>
       )}
@@ -4719,39 +4719,39 @@ function MaterialsSection({ materials, setMaterials, suppliers, orders, setExpen
 
       {showMaterialModal && (
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-slate-950/45 px-4">
-          <div className="w-full max-w-5xl rounded-2xl border border-slate-200 bg-white p-5 shadow-2xl">
+          <div className="w-full max-w-5xl rounded-2xl border border-blue-700 bg-blue-900 p-5 shadow-2xl">
             <div className="mb-4 flex items-start justify-between gap-3">
               <div>
-                <h3 className="text-base font-semibold text-slate-900">{editingMaterialId ? "编辑物料" : "新建物料"}</h3>
-                <p className="mt-1 text-xs text-slate-500">支持尺寸、单重、图片、出厂价、美金成本和卖出价。</p>
+                <h3 className="text-base font-semibold text-white">{editingMaterialId ? "编辑物料" : "新建物料"}</h3>
+                <p className="mt-1 text-xs text-blue-300">支持尺寸、单重、图片、出厂价、美金成本和卖出价。</p>
               </div>
-              <button onClick={() => setShowMaterialModal(false)} className="rounded-lg border border-slate-200 px-2.5 py-1 text-xs text-slate-500 hover:border-slate-300 hover:text-slate-700 transition-colors">关闭</button>
+              <button onClick={() => setShowMaterialModal(false)} className="rounded-lg border border-slate-200 px-2.5 py-1 text-xs text-blue-300 hover:border-slate-300 hover:text-blue-100 transition-colors">关闭</button>
             </div>
             <div className="grid gap-3 sm:grid-cols-2 xl:grid-cols-4">
-              <div><p className="mb-1 text-[11px] font-semibold text-slate-500">物料编码</p><SmallInput value={materialDraft.code} onChange={(v) => setMaterialDraft((d) => ({ ...d, code: v }))} placeholder="例如 FAB-BLK-280" /></div>
-              <div><p className="mb-1 text-[11px] font-semibold text-slate-500">物料名称</p><SmallInput value={materialDraft.name} onChange={(v) => setMaterialDraft((d) => ({ ...d, name: v }))} placeholder="例如 遮光布" /></div>
-              <div><p className="mb-1 text-[11px] font-semibold text-slate-500">规格</p><SmallInput value={materialDraft.specification} onChange={(v) => setMaterialDraft((d) => ({ ...d, specification: v }))} placeholder="例如 宽280cm，米白色" /></div>
-              <div><p className="mb-1 text-[11px] font-semibold text-slate-500">尺寸</p><SmallInput value={materialDraft.size} onChange={(v) => setMaterialDraft((d) => ({ ...d, size: v }))} placeholder="例如 280cm" /></div>
-              <div><p className="mb-1 text-[11px] font-semibold text-slate-500">总库存</p><SmallInput value={materialDraft.stock_quantity} onChange={(v) => setMaterialDraft((d) => ({ ...d, stock_quantity: v }))} type="number" placeholder="当前库存数量" /></div>
-              <div><p className="mb-1 text-[11px] font-semibold text-slate-500">出厂价 RMB</p><SmallInput value={materialDraft.factory_price_rmb} onChange={(v) => syncMaterialCosts(v, materialDraft.weight)} type="number" placeholder="人民币出厂价" /></div>
-              <div><p className="mb-1 text-[11px] font-semibold text-slate-500">单重</p><SmallInput value={materialDraft.weight} onChange={(v) => syncMaterialCosts(materialDraft.factory_price_rmb, v)} type="number" placeholder="默认 1" /></div>
-              <div><p className="mb-1 text-[11px] font-semibold text-slate-500">美金成本 USD</p><SmallInput value={materialDraft.usd_cost} onChange={(v) => setMaterialDraft((d) => ({ ...d, usd_cost: v }))} type="number" placeholder="自动可改" /></div>
-              <div><p className="mb-1 text-[11px] font-semibold text-slate-500">卖出价 USD</p><SmallInput value={materialDraft.sale_price_usd} onChange={(v) => setMaterialDraft((d) => ({ ...d, sale_price_usd: v }))} type="number" placeholder="普通卖价" /></div>
-              <div><p className="mb-1 text-[11px] font-semibold text-slate-500">单位</p><SmallSelect value={materialDraft.unit} onChange={(v) => setMaterialDraft((d) => ({ ...d, unit: v }))} options={["个", "米", "根", "套", "张"]} /></div>
-              <div><p className="mb-1 text-[11px] font-semibold text-slate-500">供应商</p><SmallSelect value={materialDraft.supplier} onChange={(v) => setMaterialDraft((d) => ({ ...d, supplier: v }))} options={suppliers.length ? suppliers.map((item) => item.name) : ["未指定"]} /></div>
+              <div><p className="mb-1 text-[11px] font-semibold text-blue-300">物料编码</p><SmallInput value={materialDraft.code} onChange={(v) => setMaterialDraft((d) => ({ ...d, code: v }))} placeholder="例如 FAB-BLK-280" /></div>
+              <div><p className="mb-1 text-[11px] font-semibold text-blue-300">物料名称</p><SmallInput value={materialDraft.name} onChange={(v) => setMaterialDraft((d) => ({ ...d, name: v }))} placeholder="例如 遮光布" /></div>
+              <div><p className="mb-1 text-[11px] font-semibold text-blue-300">规格</p><SmallInput value={materialDraft.specification} onChange={(v) => setMaterialDraft((d) => ({ ...d, specification: v }))} placeholder="例如 宽280cm，米白色" /></div>
+              <div><p className="mb-1 text-[11px] font-semibold text-blue-300">尺寸</p><SmallInput value={materialDraft.size} onChange={(v) => setMaterialDraft((d) => ({ ...d, size: v }))} placeholder="例如 280cm" /></div>
+              <div><p className="mb-1 text-[11px] font-semibold text-blue-300">总库存</p><SmallInput value={materialDraft.stock_quantity} onChange={(v) => setMaterialDraft((d) => ({ ...d, stock_quantity: v }))} type="number" placeholder="当前库存数量" /></div>
+              <div><p className="mb-1 text-[11px] font-semibold text-blue-300">出厂价 RMB</p><SmallInput value={materialDraft.factory_price_rmb} onChange={(v) => syncMaterialCosts(v, materialDraft.weight)} type="number" placeholder="人民币出厂价" /></div>
+              <div><p className="mb-1 text-[11px] font-semibold text-blue-300">单重</p><SmallInput value={materialDraft.weight} onChange={(v) => syncMaterialCosts(materialDraft.factory_price_rmb, v)} type="number" placeholder="默认 1" /></div>
+              <div><p className="mb-1 text-[11px] font-semibold text-blue-300">美金成本 USD</p><SmallInput value={materialDraft.usd_cost} onChange={(v) => setMaterialDraft((d) => ({ ...d, usd_cost: v }))} type="number" placeholder="自动可改" /></div>
+              <div><p className="mb-1 text-[11px] font-semibold text-blue-300">卖出价 USD</p><SmallInput value={materialDraft.sale_price_usd} onChange={(v) => setMaterialDraft((d) => ({ ...d, sale_price_usd: v }))} type="number" placeholder="普通卖价" /></div>
+              <div><p className="mb-1 text-[11px] font-semibold text-blue-300">单位</p><SmallSelect value={materialDraft.unit} onChange={(v) => setMaterialDraft((d) => ({ ...d, unit: v }))} options={["个", "米", "根", "套", "张"]} /></div>
+              <div><p className="mb-1 text-[11px] font-semibold text-blue-300">供应商</p><SmallSelect value={materialDraft.supplier} onChange={(v) => setMaterialDraft((d) => ({ ...d, supplier: v }))} options={suppliers.length ? suppliers.map((item) => item.name) : ["未指定"]} /></div>
             </div>
             <div className="mt-3 grid gap-3 lg:grid-cols-[1fr_180px]">
               <div className="space-y-2">
-                <div><p className="mb-1 text-[11px] font-semibold text-slate-500">备注说明</p><SmallInput value={materialDraft.remark} onChange={(v) => setMaterialDraft((d) => ({ ...d, remark: v }))} placeholder="例如 主力布料 / 常用颜色 / 特殊说明" /></div>
-                <label className="block rounded-xl border border-dashed border-slate-300 px-3 py-4 text-xs text-slate-500">
-                  <span className="font-semibold text-slate-700">上传图片</span>
-                  <p className="mt-1 text-[11px] text-slate-400">支持上传物料实拍图，方便后面辨认。</p>
+                <div><p className="mb-1 text-[11px] font-semibold text-blue-300">备注说明</p><SmallInput value={materialDraft.remark} onChange={(v) => setMaterialDraft((d) => ({ ...d, remark: v }))} placeholder="例如 主力布料 / 常用颜色 / 特殊说明" /></div>
+                <label className="block rounded-xl border border-dashed border-slate-300 px-3 py-4 text-xs text-blue-300">
+                  <span className="font-semibold text-blue-100">上传图片</span>
+                  <p className="mt-1 text-[11px] text-blue-400">支持上传物料实拍图，方便后面辨认。</p>
                   <input type="file" accept="image/*" className="mt-2 block w-full text-xs" onChange={(e) => handleMaterialImageUpload(e.target.files?.[0])} />
                 </label>
               </div>
               <div className="rounded-xl border border-slate-200 bg-slate-50 p-3">
-                <p className="text-xs font-semibold text-slate-700">图片预览</p>
-                {materialDraft.image ? <img src={materialDraft.image} alt="物料图片" className="mt-2 h-32 w-full rounded-lg object-cover" /> : <div className="mt-2 flex h-32 items-center justify-center rounded-lg border border-dashed border-slate-300 text-xs text-slate-400">暂无图片</div>}
+                <p className="text-xs font-semibold text-blue-100">图片预览</p>
+                {materialDraft.image ? <img src={materialDraft.image} alt="物料图片" className="mt-2 h-32 w-full rounded-lg object-cover" /> : <div className="mt-2 flex h-32 items-center justify-center rounded-lg border border-dashed border-slate-300 text-xs text-blue-400">暂无图片</div>}
               </div>
             </div>
             <div className="mt-5 flex justify-end gap-2">
@@ -4763,43 +4763,43 @@ function MaterialsSection({ materials, setMaterials, suppliers, orders, setExpen
       )}
 
       <div className="space-y-4">
-          <div className="overflow-x-auto rounded-xl border border-slate-200 bg-white">
+          <div className="overflow-x-auto rounded-xl border border-blue-700 bg-blue-900">
             <table className="w-full text-left text-xs">
               <thead>
-                <tr className="border-b border-slate-200 bg-slate-50">
-                  <th className="px-4 py-2 font-semibold text-slate-600">图片</th>
-                  <th className="px-4 py-2 font-semibold text-slate-600">品名</th>
-                  <th className="px-4 py-2 font-semibold text-slate-600">规格</th>
-                  <th className="px-4 py-2 font-semibold text-slate-600">尺寸</th>
-                  <th className="px-4 py-2 font-semibold text-slate-600">总库存</th>
-                  <th className="px-4 py-2 font-semibold text-slate-600">出厂价 RMB</th>
-                  <th className="px-4 py-2 font-semibold text-slate-600">美金成本 USD</th>
-                  <th className="px-4 py-2 font-semibold text-slate-600">卖出价 USD</th>
-                  <th className="px-4 py-2 font-semibold text-slate-600">单重</th>
-                  <th className="px-4 py-2 font-semibold text-slate-600">供应商</th>
-                  <th className="px-4 py-2 font-semibold text-slate-600">操作</th>
+                <tr className="border-b border-blue-700 bg-blue-800">
+                  <th className="px-4 py-2 font-semibold text-blue-200">图片</th>
+                  <th className="px-4 py-2 font-semibold text-blue-200">品名</th>
+                  <th className="px-4 py-2 font-semibold text-blue-200">规格</th>
+                  <th className="px-4 py-2 font-semibold text-blue-200">尺寸</th>
+                  <th className="px-4 py-2 font-semibold text-blue-200">总库存</th>
+                  <th className="px-4 py-2 font-semibold text-blue-200">出厂价 RMB</th>
+                  <th className="px-4 py-2 font-semibold text-blue-200">美金成本 USD</th>
+                  <th className="px-4 py-2 font-semibold text-blue-200">卖出价 USD</th>
+                  <th className="px-4 py-2 font-semibold text-blue-200">单重</th>
+                  <th className="px-4 py-2 font-semibold text-blue-200">供应商</th>
+                  <th className="px-4 py-2 font-semibold text-blue-200">操作</th>
                 </tr>
               </thead>
               <tbody>
                 {pagedInventoryRows.map((item) => (
-                  <tr key={item.id} className="border-b border-slate-100 last:border-b-0">
-                    <td className="px-4 py-2">{item.image ? <img src={item.image} alt={item.name} className="h-12 w-12 rounded-lg object-cover" /> : <div className="flex h-12 w-12 items-center justify-center rounded-lg border border-dashed border-slate-300 text-[10px] text-slate-400">暂无</div>}</td>
-                    <td className="px-4 py-2 font-medium text-slate-700">{item.name}<div className="text-[11px] text-slate-400">{item.code}</div></td>
-                    <td className="px-4 py-2 text-slate-600">{item.specification ?? "-"}</td>
-                    <td className="px-4 py-2 text-slate-600">{item.size ?? "-"}</td>
-                    <td className="px-4 py-2 font-semibold text-slate-800">{item.stock_quantity}</td>
-                    <td className="px-4 py-2 text-slate-600">{item.factory_price_rmb ?? 0}</td>
-                    <td className="px-4 py-2 text-slate-600">{item.usd_cost ?? 0}</td>
-                    <td className="px-4 py-2 text-slate-600">{item.sale_price_usd ?? 0}</td>
-                    <td className="px-4 py-2 text-slate-600">{item.weight ?? 1}</td>
-                    <td className="px-4 py-2 text-slate-500">{item.supplier ?? "-"}</td>
-                    <td className="px-4 py-2"><div className="flex flex-wrap gap-2"><button onClick={() => openEditMaterial(item)} className="rounded border border-slate-200 px-2 py-1 text-[11px] text-slate-600 hover:border-slate-300 hover:bg-slate-50 transition-colors">编辑</button>{confirmingMaterialId === item.id ? <><button onClick={() => deleteMaterial(item.id)} className="rounded border border-red-400 bg-red-500 px-2 py-1 text-[11px] font-semibold text-white hover:bg-red-600 transition-colors">确认</button><button onClick={() => setConfirmingMaterialId(null)} className="rounded border border-slate-200 px-2 py-1 text-[11px] text-slate-500 hover:border-slate-300 transition-colors">取消</button></> : <button onClick={() => setConfirmingMaterialId(item.id)} className="rounded border border-rose-100 px-2 py-1 text-[11px] text-rose-500 hover:border-rose-300 hover:bg-rose-50 transition-colors">删除</button>}</div></td>
+                  <tr key={item.id} className="border-b border-blue-800 last:border-b-0">
+                    <td className="px-4 py-2">{item.image ? <img src={item.image} alt={item.name} className="h-12 w-12 rounded-lg object-cover" /> : <div className="flex h-12 w-12 items-center justify-center rounded-lg border border-dashed border-slate-300 text-[10px] text-blue-400">暂无</div>}</td>
+                    <td className="px-4 py-2 font-medium text-blue-100">{item.name}<div className="text-[11px] text-blue-400">{item.code}</div></td>
+                    <td className="px-4 py-2 text-blue-200">{item.specification ?? "-"}</td>
+                    <td className="px-4 py-2 text-blue-200">{item.size ?? "-"}</td>
+                    <td className="px-4 py-2 font-semibold text-white">{item.stock_quantity}</td>
+                    <td className="px-4 py-2 text-blue-200">{item.factory_price_rmb ?? 0}</td>
+                    <td className="px-4 py-2 text-blue-200">{item.usd_cost ?? 0}</td>
+                    <td className="px-4 py-2 text-blue-200">{item.sale_price_usd ?? 0}</td>
+                    <td className="px-4 py-2 text-blue-200">{item.weight ?? 1}</td>
+                    <td className="px-4 py-2 text-blue-300">{item.supplier ?? "-"}</td>
+                    <td className="px-4 py-2"><div className="flex flex-wrap gap-2"><button onClick={() => openEditMaterial(item)} className="rounded border border-slate-200 px-2 py-1 text-[11px] text-blue-200 hover:border-slate-300 hover:bg-slate-50 transition-colors">编辑</button>{confirmingMaterialId === item.id ? <><button onClick={() => deleteMaterial(item.id)} className="rounded border border-red-400 bg-red-500 px-2 py-1 text-[11px] font-semibold text-white hover:bg-red-600 transition-colors">确认</button><button onClick={() => setConfirmingMaterialId(null)} className="rounded border border-slate-200 px-2 py-1 text-[11px] text-blue-300 hover:border-slate-300 transition-colors">取消</button></> : <button onClick={() => setConfirmingMaterialId(item.id)} className="rounded border border-rose-100 px-2 py-1 text-[11px] text-rose-500 hover:border-rose-300 hover:bg-rose-50 transition-colors">删除</button>}</div></td>
                   </tr>
                 ))}
               </tbody>
             </table>
           </div>
-          <div className="flex flex-wrap items-center justify-between gap-3 rounded-xl border border-slate-200 bg-white px-4 py-3 text-xs text-slate-600"><span>第 {inventoryPage} / {inventoryPageCount} 页，共 {inventoryRows.length} 条物料</span><div className="flex items-center gap-2"><button type="button" onClick={() => setInventoryPage((p) => Math.max(1, p - 1))} disabled={inventoryPage <= 1} className="rounded-lg border border-slate-200 px-3 py-1.5 disabled:cursor-not-allowed disabled:opacity-40">上一页</button><button type="button" onClick={() => setInventoryPage((p) => Math.min(inventoryPageCount, p + 1))} disabled={inventoryPage >= inventoryPageCount} className="rounded-lg border border-slate-200 px-3 py-1.5 disabled:cursor-not-allowed disabled:opacity-40">下一页</button></div></div>
+          <div className="flex flex-wrap items-center justify-between gap-3 rounded-xl border border-blue-700 bg-blue-900 px-4 py-3 text-xs text-blue-200"><span>第 {inventoryPage} / {inventoryPageCount} 页，共 {inventoryRows.length} 条物料</span><div className="flex items-center gap-2"><button type="button" onClick={() => setInventoryPage((p) => Math.max(1, p - 1))} disabled={inventoryPage <= 1} className="rounded-lg border border-slate-200 px-3 py-1.5 disabled:cursor-not-allowed disabled:opacity-40">上一页</button><button type="button" onClick={() => setInventoryPage((p) => Math.min(inventoryPageCount, p + 1))} disabled={inventoryPage >= inventoryPageCount} className="rounded-lg border border-slate-200 px-3 py-1.5 disabled:cursor-not-allowed disabled:opacity-40">下一页</button></div></div>
         </div>
     </div>
   );
@@ -5263,28 +5263,28 @@ function EmployeesSection({ employees, setEmployees, attendances, setAttendances
       {sub === "profiles" ? (
         <div className="space-y-4">
           <PanelCard title="员工档案" note="员工工号自动递增，员工档案单独管理，不再和考勤或规则混在一起。">
-            <div className="mb-3 flex flex-wrap items-center justify-between gap-3"><div className="flex flex-wrap items-center gap-2"><div className="relative min-w-[180px] flex-1"><span className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-400 text-xs">⌕</span><input value={profileSearch} onChange={(e) => setProfileSearch(e.target.value)} placeholder="筛选员工 / 工号 / 电话 / 分组" className="h-8 w-full rounded-lg border border-slate-300 bg-white pl-8 pr-3 text-xs text-slate-700" /></div><span className="text-xs text-slate-500">员工分组</span><select value={profileEthnicityFilter} onChange={(e) => setProfileEthnicityFilter(e.target.value)} className="h-8 rounded-lg border border-slate-300 bg-white px-2 text-xs text-slate-700"><option>全部</option>{EMPLOYEE_GROUP_OPTIONS.map((option) => <option key={option}>{option}</option>)}</select></div><div className="text-xs text-slate-500">共 {profileRows.length} 名员工</div></div>
-            <div className="overflow-x-auto rounded-xl border border-slate-200 bg-white"><table className="w-full text-left text-xs"><thead><tr className="border-b border-slate-200 bg-slate-50"><th className="px-4 py-2 font-semibold text-slate-600">工号</th><th className="px-4 py-2 font-semibold text-slate-600">姓名</th><th className="px-4 py-2 font-semibold text-slate-600">电话</th><th className="px-4 py-2 font-semibold text-slate-600">时薪</th><th className="px-4 py-2 font-semibold text-slate-600">工作日</th><th className="px-4 py-2 font-semibold text-slate-600">饭补资格</th><th className="px-4 py-2 font-semibold text-slate-600">分组</th><th className="px-4 py-2 font-semibold text-slate-600">操作</th></tr></thead><tbody>{pagedProfileRows.map((item) => <tr key={item.id} className="border-b border-slate-100 last:border-b-0"><td className="px-4 py-2 font-medium text-slate-700">{item.code}</td><td className="px-4 py-2 text-slate-700">{item.name}</td><td className="px-4 py-2 text-slate-600">{item.phone || "-"}</td><td className="px-4 py-2 text-slate-700">{formatMoney(item.hourly_rate || 0)}</td><td className="px-4 py-2 text-slate-600">{(item.workdays || []).map((day) => WORKDAY_OPTIONS.find((option) => option.key === day)?.label || day).join("、")}</td><td className="px-4 py-2 text-slate-600">{item.meal_allowance_eligible ? "可用" : "关闭"}</td><td className="px-4 py-2 text-slate-600">{item.ethnicity}</td><td className="px-4 py-2"><ActionBtn onClick={() => openEditEmployee(item)}>编辑</ActionBtn></td></tr>)}</tbody></table></div>
-            <div className="flex flex-wrap items-center justify-between gap-3 rounded-xl border border-slate-200 bg-white px-4 py-3 text-xs text-slate-600"><span>第 {profilePage} / {profilePageCount} 页，共 {profileRows.length} 名员工</span><div className="flex items-center gap-2"><button type="button" onClick={() => setProfilePage((p) => Math.max(1, p - 1))} disabled={profilePage <= 1} className="rounded-lg border border-slate-200 px-3 py-1.5 disabled:cursor-not-allowed disabled:opacity-40">上一页</button><button type="button" onClick={() => setProfilePage((p) => Math.min(profilePageCount, p + 1))} disabled={profilePage >= profilePageCount} className="rounded-lg border border-slate-200 px-3 py-1.5 disabled:cursor-not-allowed disabled:opacity-40">下一页</button></div></div>
+            <div className="mb-3 flex flex-wrap items-center justify-between gap-3"><div className="flex flex-wrap items-center gap-2"><div className="relative min-w-[180px] flex-1"><span className="absolute left-3 top-1/2 -translate-y-1/2 text-blue-400 text-xs">⌕</span><input value={profileSearch} onChange={(e) => setProfileSearch(e.target.value)} placeholder="筛选员工 / 工号 / 电话 / 分组" className="h-8 w-full rounded-lg border border-slate-300 bg-white pl-8 pr-3 text-xs text-blue-100" /></div><span className="text-xs text-blue-300">员工分组</span><select value={profileEthnicityFilter} onChange={(e) => setProfileEthnicityFilter(e.target.value)} className="h-8 rounded-lg border border-slate-300 bg-white px-2 text-xs text-blue-100"><option>全部</option>{EMPLOYEE_GROUP_OPTIONS.map((option) => <option key={option}>{option}</option>)}</select></div><div className="text-xs text-blue-300">共 {profileRows.length} 名员工</div></div>
+            <div className="overflow-x-auto rounded-xl border border-blue-700 bg-blue-900"><table className="w-full text-left text-xs"><thead><tr className="border-b border-blue-700 bg-blue-800"><th className="px-4 py-2 font-semibold text-blue-200">工号</th><th className="px-4 py-2 font-semibold text-blue-200">姓名</th><th className="px-4 py-2 font-semibold text-blue-200">电话</th><th className="px-4 py-2 font-semibold text-blue-200">时薪</th><th className="px-4 py-2 font-semibold text-blue-200">工作日</th><th className="px-4 py-2 font-semibold text-blue-200">饭补资格</th><th className="px-4 py-2 font-semibold text-blue-200">分组</th><th className="px-4 py-2 font-semibold text-blue-200">操作</th></tr></thead><tbody>{pagedProfileRows.map((item) => <tr key={item.id} className="border-b border-blue-800 last:border-b-0"><td className="px-4 py-2 font-medium text-blue-100">{item.code}</td><td className="px-4 py-2 text-blue-100">{item.name}</td><td className="px-4 py-2 text-blue-200">{item.phone || "-"}</td><td className="px-4 py-2 text-blue-100">{formatMoney(item.hourly_rate || 0)}</td><td className="px-4 py-2 text-blue-200">{(item.workdays || []).map((day) => WORKDAY_OPTIONS.find((option) => option.key === day)?.label || day).join("、")}</td><td className="px-4 py-2 text-blue-200">{item.meal_allowance_eligible ? "可用" : "关闭"}</td><td className="px-4 py-2 text-blue-200">{item.ethnicity}</td><td className="px-4 py-2"><ActionBtn onClick={() => openEditEmployee(item)}>编辑</ActionBtn></td></tr>)}</tbody></table></div>
+            <div className="flex flex-wrap items-center justify-between gap-3 rounded-xl border border-blue-700 bg-blue-900 px-4 py-3 text-xs text-blue-200"><span>第 {profilePage} / {profilePageCount} 页，共 {profileRows.length} 名员工</span><div className="flex items-center gap-2"><button type="button" onClick={() => setProfilePage((p) => Math.max(1, p - 1))} disabled={profilePage <= 1} className="rounded-lg border border-slate-200 px-3 py-1.5 disabled:cursor-not-allowed disabled:opacity-40">上一页</button><button type="button" onClick={() => setProfilePage((p) => Math.min(profilePageCount, p + 1))} disabled={profilePage >= profilePageCount} className="rounded-lg border border-slate-200 px-3 py-1.5 disabled:cursor-not-allowed disabled:opacity-40">下一页</button></div></div>
           </PanelCard>
         </div>
       ) : null}
 
       {sub === "attendance" ? (
         <div className="space-y-4">
-          <div className="flex flex-wrap items-center gap-3"><SegmentedControl options={[{ key: "today", label: "今天" }, { key: "thisWeek", label: "本周" }, { key: "lastWeek", label: "上周" }]} value={attendanceFilter} onChange={setAttendanceFilter} /><div className="flex items-center gap-2"><span className="text-xs text-slate-500">分组</span><select value={attendanceEthnicityFilter} onChange={(e) => setAttendanceEthnicityFilter(e.target.value)} className="h-8 rounded-lg border border-slate-300 bg-white px-2 text-xs text-slate-700"><option>全部</option>{EMPLOYEE_GROUP_OPTIONS.map((option) => <option key={option}>{option}</option>)}</select></div><span className="text-xs text-slate-500">{attendanceRange.start} ~ {attendanceRange.end}</span></div>
-          <PanelCard title="考勤规则说明" note="当天工作时长 = 10小时 + 加班时长 - 请假时长。工时小于等于 5 小时时强制取消饭补。"><div className="text-xs text-slate-500">缺失考勤会按员工工作日和自动规则补齐，支持逐行人工修正。当前饭补金额 {formatMoney(mealAllowanceAmount)} / 次。</div></PanelCard>
-          <div className="overflow-x-auto rounded-xl border border-slate-200 bg-white"><table className="w-full text-left text-xs"><thead><tr className="border-b border-slate-200 bg-slate-50"><th className="px-3 py-2 font-semibold text-slate-600">日期</th><th className="px-3 py-2 font-semibold text-slate-600">工号</th><th className="px-3 py-2 font-semibold text-slate-600">人名</th><th className="px-3 py-2 font-semibold text-slate-600">工作时长</th><th className="px-3 py-2 font-semibold text-slate-600">请假时长</th><th className="px-3 py-2 font-semibold text-slate-600">加班时长</th><th className="px-3 py-2 font-semibold text-slate-600">饭补</th><th className="px-3 py-2 font-semibold text-slate-600">操作</th></tr></thead><tbody>{pagedAttendanceRows.map((item) => { const employee = normalizedEmployees.find((row) => row.id === item.employee_id || row.name === item.employee_name); const editing = editingAttendanceId === item.id; return <tr key={item.id} className="border-b border-slate-100 last:border-b-0"><td className="px-3 py-2 text-slate-600">{item.date}</td><td className="px-3 py-2 text-slate-700">{item.employee_code || employee?.code || "-"}</td><td className="px-3 py-2 font-medium text-slate-700">{item.employee_name}</td><td className="px-3 py-2 text-slate-700">{formatMinutes(item.worked_minutes)}</td>{editing ? <><td className="px-3 py-2"><SmallInput value={String(item.leave_minutes)} onChange={(v) => setAttendanceField(item.id, "leave_minutes", Number(v) || 0)} type="number" /></td><td className="px-3 py-2"><SmallInput value={String(item.overtime_minutes)} onChange={(v) => setAttendanceField(item.id, "overtime_minutes", Number(v) || 0)} type="number" /></td><td className="px-3 py-2"><label className="flex items-center gap-2 text-slate-600"><input type="checkbox" checked={item.meal_allowance} disabled={item.worked_minutes <= 300 || !employee?.meal_allowance_eligible} onChange={(e) => setAttendanceField(item.id, "meal_allowance", e.target.checked)} /> 饭补</label></td><td className="px-3 py-2"><div className="flex gap-2"><ActionBtn tone="success" onClick={() => setEditingAttendanceId(null)}>完成</ActionBtn><ActionBtn onClick={() => setEditingAttendanceId(null)}>取消</ActionBtn></div></td></> : <><td className="px-3 py-2 text-slate-600">{formatMinutes(item.leave_minutes)}</td><td className="px-3 py-2 text-slate-600">{formatMinutes(item.overtime_minutes)}</td><td className="px-3 py-2 text-slate-600">{item.meal_allowance ? `是 · 当前饭补金额 ${formatMoney(mealAllowanceAmount)} / 次` : "否"}</td><td className="px-3 py-2"><div className="flex gap-2">{confirmingAttendanceId === item.id ? <><button onClick={() => deleteAttendance(item.id)} className="rounded border border-red-400 bg-red-500 px-2 py-1 text-[11px] font-semibold text-white hover:bg-red-600 transition-colors">确认</button><button onClick={() => setConfirmingAttendanceId(null)} className="rounded border border-slate-200 px-2 py-1 text-[11px] text-slate-500 hover:border-slate-300 transition-colors">取消</button></> : <><ActionBtn onClick={() => setEditingAttendanceId(item.id)}>编辑</ActionBtn><button onClick={() => setConfirmingAttendanceId(item.id)} className="rounded border border-rose-100 px-2 py-1 text-[11px] text-rose-500 hover:border-rose-300 hover:bg-rose-50 transition-colors">删除</button></>}</div></td></>}</tr>; })}</tbody></table></div>
-          <div className="flex flex-wrap items-center justify-between gap-3 rounded-xl border border-slate-200 bg-white px-4 py-3 text-xs text-slate-600"><span>第 {attendancePage} / {attendancePageCount} 页，共 {attendanceRows.length} 条考勤</span><div className="flex items-center gap-2"><button type="button" onClick={() => setAttendancePage((page) => Math.max(1, page - 1))} disabled={attendancePage <= 1} className="rounded-lg border border-slate-200 px-3 py-1.5 disabled:cursor-not-allowed disabled:opacity-40">上一页</button><button type="button" onClick={() => setAttendancePage((page) => Math.min(attendancePageCount, page + 1))} disabled={attendancePage >= attendancePageCount} className="rounded-lg border border-slate-200 px-3 py-1.5 disabled:cursor-not-allowed disabled:opacity-40">下一页</button></div></div>
+          <div className="flex flex-wrap items-center gap-3"><SegmentedControl options={[{ key: "today", label: "今天" }, { key: "thisWeek", label: "本周" }, { key: "lastWeek", label: "上周" }]} value={attendanceFilter} onChange={setAttendanceFilter} /><div className="flex items-center gap-2"><span className="text-xs text-blue-300">分组</span><select value={attendanceEthnicityFilter} onChange={(e) => setAttendanceEthnicityFilter(e.target.value)} className="h-8 rounded-lg border border-slate-300 bg-white px-2 text-xs text-blue-100"><option>全部</option>{EMPLOYEE_GROUP_OPTIONS.map((option) => <option key={option}>{option}</option>)}</select></div><span className="text-xs text-blue-300">{attendanceRange.start} ~ {attendanceRange.end}</span></div>
+          <PanelCard title="考勤规则说明" note="当天工作时长 = 10小时 + 加班时长 - 请假时长。工时小于等于 5 小时时强制取消饭补。"><div className="text-xs text-blue-300">缺失考勤会按员工工作日和自动规则补齐，支持逐行人工修正。当前饭补金额 {formatMoney(mealAllowanceAmount)} / 次。</div></PanelCard>
+          <div className="overflow-x-auto rounded-xl border border-blue-700 bg-blue-900"><table className="w-full text-left text-xs"><thead><tr className="border-b border-blue-700 bg-blue-800"><th className="px-3 py-2 font-semibold text-blue-200">日期</th><th className="px-3 py-2 font-semibold text-blue-200">工号</th><th className="px-3 py-2 font-semibold text-blue-200">人名</th><th className="px-3 py-2 font-semibold text-blue-200">工作时长</th><th className="px-3 py-2 font-semibold text-blue-200">请假时长</th><th className="px-3 py-2 font-semibold text-blue-200">加班时长</th><th className="px-3 py-2 font-semibold text-blue-200">饭补</th><th className="px-3 py-2 font-semibold text-blue-200">操作</th></tr></thead><tbody>{pagedAttendanceRows.map((item) => { const employee = normalizedEmployees.find((row) => row.id === item.employee_id || row.name === item.employee_name); const editing = editingAttendanceId === item.id; return <tr key={item.id} className="border-b border-blue-800 last:border-b-0"><td className="px-3 py-2 text-blue-200">{item.date}</td><td className="px-3 py-2 text-blue-100">{item.employee_code || employee?.code || "-"}</td><td className="px-3 py-2 font-medium text-blue-100">{item.employee_name}</td><td className="px-3 py-2 text-blue-100">{formatMinutes(item.worked_minutes)}</td>{editing ? <><td className="px-3 py-2"><SmallInput value={String(item.leave_minutes)} onChange={(v) => setAttendanceField(item.id, "leave_minutes", Number(v) || 0)} type="number" /></td><td className="px-3 py-2"><SmallInput value={String(item.overtime_minutes)} onChange={(v) => setAttendanceField(item.id, "overtime_minutes", Number(v) || 0)} type="number" /></td><td className="px-3 py-2"><label className="flex items-center gap-2 text-blue-200"><input type="checkbox" checked={item.meal_allowance} disabled={item.worked_minutes <= 300 || !employee?.meal_allowance_eligible} onChange={(e) => setAttendanceField(item.id, "meal_allowance", e.target.checked)} /> 饭补</label></td><td className="px-3 py-2"><div className="flex gap-2"><ActionBtn tone="success" onClick={() => setEditingAttendanceId(null)}>完成</ActionBtn><ActionBtn onClick={() => setEditingAttendanceId(null)}>取消</ActionBtn></div></td></> : <><td className="px-3 py-2 text-blue-200">{formatMinutes(item.leave_minutes)}</td><td className="px-3 py-2 text-blue-200">{formatMinutes(item.overtime_minutes)}</td><td className="px-3 py-2 text-blue-200">{item.meal_allowance ? `是 · 当前饭补金额 ${formatMoney(mealAllowanceAmount)} / 次` : "否"}</td><td className="px-3 py-2"><div className="flex gap-2">{confirmingAttendanceId === item.id ? <><button onClick={() => deleteAttendance(item.id)} className="rounded border border-red-400 bg-red-500 px-2 py-1 text-[11px] font-semibold text-white hover:bg-red-600 transition-colors">确认</button><button onClick={() => setConfirmingAttendanceId(null)} className="rounded border border-slate-200 px-2 py-1 text-[11px] text-blue-300 hover:border-slate-300 transition-colors">取消</button></> : <><ActionBtn onClick={() => setEditingAttendanceId(item.id)}>编辑</ActionBtn><button onClick={() => setConfirmingAttendanceId(item.id)} className="rounded border border-rose-100 px-2 py-1 text-[11px] text-rose-500 hover:border-rose-300 hover:bg-rose-50 transition-colors">删除</button></>}</div></td></>}</tr>; })}</tbody></table></div>
+          <div className="flex flex-wrap items-center justify-between gap-3 rounded-xl border border-blue-700 bg-blue-900 px-4 py-3 text-xs text-blue-200"><span>第 {attendancePage} / {attendancePageCount} 页，共 {attendanceRows.length} 条考勤</span><div className="flex items-center gap-2"><button type="button" onClick={() => setAttendancePage((page) => Math.max(1, page - 1))} disabled={attendancePage <= 1} className="rounded-lg border border-slate-200 px-3 py-1.5 disabled:cursor-not-allowed disabled:opacity-40">上一页</button><button type="button" onClick={() => setAttendancePage((page) => Math.min(attendancePageCount, page + 1))} disabled={attendancePage >= attendancePageCount} className="rounded-lg border border-slate-200 px-3 py-1.5 disabled:cursor-not-allowed disabled:opacity-40">下一页</button></div></div>
         </div>
       ) : null}
 
       {sub === "payroll" ? (
         <div className="space-y-4">
-          <div className="flex flex-wrap items-center gap-3"><SegmentedControl options={[{ key: "lastWeek", label: "上周" }, { key: "thisWeek", label: "本周" }]} value={payrollWeekFilter} onChange={setPayrollWeekFilter} /><div className="flex items-center gap-2"><span className="text-xs text-slate-500">分组</span><select value={payrollEthnicityFilter} onChange={(e) => setPayrollEthnicityFilter(e.target.value)} className="h-8 rounded-lg border border-slate-300 bg-white px-2 text-xs text-slate-700"><option>全部</option>{EMPLOYEE_GROUP_OPTIONS.map((option) => <option key={option}>{option}</option>)}</select></div><span className="text-xs text-slate-500">{payrollRange.start} ~ {payrollRange.end}</span></div>
-          <PanelCard title="工资说明" note={`工资 = 总工时 × 时薪 + 饭补次数 × 当前饭补金额。点击一键发放后，会自动落一笔“工资”支出。`}><div className="text-xs text-slate-500">当前饭补金额 {formatMoney(mealAllowanceAmount)} / 次，保留周维度发放，本周 / 上周两档。</div></PanelCard>
-          <div className="overflow-x-auto rounded-xl border border-slate-200 bg-white"><table className="w-full text-left text-xs"><thead><tr className="border-b border-slate-200 bg-slate-50"><th className="px-4 py-2 font-semibold text-slate-600">姓名</th><th className="px-4 py-2 font-semibold text-slate-600">时薪</th><th className="px-4 py-2 font-semibold text-slate-600">总工时</th><th className="px-4 py-2 font-semibold text-slate-600">饭补说明</th><th className="px-4 py-2 font-semibold text-slate-600">应发工资</th><th className="px-4 py-2 font-semibold text-slate-600">是否已发放工资</th></tr></thead><tbody>{pagedPayrollRows.map((item) => <tr key={item.employee.id} className="border-b border-slate-100 last:border-b-0"><td className="px-4 py-2 font-medium text-slate-700">{item.employee.name}</td><td className="px-4 py-2 text-slate-700">{formatMoney(item.hourlyRate)}</td><td className="px-4 py-2 text-slate-600">{formatMinutes(item.totalMinutes)}</td><td className="px-4 py-2 text-slate-600">{item.mealCount > 0 ? `${item.mealCount} 次，当前饭补金额 ${formatMoney(mealAllowanceAmount)} / 次` : "无"}</td><td className="px-4 py-2 font-semibold text-slate-800">{formatMoney(item.wage)}</td><td className="px-4 py-2 text-slate-600">{item.paid ? "已发放" : "未发放"}</td></tr>)}</tbody></table></div>
-          <div className="flex flex-wrap items-center justify-between gap-3 rounded-xl border border-slate-200 bg-white px-4 py-3 text-xs text-slate-600"><span>第 {payrollPage} / {payrollPageCount} 页，共 {payrollRows.length} 条工资</span><div className="flex items-center gap-2"><button type="button" onClick={() => setPayrollPage((p) => Math.max(1, p - 1))} disabled={payrollPage <= 1} className="rounded-lg border border-slate-200 px-3 py-1.5 disabled:cursor-not-allowed disabled:opacity-40">上一页</button><button type="button" onClick={() => setPayrollPage((p) => Math.min(payrollPageCount, p + 1))} disabled={payrollPage >= payrollPageCount} className="rounded-lg border border-slate-200 px-3 py-1.5 disabled:cursor-not-allowed disabled:opacity-40">下一页</button></div></div>
+          <div className="flex flex-wrap items-center gap-3"><SegmentedControl options={[{ key: "lastWeek", label: "上周" }, { key: "thisWeek", label: "本周" }]} value={payrollWeekFilter} onChange={setPayrollWeekFilter} /><div className="flex items-center gap-2"><span className="text-xs text-blue-300">分组</span><select value={payrollEthnicityFilter} onChange={(e) => setPayrollEthnicityFilter(e.target.value)} className="h-8 rounded-lg border border-slate-300 bg-white px-2 text-xs text-blue-100"><option>全部</option>{EMPLOYEE_GROUP_OPTIONS.map((option) => <option key={option}>{option}</option>)}</select></div><span className="text-xs text-blue-300">{payrollRange.start} ~ {payrollRange.end}</span></div>
+          <PanelCard title="工资说明" note={`工资 = 总工时 × 时薪 + 饭补次数 × 当前饭补金额。点击一键发放后，会自动落一笔“工资”支出。`}><div className="text-xs text-blue-300">当前饭补金额 {formatMoney(mealAllowanceAmount)} / 次，保留周维度发放，本周 / 上周两档。</div></PanelCard>
+          <div className="overflow-x-auto rounded-xl border border-blue-700 bg-blue-900"><table className="w-full text-left text-xs"><thead><tr className="border-b border-blue-700 bg-blue-800"><th className="px-4 py-2 font-semibold text-blue-200">姓名</th><th className="px-4 py-2 font-semibold text-blue-200">时薪</th><th className="px-4 py-2 font-semibold text-blue-200">总工时</th><th className="px-4 py-2 font-semibold text-blue-200">饭补说明</th><th className="px-4 py-2 font-semibold text-blue-200">应发工资</th><th className="px-4 py-2 font-semibold text-blue-200">是否已发放工资</th></tr></thead><tbody>{pagedPayrollRows.map((item) => <tr key={item.employee.id} className="border-b border-blue-800 last:border-b-0"><td className="px-4 py-2 font-medium text-blue-100">{item.employee.name}</td><td className="px-4 py-2 text-blue-100">{formatMoney(item.hourlyRate)}</td><td className="px-4 py-2 text-blue-200">{formatMinutes(item.totalMinutes)}</td><td className="px-4 py-2 text-blue-200">{item.mealCount > 0 ? `${item.mealCount} 次，当前饭补金额 ${formatMoney(mealAllowanceAmount)} / 次` : "无"}</td><td className="px-4 py-2 font-semibold text-white">{formatMoney(item.wage)}</td><td className="px-4 py-2 text-blue-200">{item.paid ? "已发放" : "未发放"}</td></tr>)}</tbody></table></div>
+          <div className="flex flex-wrap items-center justify-between gap-3 rounded-xl border border-blue-700 bg-blue-900 px-4 py-3 text-xs text-blue-200"><span>第 {payrollPage} / {payrollPageCount} 页，共 {payrollRows.length} 条工资</span><div className="flex items-center gap-2"><button type="button" onClick={() => setPayrollPage((p) => Math.max(1, p - 1))} disabled={payrollPage <= 1} className="rounded-lg border border-slate-200 px-3 py-1.5 disabled:cursor-not-allowed disabled:opacity-40">上一页</button><button type="button" onClick={() => setPayrollPage((p) => Math.min(payrollPageCount, p + 1))} disabled={payrollPage >= payrollPageCount} className="rounded-lg border border-slate-200 px-3 py-1.5 disabled:cursor-not-allowed disabled:opacity-40">下一页</button></div></div>
         </div>
       ) : null}
 
@@ -5292,18 +5292,18 @@ function EmployeesSection({ employees, setEmployees, attendances, setAttendances
         <div className="space-y-4">
           <PanelCard title="员工系统规则" note="考勤工资规则只保留在这里配置，改完后请点页面上方保存。">
             <div className="grid gap-3 md:grid-cols-2 xl:grid-cols-4">
-              <div><p className="mb-1 text-[11px] font-semibold text-slate-500">饭补金额</p><SmallInput value={String(mealAllowanceAmount)} onChange={(v) => setSettings((prev) => ({ ...prev, meal_allowance_amount: Number(v) || 0 }))} type="number" /></div>
-              <div><p className="mb-1 text-[11px] font-semibold text-slate-500">自动考勤时区</p><SmallInput value={settings.auto_attendance_timezone ?? "America/New_York"} onChange={(v) => setSettings((prev) => ({ ...prev, auto_attendance_timezone: v }))} /></div>
-              <div><p className="mb-1 text-[11px] font-semibold text-slate-500">执行时间</p><SmallInput value={settings.auto_attendance_run_time ?? "01:00"} onChange={(v) => setSettings((prev) => ({ ...prev, auto_attendance_run_time: v }))} /></div>
-              <div><p className="mb-1 text-[11px] font-semibold text-slate-500">自动默认工时(分钟)</p><SmallInput value={String(settings.auto_attendance_default_minutes ?? 600)} onChange={(v) => setSettings((prev) => ({ ...prev, auto_attendance_default_minutes: Number(v) || 0 }))} type="number" /></div>
+              <div><p className="mb-1 text-[11px] font-semibold text-blue-300">饭补金额</p><SmallInput value={String(mealAllowanceAmount)} onChange={(v) => setSettings((prev) => ({ ...prev, meal_allowance_amount: Number(v) || 0 }))} type="number" /></div>
+              <div><p className="mb-1 text-[11px] font-semibold text-blue-300">自动考勤时区</p><SmallInput value={settings.auto_attendance_timezone ?? "America/New_York"} onChange={(v) => setSettings((prev) => ({ ...prev, auto_attendance_timezone: v }))} /></div>
+              <div><p className="mb-1 text-[11px] font-semibold text-blue-300">执行时间</p><SmallInput value={settings.auto_attendance_run_time ?? "01:00"} onChange={(v) => setSettings((prev) => ({ ...prev, auto_attendance_run_time: v }))} /></div>
+              <div><p className="mb-1 text-[11px] font-semibold text-blue-300">自动默认工时(分钟)</p><SmallInput value={String(settings.auto_attendance_default_minutes ?? 600)} onChange={(v) => setSettings((prev) => ({ ...prev, auto_attendance_default_minutes: Number(v) || 0 }))} type="number" /></div>
             </div>
             <div className="mt-3"><SettingsTextArea label="自动备注" value={settings.auto_attendance_note ?? ""} rows={4} onChange={(value) => setSettings((prev) => ({ ...prev, auto_attendance_note: value }))} note="自动生成考勤时附带说明，可留空。" /></div>
-            <div className="mt-3 rounded-lg border border-slate-200 bg-slate-50 px-3 py-2 text-xs text-slate-600">自动考勤规则：{settings.auto_attendance_timezone || "America/New_York"} 每天 {settings.auto_attendance_run_time || "01:00"} 为在职员工按工作日自动生成 {formatMinutes(settings.auto_attendance_default_minutes || 600)} 考勤，再叠加请假 / 加班修正。{settings.auto_attendance_note?.trim() ? ` 备注：${settings.auto_attendance_note.trim()}` : ""}</div>
+            <div className="mt-3 rounded-lg border border-slate-200 bg-slate-50 px-3 py-2 text-xs text-blue-200">自动考勤规则：{settings.auto_attendance_timezone || "America/New_York"} 每天 {settings.auto_attendance_run_time || "01:00"} 为在职员工按工作日自动生成 {formatMinutes(settings.auto_attendance_default_minutes || 600)} 考勤，再叠加请假 / 加班修正。{settings.auto_attendance_note?.trim() ? ` 备注：${settings.auto_attendance_note.trim()}` : ""}</div>
           </PanelCard>
         </div>
       ) : null}
 
-      {showAttendanceModal ? <div className="fixed inset-0 z-50 flex items-center justify-center bg-slate-950/45 px-4"><div className="w-full max-w-xl rounded-2xl border border-slate-200 bg-white p-5 shadow-2xl"><div className="mb-4 flex items-start justify-between gap-3"><div><h3 className="text-base font-semibold text-slate-900">手工补录考勤</h3><p className="mt-1 text-xs text-slate-500">可以指定员工和日期新增考勤，但同一员工同一天不能重复新增。</p></div><button onClick={() => setShowAttendanceModal(false)} className="rounded-lg border border-slate-200 px-2.5 py-1 text-xs text-slate-500 hover:border-slate-300 hover:text-slate-700 transition-colors">关闭</button></div><div className="grid gap-3 sm:grid-cols-2"><div><p className="mb-1 text-[11px] font-semibold text-slate-500">员工</p><SmallSelect value={attendanceDraft.employee_id} onChange={(v) => { setAttendanceDraftError(""); setAttendanceDraft((draft) => ({ ...draft, employee_id: v })); }} options={normalizedEmployees.map((item) => item.id)} labels={Object.fromEntries(normalizedEmployees.map((item) => [item.id, `${item.code} · ${item.name}`]))} /></div><div><p className="mb-1 text-[11px] font-semibold text-slate-500">日期</p><SmallInput value={attendanceDraft.date} onChange={(v) => { setAttendanceDraftError(""); setAttendanceDraft((draft) => ({ ...draft, date: v })); }} type="date" /></div><div><p className="mb-1 text-[11px] font-semibold text-slate-500">请假时长（分钟）</p><SmallInput value={attendanceDraft.leave_minutes} onChange={(v) => setAttendanceDraft((draft) => ({ ...draft, leave_minutes: v }))} type="number" /></div><div><p className="mb-1 text-[11px] font-semibold text-slate-500">加班时长（分钟）</p><SmallInput value={attendanceDraft.overtime_minutes} onChange={(v) => setAttendanceDraft((draft) => ({ ...draft, overtime_minutes: v }))} type="number" /></div></div>{attendanceDraftError ? <div className="mt-3 rounded-lg border border-rose-200 bg-rose-50 px-3 py-2 text-xs text-rose-600">{attendanceDraftError}</div> : null}<div className="mt-3 rounded-lg border border-slate-200 bg-slate-50 px-3 py-2 text-xs text-slate-600">计算后工作时长：{formatMinutes(calcWorkedMinutes(Number(attendanceDraft.leave_minutes) || 0, Number(attendanceDraft.overtime_minutes) || 0))}</div><div className="mt-5 flex justify-end gap-2"><ActionBtn onClick={() => setShowAttendanceModal(false)}>取消</ActionBtn><ActionBtn tone="primary" onClick={saveAttendanceDraft}>保存考勤</ActionBtn></div></div></div> : null}{showEmployeeModal ? <div className="fixed inset-0 z-50 flex items-center justify-center bg-slate-950/45 px-4"><div className="w-full max-w-3xl rounded-2xl border border-slate-200 bg-white p-5 shadow-2xl"><div className="mb-4 flex items-start justify-between gap-3"><div><h3 className="text-base font-semibold text-slate-900">{editingEmployeeId ? "编辑员工" : "新建员工"}</h3><p className="mt-1 text-xs text-slate-500">工号自动递增，从 001 开始。</p></div><button onClick={() => setShowEmployeeModal(false)} className="rounded-lg border border-slate-200 px-2.5 py-1 text-xs text-slate-500 hover:border-slate-300 hover:text-slate-700 transition-colors">关闭</button></div><div className="grid gap-3 sm:grid-cols-2"><div><p className="mb-1 text-[11px] font-semibold text-slate-500">姓名</p><SmallInput value={employeeDraft.name} onChange={(v) => setEmployeeDraft((draft) => ({ ...draft, name: v }))} /></div><div><p className="mb-1 text-[11px] font-semibold text-slate-500">电话</p><SmallInput value={employeeDraft.phone} onChange={(v) => setEmployeeDraft((draft) => ({ ...draft, phone: v }))} /></div><div><p className="mb-1 text-[11px] font-semibold text-slate-500">时薪</p><SmallInput value={employeeDraft.hourly_rate} onChange={(v) => setEmployeeDraft((draft) => ({ ...draft, hourly_rate: v }))} type="number" /></div><div><p className="mb-1 text-[11px] font-semibold text-slate-500">分组</p><SmallSelect value={employeeDraft.ethnicity} onChange={(v) => setEmployeeDraft((draft) => ({ ...draft, ethnicity: v }))} options={[...EMPLOYEE_GROUP_OPTIONS]} /></div></div><div className="mt-4"><p className="mb-2 text-[11px] font-semibold text-slate-500">工作日</p><div className="flex flex-wrap gap-2">{WORKDAY_OPTIONS.map((option) => { const checked = employeeDraft.workdays.includes(option.key); return <label key={option.key} className={`rounded-lg border px-3 py-2 text-xs ${checked ? "border-blue-300 bg-blue-50 text-blue-700" : "border-slate-200 bg-white text-slate-600"}`}><input type="checkbox" className="mr-2" checked={checked} onChange={(e) => setEmployeeDraft((draft) => ({ ...draft, workdays: e.target.checked ? [...draft.workdays, option.key] : draft.workdays.filter((day) => day !== option.key) }))} />{option.label}</label>; })}</div></div><label className="mt-4 flex items-center gap-2 text-xs text-slate-600"><input type="checkbox" checked={employeeDraft.meal_allowance_eligible} onChange={(e) => setEmployeeDraft((draft) => ({ ...draft, meal_allowance_eligible: e.target.checked }))} /> 饭补资格</label><div className="mt-5 flex justify-end gap-2"><ActionBtn onClick={() => setShowEmployeeModal(false)}>取消</ActionBtn><ActionBtn tone="primary" onClick={saveEmployee}>保存员工</ActionBtn></div></div></div> : null}
+      {showAttendanceModal ? <div className="fixed inset-0 z-50 flex items-center justify-center bg-slate-950/45 px-4"><div className="w-full max-w-xl rounded-2xl border border-blue-700 bg-blue-900 p-5 shadow-2xl"><div className="mb-4 flex items-start justify-between gap-3"><div><h3 className="text-base font-semibold text-white">手工补录考勤</h3><p className="mt-1 text-xs text-blue-300">可以指定员工和日期新增考勤，但同一员工同一天不能重复新增。</p></div><button onClick={() => setShowAttendanceModal(false)} className="rounded-lg border border-slate-200 px-2.5 py-1 text-xs text-blue-300 hover:border-slate-300 hover:text-blue-100 transition-colors">关闭</button></div><div className="grid gap-3 sm:grid-cols-2"><div><p className="mb-1 text-[11px] font-semibold text-blue-300">员工</p><SmallSelect value={attendanceDraft.employee_id} onChange={(v) => { setAttendanceDraftError(""); setAttendanceDraft((draft) => ({ ...draft, employee_id: v })); }} options={normalizedEmployees.map((item) => item.id)} labels={Object.fromEntries(normalizedEmployees.map((item) => [item.id, `${item.code} · ${item.name}`]))} /></div><div><p className="mb-1 text-[11px] font-semibold text-blue-300">日期</p><SmallInput value={attendanceDraft.date} onChange={(v) => { setAttendanceDraftError(""); setAttendanceDraft((draft) => ({ ...draft, date: v })); }} type="date" /></div><div><p className="mb-1 text-[11px] font-semibold text-blue-300">请假时长（分钟）</p><SmallInput value={attendanceDraft.leave_minutes} onChange={(v) => setAttendanceDraft((draft) => ({ ...draft, leave_minutes: v }))} type="number" /></div><div><p className="mb-1 text-[11px] font-semibold text-blue-300">加班时长（分钟）</p><SmallInput value={attendanceDraft.overtime_minutes} onChange={(v) => setAttendanceDraft((draft) => ({ ...draft, overtime_minutes: v }))} type="number" /></div></div>{attendanceDraftError ? <div className="mt-3 rounded-lg border border-rose-200 bg-rose-50 px-3 py-2 text-xs text-rose-600">{attendanceDraftError}</div> : null}<div className="mt-3 rounded-lg border border-slate-200 bg-slate-50 px-3 py-2 text-xs text-blue-200">计算后工作时长：{formatMinutes(calcWorkedMinutes(Number(attendanceDraft.leave_minutes) || 0, Number(attendanceDraft.overtime_minutes) || 0))}</div><div className="mt-5 flex justify-end gap-2"><ActionBtn onClick={() => setShowAttendanceModal(false)}>取消</ActionBtn><ActionBtn tone="primary" onClick={saveAttendanceDraft}>保存考勤</ActionBtn></div></div></div> : null}{showEmployeeModal ? <div className="fixed inset-0 z-50 flex items-center justify-center bg-slate-950/45 px-4"><div className="w-full max-w-3xl rounded-2xl border border-blue-700 bg-blue-900 p-5 shadow-2xl"><div className="mb-4 flex items-start justify-between gap-3"><div><h3 className="text-base font-semibold text-white">{editingEmployeeId ? "编辑员工" : "新建员工"}</h3><p className="mt-1 text-xs text-blue-300">工号自动递增，从 001 开始。</p></div><button onClick={() => setShowEmployeeModal(false)} className="rounded-lg border border-slate-200 px-2.5 py-1 text-xs text-blue-300 hover:border-slate-300 hover:text-blue-100 transition-colors">关闭</button></div><div className="grid gap-3 sm:grid-cols-2"><div><p className="mb-1 text-[11px] font-semibold text-blue-300">姓名</p><SmallInput value={employeeDraft.name} onChange={(v) => setEmployeeDraft((draft) => ({ ...draft, name: v }))} /></div><div><p className="mb-1 text-[11px] font-semibold text-blue-300">电话</p><SmallInput value={employeeDraft.phone} onChange={(v) => setEmployeeDraft((draft) => ({ ...draft, phone: v }))} /></div><div><p className="mb-1 text-[11px] font-semibold text-blue-300">时薪</p><SmallInput value={employeeDraft.hourly_rate} onChange={(v) => setEmployeeDraft((draft) => ({ ...draft, hourly_rate: v }))} type="number" /></div><div><p className="mb-1 text-[11px] font-semibold text-blue-300">分组</p><SmallSelect value={employeeDraft.ethnicity} onChange={(v) => setEmployeeDraft((draft) => ({ ...draft, ethnicity: v }))} options={[...EMPLOYEE_GROUP_OPTIONS]} /></div></div><div className="mt-4"><p className="mb-2 text-[11px] font-semibold text-blue-300">工作日</p><div className="flex flex-wrap gap-2">{WORKDAY_OPTIONS.map((option) => { const checked = employeeDraft.workdays.includes(option.key); return <label key={option.key} className={`rounded-lg border px-3 py-2 text-xs ${checked ? "border-blue-300 bg-blue-50 text-blue-700" : "border-blue-700 bg-blue-900 text-blue-200"}`}><input type="checkbox" className="mr-2" checked={checked} onChange={(e) => setEmployeeDraft((draft) => ({ ...draft, workdays: e.target.checked ? [...draft.workdays, option.key] : draft.workdays.filter((day) => day !== option.key) }))} />{option.label}</label>; })}</div></div><label className="mt-4 flex items-center gap-2 text-xs text-blue-200"><input type="checkbox" checked={employeeDraft.meal_allowance_eligible} onChange={(e) => setEmployeeDraft((draft) => ({ ...draft, meal_allowance_eligible: e.target.checked }))} /> 饭补资格</label><div className="mt-5 flex justify-end gap-2"><ActionBtn onClick={() => setShowEmployeeModal(false)}>取消</ActionBtn><ActionBtn tone="primary" onClick={saveEmployee}>保存员工</ActionBtn></div></div></div> : null}
     </div>
   );
 }
@@ -5323,11 +5323,11 @@ function SettingsField({
   onChange: (value: string) => void;
   type?: string;
 }) {
-  return <div className="flex flex-col gap-1 sm:flex-row sm:items-start sm:gap-6"><label className="w-28 shrink-0 pt-2 text-xs font-semibold text-slate-600">{label}</label><div className="flex-1"><input value={value} onChange={(e) => onChange(e.target.value)} type={type} className="h-8 w-full max-w-sm rounded-lg border border-slate-300 bg-white px-3 text-xs text-slate-700 focus:border-blue-400 focus:outline-none" />{note && <p className="mt-1 text-[11px] text-slate-400">{note}</p>}</div></div>;
+  return <div className="flex flex-col gap-1 sm:flex-row sm:items-start sm:gap-6"><label className="w-28 shrink-0 pt-2 text-xs font-semibold text-blue-200">{label}</label><div className="flex-1"><input value={value} onChange={(e) => onChange(e.target.value)} type={type} className="h-8 w-full max-w-sm rounded-lg border border-slate-300 bg-white px-3 text-xs text-blue-100 focus:border-blue-300 focus:outline-none" />{note && <p className="mt-1 text-[11px] text-blue-400">{note}</p>}</div></div>;
 }
 
 function SettingsGroup({ title, children }: { title: string; children: React.ReactNode; }) {
-  return <div className="rounded-xl border border-slate-200 bg-white p-3"><h3 className="mb-3 border-b border-slate-100 pb-2.5 text-xs font-semibold uppercase tracking-wider text-slate-500">{title}</h3><div className="flex flex-col gap-3.5">{children}</div></div>;
+  return <div className="rounded-xl border border-blue-700 bg-blue-900 p-3"><h3 className="mb-3 border-b border-blue-800 pb-2.5 text-xs font-semibold uppercase tracking-wider text-blue-300">{title}</h3><div className="flex flex-col gap-3.5">{children}</div></div>;
 }
 
 function SettingsTextArea({
@@ -5343,7 +5343,7 @@ function SettingsTextArea({
   rows?: number;
   onChange: (value: string) => void;
 }) {
-  return <div className="flex flex-col gap-1"><label className="text-xs font-semibold text-slate-600">{label}</label><textarea value={value} onChange={(e) => onChange(e.target.value)} rows={rows} className="w-full rounded-lg border border-slate-300 bg-white px-3 py-2 text-xs text-slate-700 focus:border-blue-400 focus:outline-none resize-none" />{note && <p className="text-[11px] text-slate-400">{note}</p>}</div>;
+  return <div className="flex flex-col gap-1"><label className="text-xs font-semibold text-blue-200">{label}</label><textarea value={value} onChange={(e) => onChange(e.target.value)} rows={rows} className="w-full rounded-lg border border-slate-300 bg-white px-3 py-2 text-xs text-blue-100 focus:border-blue-300 focus:outline-none resize-none" />{note && <p className="text-[11px] text-blue-400">{note}</p>}</div>;
 }
 
 type SettingsPageKey = "company-base" | "company-contact" | "finance" | "print" | "lists";
@@ -5406,16 +5406,16 @@ function SettingsSection({ settings, setSettings, saveState, isDirty, lastSavedA
             : `${saveText}，考勤工资规则已经只保留在员工管理里维护。`}
       </div>
 
-      <div className="rounded-xl border border-slate-200 bg-white p-3">
+      <div className="rounded-xl border border-blue-700 bg-blue-900 p-3">
         <div className="flex flex-wrap items-center justify-between gap-2">
           <div>
-            <p className="text-[11px] font-semibold text-slate-500">当前分页</p>
-            <p className="mt-1 text-sm font-semibold text-slate-900">{currentPage.label}</p>
-            <p className="mt-1 text-xs text-slate-500">{currentPage.note}</p>
+            <p className="text-[11px] font-semibold text-blue-300">当前分页</p>
+            <p className="mt-1 text-sm font-semibold text-white">{currentPage.label}</p>
+            <p className="mt-1 text-xs text-blue-300">{currentPage.note}</p>
           </div>
           <div className="flex items-center gap-2">
             <ActionBtn disabled={pageIndex === 0} onClick={() => setPage(pages[Math.max(0, pageIndex - 1)].key)}>{"← 上一页"}</ActionBtn>
-            <div className="rounded-lg border border-slate-200 px-3 py-1.5 text-xs font-semibold text-slate-600">第 {pageIndex + 1} / {pages.length} 页</div>
+            <div className="rounded-lg border border-slate-200 px-3 py-1.5 text-xs font-semibold text-blue-200">第 {pageIndex + 1} / {pages.length} 页</div>
             <ActionBtn disabled={pageIndex === pages.length - 1} onClick={() => setPage(pages[Math.min(pages.length - 1, pageIndex + 1)].key)}>{"下一页 →"}</ActionBtn>
           </div>
         </div>
@@ -5424,7 +5424,7 @@ function SettingsSection({ settings, setSettings, saveState, isDirty, lastSavedA
             <button
               key={item.key}
               onClick={() => setPage(item.key)}
-              className={`rounded-lg border px-3 py-1.5 text-xs font-semibold transition-colors ${page === item.key ? "border-blue-600 bg-blue-50 text-blue-700" : "border-slate-200 bg-white text-slate-600 hover:border-slate-300 hover:text-slate-900"}`}
+              className={`rounded-lg border px-3 py-1.5 text-xs font-semibold transition-colors ${page === item.key ? "border-blue-600 bg-blue-50 text-blue-700" : "border-blue-700 bg-blue-900 text-blue-200 hover:border-blue-600 hover:text-white"}`}
             >
               {item.label}
             </button>
@@ -5443,9 +5443,9 @@ function SettingsSection({ settings, setSettings, saveState, isDirty, lastSavedA
             </SettingsGroup>
             <SettingsGroup title="页面预览">
               <div className="space-y-3 text-xs">
-                <div className="flex items-center justify-between"><span className="text-slate-500">公司名称</span><span className="max-w-[220px] text-right font-medium text-slate-900">{settings.company_name || "未填写"}</span></div>
-                <div className="flex items-center justify-between"><span className="text-slate-500">打印名称</span><span className="max-w-[220px] text-right font-medium text-slate-900">{settings.company_name_zh || settings.company_name || "未填写"}</span></div>
-                <div className="flex items-center justify-between"><span className="text-slate-500">展示地址</span><span className="max-w-[220px] text-right text-slate-900">{settings.company_address || settings.address || "未填写"}</span></div>
+                <div className="flex items-center justify-between"><span className="text-blue-300">公司名称</span><span className="max-w-[220px] text-right font-medium text-white">{settings.company_name || "未填写"}</span></div>
+                <div className="flex items-center justify-between"><span className="text-blue-300">打印名称</span><span className="max-w-[220px] text-right font-medium text-white">{settings.company_name_zh || settings.company_name || "未填写"}</span></div>
+                <div className="flex items-center justify-between"><span className="text-blue-300">展示地址</span><span className="max-w-[220px] text-right text-white">{settings.company_address || settings.address || "未填写"}</span></div>
               </div>
             </SettingsGroup>
           </div>
@@ -5461,7 +5461,7 @@ function SettingsSection({ settings, setSettings, saveState, isDirty, lastSavedA
               <SettingsField label="Logo URL" value={settings.logo_url ?? ""} onChange={(value) => update("logo_url", value)} />
             </SettingsGroup>
             <SettingsGroup title="保存确认">
-              <div className="space-y-3 text-xs text-slate-600">
+              <div className="space-y-3 text-xs text-blue-200">
                 <p>这里不再自动保存，改完后请点页面上方的“保存更改”。</p>
                 <p>看到 <span className="font-semibold text-emerald-700">设置已保存成功</span>，才表示服务端真的写入成功。</p>
                 <p>考勤工资规则已经从系统设置移走，只在员工管理里维护。</p>
@@ -5734,16 +5734,34 @@ export default function DashboardBizPage() {
 
   return (
     <PageSection>
+      <style>{`
+        /* Blue Theme Overrides (scoped via data-blue-theme) */
+        [data-blue-theme] [class*="bg-white"]:not([class*="bg-white/"]){background:#1e3a5f!important}
+        [data-blue-theme] [class*="bg-slate-50"]:not([class*="bg-slate-950"]){background:#1e40af!important}
+        [data-blue-theme] [class*="bg-slate-100"]{background:#1d4ed8!important}
+        [data-blue-theme] [class*="bg-slate-950"]{background:rgba(10,20,40,0.55)!important}
+        [data-blue-theme] [class*="border-slate"]{border-color:#1e40af!important}
+        [data-blue-theme] [class*="divide-slate"]{border-color:#1e40af!important}
+        [data-blue-theme] [class*="text-slate-900"],
+        [data-blue-theme] [class*="text-slate-800"],
+        [data-blue-theme] [class*="text-slate-700"]{color:#fff!important}
+        [data-blue-theme] [class*="text-slate-600"]{color:#bfdbfe!important}
+        [data-blue-theme] [class*="text-slate-500"]{color:#93c5fd!important}
+        [data-blue-theme] [class*="text-slate-400"]{color:#60a5fa!important}
+        [data-blue-theme] input[class*="bg-white"],
+        [data-blue-theme] textarea[class*="bg-white"],
+        [data-blue-theme] select[class*="bg-white"]{background:#1e40af!important;color:#fff!important}
+      `}</style>
       <DashboardPageHeader
         eyebrow="Owner Backend · Business"
         title="业务管理"
         description={`订单、财务、客户、物料、员工与设置的统一操作界面。${saveState === "saving" ? " 正在保存…" : saveState === "conflict" ? " 检测到其他页面已改动，请刷新后再继续" : saveState === "error" ? " 保存异常" : isDirty ? " 当前有未保存更改" : lastSavedAt ? ` 已保存 ${lastSavedAt}` : ""}`}
       />
 
-      <div className="mt-3 flex flex-wrap items-center justify-between gap-3 rounded-[18px] border border-slate-200 bg-white px-4 py-3 shadow-sm">
+      <div className="mt-3 flex flex-wrap items-center justify-between gap-3 rounded-[18px] border border-blue-700 bg-blue-900 px-4 py-3 shadow-sm">
         <div>
-          <p className="text-xs font-semibold text-slate-700">手动保存</p>
-          <p className="mt-1 text-xs text-slate-500">{saveHint}</p>
+          <p className="text-xs font-semibold text-blue-100">手动保存</p>
+          <p className="mt-1 text-xs text-blue-300">{saveHint}</p>
         </div>
         <div className="flex items-center gap-2">
           <div className={`rounded-lg border px-3 py-1.5 text-xs font-semibold ${saveTone}`}>{saveText}</div>
@@ -5752,10 +5770,10 @@ export default function DashboardBizPage() {
       </div>
 
       <div className="mt-4 flex min-h-[600px] overflow-hidden rounded-[20px] bg-white shadow-sm">
-        <nav className="w-40 shrink-0 border-r border-slate-100 bg-slate-50 py-4">
+        <nav className="w-40 shrink-0 border-r border-blue-800 bg-blue-800/50 py-4">
           {NAV_GROUPS.map((group) => (
             <div key={group.label} className="mb-4">
-              <p className="mb-1 px-4 text-[10px] font-semibold uppercase tracking-widest text-slate-400">
+              <p className="mb-1 px-4 text-[10px] font-semibold uppercase tracking-widest text-blue-400">
                 {group.label}
               </p>
               {group.items.map((item) => (
@@ -5764,8 +5782,8 @@ export default function DashboardBizPage() {
                   onClick={() => setSection(item.key)}
                   className={`flex w-full items-center gap-2.5 px-4 py-2 text-left text-xs font-medium transition-colors ${
                     section === item.key
-                      ? "bg-white text-slate-900 shadow-sm border-r-2 border-blue-500"
-                      : "text-slate-500 hover:bg-white/60 hover:text-slate-800"
+                      ? "bg-blue-800 text-white shadow-sm border-r-2 border-blue-400"
+                      : "text-blue-300 hover:bg-blue-800/60 hover:text-white"
                   }`}
                 >
                   <span className="text-sm leading-none">{item.icon}</span>
@@ -5776,7 +5794,7 @@ export default function DashboardBizPage() {
           ))}
         </nav>
 
-        <div className="flex-1 overflow-x-auto p-5">
+        <div className="flex-1 overflow-x-auto p-5" data-blue-theme={section !== "finance" ? "" : undefined}>
           {section === "overview" && (
             <OverviewSection
               onNavigate={(k) => setSection(k as Section)}

@@ -5220,11 +5220,11 @@ function EmployeesSection({ employees, setEmployees, attendances, setAttendances
           <PanelCard title="员工系统规则" note="员工系统规则独立成页，只保留规则配置，不再混入员工档案。">
             <div className="grid gap-3 md:grid-cols-2 xl:grid-cols-4">
               <div><p className="mb-1 text-[11px] font-semibold text-slate-500">饭补金额</p><SmallInput value={String(mealAllowanceAmount)} onChange={(v) => setSettings((prev) => ({ ...prev, meal_allowance_amount: Number(v) || 0 }))} type="number" /></div>
-              <div><p className="mb-1 text-[11px] font-semibold text-slate-500">自动考勤时区</p><SmallInput value={settings.auto_attendance_timezone || "America/New_York"} onChange={(v) => setSettings((prev) => ({ ...prev, auto_attendance_timezone: v || "America/New_York" }))} /></div>
-              <div><p className="mb-1 text-[11px] font-semibold text-slate-500">执行时间</p><SmallInput value={settings.auto_attendance_run_time || "01:00"} onChange={(v) => setSettings((prev) => ({ ...prev, auto_attendance_run_time: v || "01:00" }))} /></div>
+              <div><p className="mb-1 text-[11px] font-semibold text-slate-500">自动考勤时区</p><SmallInput value={settings.auto_attendance_timezone ?? "America/New_York"} onChange={(v) => setSettings((prev) => ({ ...prev, auto_attendance_timezone: v }))} /></div>
+              <div><p className="mb-1 text-[11px] font-semibold text-slate-500">执行时间</p><SmallInput value={settings.auto_attendance_run_time ?? "01:00"} onChange={(v) => setSettings((prev) => ({ ...prev, auto_attendance_run_time: v }))} /></div>
               <div><p className="mb-1 text-[11px] font-semibold text-slate-500">自动默认工时</p><div className="rounded-lg border border-slate-200 bg-slate-50 px-3 py-2 text-xs text-slate-600">{formatMinutes(settings.auto_attendance_default_minutes || 600)}</div></div>
             </div>
-            <div className="mt-3 rounded-lg border border-slate-200 bg-slate-50 px-3 py-2 text-xs text-slate-600">自动考勤规则：{settings.auto_attendance_timezone || "America/New_York"} 每天 {settings.auto_attendance_run_time || "01:00"} 为在职员工按工作日自动生成 10 小时考勤，再叠加请假 / 加班修正。</div>
+            <div className="mt-3 rounded-lg border border-slate-200 bg-slate-50 px-3 py-2 text-xs text-slate-600">自动考勤规则：{settings.auto_attendance_timezone || "America/New_York"} 每天 {settings.auto_attendance_run_time || "01:00"} 为在职员工按工作日自动生成 {formatMinutes(settings.auto_attendance_default_minutes || 600)} 考勤，再叠加请假 / 加班修正。</div>
           </PanelCard>
         </div>
       ) : null}

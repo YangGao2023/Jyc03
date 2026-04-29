@@ -209,6 +209,66 @@ function findSupplierByReference(
   return matches.length === 1 ? matches[0] : undefined;
 }
 
+type DirectoryRole = "客户" | "供应商";
+
+function directoryKey(value: { master_id?: string; name?: string; phone?: string }) {
+  const masterId = normalizeEntityText(value.master_id);
+  if (masterId) return `master:${masterId}`;
+  const name = normalizeEntityText(value.name);
+  const phone = normalizeEntityPhone(value.phone);
+  if (name && phone) return `match:${name}|${phone}`;
+  return "";
+}
+
+function mergeDirectoryRoles(...roles: Array<DirectoryRole | undefined>) {
+  return Array.from(new Set(roles.filter(Boolean) as DirectoryRole[]));
+}
+
+function linkDirectoryEntities(clients: ContactRecord[], suppliers: SupplierRecord[]) {
+  type Group = { masterId: string; clients: ContactRecord[]; suppliers: SupplierRecord[] };
+  const groups = new Map<string, Group>();
+
+  function collect(kind: "clients" | "suppliers", record: ContactRecord | SupplierRecord) {
+    const key = directoryKey(record) || `${kind}:${record.id}`;
+    const masterId = normalizeEntityText((record as any).master_id) || record.id;
+    const group = groups.get(key) ?? { masterId, clients: [], suppliers: [] };
+    if (!normalizeEntityText(group.masterId)) group.masterId = masterId;
+    group[kind].push(record as never);
+    groups.set(key, group);
+  }
+
+  clients.forEach((item) => collect("clients", item));
+  suppliers.forEach((item) => collect("suppliers", item));
+
+  return {
+    clients: clients.map((item) => {
+      const group = groups.get(directoryKey(item) || `clients:${item.id}`);
+      return {
+        ...item,
+        master_id: group?.masterId ?? item.master_id ?? item.id,
+        roles: mergeDirectoryRoles(item.roles?.[0], item.roles?.[1], "客户", group && group.suppliers.length ? "供应商" : undefined),
+      };
+    }),
+    suppliers: suppliers.map((item) => {
+      const group = groups.get(directoryKey(item) || `suppliers:${item.id}`);
+      return {
+        ...item,
+        master_id: group?.masterId ?? item.master_id ?? item.id,
+        roles: mergeDirectoryRoles(item.roles?.[0], item.roles?.[1], "供应商", group && group.clients.length ? "客户" : undefined),
+      };
+    }),
+  };
+}
+
+function directoryBadgeLabel(record: { master_id?: string; roles?: Array<DirectoryRole>; name?: string; phone?: string }, counterpartList: Array<{ master_id?: string; name?: string; phone?: string }>, ownRole: DirectoryRole) {
+  const existing = record.roles?.filter(Boolean) ?? [];
+  if (existing.length) return Array.from(new Set(existing)).join(" / ");
+  const key = directoryKey(record);
+  if (!key) return ownRole;
+  const hasPartner = counterpartList.some((item) => directoryKey(item) === key);
+  return hasPartner ? "客户 / 供应商" : ownRole;
+}
+
 function orderBelongsToClient(order: BizOrder, client: ContactRecord) {
   if (order.client_id && order.client_id === client.id) return true;
   const sameName = normalizeEntityText(order.client_name) === normalizeEntityText(client.name);
@@ -4092,6 +4152,7 @@ function ClientsSection({ clients, setClients, suppliers, setSuppliers, orders, 
           { label: "客户数", value: String(clients.length) },
           { label: "VIP客户", value: String(clients.filter((item) => item.is_vip).length), accent: "text-sky-600" },
           { label: "供应商数", value: String(suppliers.length) },
+          { label: "双角色主体", value: String(clients.filter((item) => directoryBadgeLabel(item, suppliers, "客户") === "客户 / 供应商").length), accent: "text-violet-600" },
           { label: "有欠款客户", value: String(clients.filter((item) => (item.balance ?? 0) > 0).length), accent: "text-amber-600" },
         ]}
       />
@@ -4178,6 +4239,7 @@ function ClientsSection({ clients, setClients, suppliers, setSuppliers, orders, 
                           <div>
                             <div className="flex items-center gap-2">
                               <span className="text-xs font-semibold text-slate-700">{item.name}</span>
+                              <span className="rounded-full bg-violet-50 px-2 py-0.5 text-[11px] font-semibold text-violet-700">{directoryBadgeLabel(item, suppliers, "客户")}</span>
                               {item.is_vip ? <span className="rounded-full bg-amber-50 px-2 py-0.5 text-[11px] font-semibold text-amber-700">VIP</span> : null}
                             </div>
                             <p className="mt-1 text-[11px] text-slate-700">{item.phone ?? item.contact ?? "暂未填写联系方式"}</p>
@@ -4637,7 +4699,7 @@ function ClientsSection({ clients, setClients, suppliers, setSuppliers, orders, 
               <tbody>
                 {pagedSuppliers.map((item) => (
                   <tr key={item.id} className="border-b border-gray-200 last:border-b-0">
-                    <td className="px-4 py-2 font-medium text-slate-700">{item.name}</td>
+                    <td className="px-4 py-2 font-medium text-slate-700"><div className="flex flex-wrap items-center gap-2"><span>{item.name}</span><span className="rounded-full bg-violet-50 px-2 py-0.5 text-[11px] font-semibold text-violet-700">{directoryBadgeLabel(item, clients, "供应商")}</span></div></td>
                     <td className="px-4 py-2 text-slate-600">{item.category ?? "-"}</td>
                     <td className="px-4 py-2 text-slate-600">{item.contact_person ?? "-"}</td>
                     <td className="px-4 py-2 text-slate-600">{item.phone ?? "-"}</td>
@@ -5781,12 +5843,13 @@ export default function DashboardBizPage() {
   const [isHydrated, setIsHydrated] = useState(false);
   const [saveState, setSaveState] = useState<"idle" | "saving" | "saved" | "error" | "conflict">("idle");
   const [showVoided, setShowVoided] = useState(false);
+  const linkedDirectory = useMemo(() => linkDirectoryEntities(clients, suppliers), [clients, suppliers]);
   const orderSummary = useMemo(() => summarizeOrders(orders.filter((o) => o.status !== "已作废")), [orders]);
   const snapshot = useMemo(() => buildBizSnapshot({
     revision: storeRevision,
     orders,
-    clients,
-    suppliers,
+    clients: linkedDirectory.clients,
+    suppliers: linkedDirectory.suppliers,
     expenses,
     cashEntries,
     materials,

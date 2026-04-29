@@ -56,6 +56,8 @@ export type ContactRecord = {
   is_vip?: boolean;
   balance?: number;
   wechat?: string;
+  master_id?: string;
+  roles?: Array<"客户" | "供应商">;
 };
 
 export type SupplierRecord = {
@@ -69,6 +71,8 @@ export type SupplierRecord = {
   address?: string;
   last_purchase_date?: string;
   remark?: string;
+  master_id?: string;
+  roles?: Array<"客户" | "供应商">;
 };
 
 export type ExpenseRecord = {

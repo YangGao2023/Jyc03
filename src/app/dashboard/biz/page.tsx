@@ -3350,24 +3350,39 @@ function FinanceSection({ orders, setOrders, expenses, setExpenses, cashEntries,
   return (
     <div>
       <SectionHeader eyebrow="Finance Management" title="收支管理" actions={<>{sub === "audit" ? <ActionBtn onClick={runFinanceAudit}>↻ 重新扫描</ActionBtn> : null}{sub === "audit" ? <ActionBtn tone="success" onClick={applyFinanceRepair}>🔧 应用自动修复</ActionBtn> : null}{sub === "expense" ? <ActionBtn tone="primary" onClick={() => setShowExpenseModal(true)}>+ 录入支出</ActionBtn> : null}{sub === "cash" ? <ActionBtn tone="primary" onClick={() => setShowOfficeTransferModal(true)}>+ 办公室转入/转出</ActionBtn> : null}</>} />
-      <div className="mb-4 rounded-xl border border-slate-200 bg-white p-3">
-        <div className="flex flex-wrap items-center gap-2">
-          <div>
-            <p className="text-sm font-semibold text-slate-700">📅 {today}</p>
+      <div className="mb-4 rounded-xl border border-slate-200 bg-white p-2">
+        <div className="flex flex-wrap items-center justify-between gap-2">
+          <div className="flex flex-wrap items-center gap-1">
+            <p className="text-sm font-semibold text-slate-700">📅</p>
+            <p className="text-xs text-slate-500">{today}</p>
+            <div className="flex flex-wrap items-end gap-1.5">
+              <div>
+                <p className="text-[10px] font-semibold text-slate-500">开始</p>
+                <SmallInput value={financeDateStart} onChange={(v: string) => { setFinanceDateStart(v); if (dateMode === "single") setFinanceDateEnd(v); }} type="date" />
+              </div>
+              {dateMode === "range" && (
+              <div>
+                <p className="text-[10px] font-semibold text-slate-500">结束</p>
+                <SmallInput value={financeDateEnd} onChange={setFinanceDateEnd} type="date" />
+              </div>
+              )}
+              {sub !== "ledger" && (
+              <div className="flex items-center gap-1 self-end pb-[2px]">
+                <button onClick={() => setDateMode("single")} className={`rounded px-1.5 py-0.5 text-[10px] font-medium transition-colors ${dateMode === "single" ? "bg-slate-700 text-white" : "bg-slate-100 text-slate-500"}`}>单日</button>
+                <button onClick={() => setDateMode("range")} className={`rounded px-1.5 py-0.5 text-[10px] font-medium transition-colors ${dateMode === "range" ? "bg-slate-700 text-white" : "bg-slate-100 text-slate-500"}`}>区间</button>
+              </div>
+              )}
+              <ActionBtn onClick={() => { setFinanceDateStart(today); setFinanceDateEnd(today); }}>今天</ActionBtn>
+              <ActionBtn onClick={() => { setFinanceDateStart(""); setFinanceDateEnd(""); }}>全部</ActionBtn>
+            </div>
           </div>
-          <div className="flex flex-wrap items-end gap-2">
-            <div>
-              <p className="text-[10px] font-semibold text-slate-500">开始</p>
-              <SmallInput value={financeDateStart} onChange={(v: string) => { setFinanceDateStart(v); if (dateMode === "single") setFinanceDateEnd(v); }} type="date" />
-            </div>
-            {dateMode === "range" && (
-            <div>
-              <p className="text-[10px] font-semibold text-slate-500">结束</p>
-              <SmallInput value={financeDateEnd} onChange={setFinanceDateEnd} type="date" />
-            </div>
-            )}
-            <ActionBtn onClick={() => { setFinanceDateStart(today); setFinanceDateEnd(today); }}>今天</ActionBtn>
-            <ActionBtn onClick={() => { setFinanceDateStart(""); setFinanceDateEnd(""); }}>全部时间</ActionBtn>
+          <div className="flex flex-wrap items-center gap-2">
+            {sub === "income" ? <div className="rounded bg-emerald-50 px-2.5 py-1"><span className="text-[10px] text-emerald-600">收入 <strong>{formatMoney(totalIncome)}</strong></span></div> : null}
+            {sub === "expense" ? <div className="rounded bg-rose-50 px-2.5 py-1"><span className="text-[10px] text-rose-600">支出 <strong>{formatMoney(totalExpense)}</strong></span></div> : null}
+            {sub === "cash" ? <div className="rounded bg-slate-50 px-2.5 py-1"><span className="text-[10px] text-slate-600">办公室 <strong>{formatMoney(cashBalance)}</strong></span></div> : null}
+            {sub === "ledger" ? <div className="rounded bg-slate-50 px-2.5 py-1"><span className="text-[10px] text-slate-600">余额 <strong>{formatMoney(ledgerBalance)}</strong></span></div> : null}
+            {sub === "receivables" ? <div className="rounded bg-amber-50 px-2.5 py-1"><span className="text-[10px] text-amber-600">应收 <strong>{formatMoney(filteredReceivableOrders.reduce((sum, item) => sum + (item.balance ?? 0), 0))}</strong></span></div> : null}
+            {sub === "audit" ? <div className="rounded bg-rose-50 px-2.5 py-1"><span className="text-[10px] text-rose-600">问题 <strong>{activeAudit.autoFixableCount}</strong></span></div> : null}
           </div>
         </div>
         <div className="mt-1.5 flex flex-wrap items-center gap-2">
@@ -3383,33 +3398,19 @@ function FinanceSection({ orders, setOrders, expenses, setExpenses, cashEntries,
               )}
             </div>
           ) : (
-            <>
-              <div className="flex items-center gap-1">
-                <button onClick={() => setDateMode("single")} className={`rounded px-2 py-1 text-[11px] font-medium transition-colors ${dateMode === "single" ? "bg-slate-800 text-white" : "bg-slate-100 text-slate-600"}`}>单选</button>
-                <button onClick={() => setDateMode("range")} className={`rounded px-2 py-1 text-[11px] font-medium transition-colors ${dateMode === "range" ? "bg-slate-800 text-white" : "bg-slate-100 text-slate-600"}`}>区间</button>
-              </div>
-              <div className="flex flex-wrap items-center gap-2">
-                {METHOD_OPTIONS.map(m => (
-                  <label key={m} className="flex cursor-pointer items-center gap-1">
-                    <input type="checkbox" checked={activeMethods.includes(m)} onChange={() => setActiveMethods(prev => prev.includes(m) ? prev.filter(x => x !== m) : [...prev, m])} className="h-3 w-3 accent-slate-700" />
-                    <span className="text-[11px] text-slate-600">{m}</span>
-                  </label>
-                ))}
-                <label className="flex cursor-pointer items-center gap-1">
-                  <input type="checkbox" checked={activeMethods.length === METHOD_OPTIONS.length} onChange={() => setActiveMethods(prev => prev.length === METHOD_OPTIONS.length ? [] : [...METHOD_OPTIONS])} className="h-3 w-3 accent-slate-700" />
-                  <span className="text-[11px] font-medium text-slate-700">全选</span>
+            <div className="flex flex-wrap items-center gap-2">
+              {METHOD_OPTIONS.map(m => (
+                <label key={m} className="flex cursor-pointer items-center gap-1">
+                  <input type="checkbox" checked={activeMethods.includes(m)} onChange={() => setActiveMethods(prev => prev.includes(m) ? prev.filter(x => x !== m) : [...prev, m])} className="h-3 w-3 accent-slate-700" />
+                  <span className="text-[11px] text-slate-600">{m}</span>
                 </label>
-              </div>
-            </>
+              ))}
+              <label className="flex cursor-pointer items-center gap-1">
+                <input type="checkbox" checked={activeMethods.length === METHOD_OPTIONS.length} onChange={() => setActiveMethods(prev => prev.length === METHOD_OPTIONS.length ? [] : [...METHOD_OPTIONS])} className="h-3 w-3 accent-slate-700" />
+                <span className="text-[11px] font-medium text-slate-700">全选</span>
+              </label>
+            </div>
           )}
-        </div>
-        <div className="mt-2 grid gap-2 sm:grid-cols-2 xl:grid-cols-4">
-          {sub === "income" ? <div className="rounded-lg border border-slate-100 bg-slate-50 p-2"><p className="text-[11px] text-slate-500">筛选收入</p><p className="mt-1 text-base font-semibold text-emerald-600">{formatMoney(totalIncome)}</p></div> : null}
-          {sub === "expense" ? <div className="rounded-xl border border-slate-100 bg-slate-50 p-3"><p className="text-[11px] text-slate-500">筛选支出</p><p className="mt-1 text-base font-semibold text-rose-600">{formatMoney(totalExpense)}</p></div> : null}
-          {sub === "cash" ? <div className="rounded-xl border border-slate-100 bg-slate-50 p-3"><p className="text-[11px] text-slate-500">办公室净额</p><p className="mt-1 text-base font-semibold text-slate-900">{formatMoney(cashBalance)}</p></div> : null}
-          {sub === "ledger" ? <div className="rounded-xl border border-slate-100 bg-slate-50 p-3"><p className="text-[11px] text-slate-500">公司余额</p><p className="mt-1 text-base font-semibold text-emerald-600">{formatMoney(ledgerBalance)}</p></div> : null}
-          {sub === "receivables" ? <div className="rounded-xl border border-slate-100 bg-slate-50 p-3"><p className="text-[11px] text-slate-500">筛选应收款</p><p className="mt-1 text-base font-semibold text-amber-600">{formatMoney(filteredReceivableOrders.reduce((sum, item) => sum + (item.balance ?? 0), 0))}</p></div> : null}
-          {sub === "audit" ? <div className="rounded-xl border border-slate-100 bg-slate-50 p-3"><p className="text-[11px] text-slate-500">待修复问题</p><p className="mt-1 text-base font-semibold text-rose-600">{activeAudit.autoFixableCount}</p></div> : null}
         </div>
       </div>
       <div className="mb-4 flex flex-wrap border-b-2 border-slate-200 bg-white self-start">

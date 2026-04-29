@@ -2793,7 +2793,7 @@ function isDateInRange(dateStr: string | undefined, startDate: string, endDate: 
 
 function PanelCard({ title, note, children }: { title: string; note?: string; children: React.ReactNode; }) {
   return (
-    <div className="rounded-xl border border-slate-200 bg-white p-3">
+    <div className="rounded-xl border border-slate-200 bg-white p-2">
       <div className="mb-3 border-b border-slate-100 pb-2">
         <h3 className="text-sm font-semibold text-slate-900">{title}</h3>
         {note && <p className="mt-1 text-[11px] text-slate-500">{note}</p>}
@@ -3351,19 +3351,18 @@ function FinanceSection({ orders, setOrders, expenses, setExpenses, cashEntries,
     <div>
       <SectionHeader eyebrow="Finance Management" title="收支管理" actions={<>{sub === "audit" ? <ActionBtn onClick={runFinanceAudit}>↻ 重新扫描</ActionBtn> : null}{sub === "audit" ? <ActionBtn tone="success" onClick={applyFinanceRepair}>🔧 应用自动修复</ActionBtn> : null}{sub === "expense" ? <ActionBtn tone="primary" onClick={() => setShowExpenseModal(true)}>+ 录入支出</ActionBtn> : null}{sub === "cash" ? <ActionBtn tone="primary" onClick={() => setShowOfficeTransferModal(true)}>+ 办公室转入/转出</ActionBtn> : null}</>} />
       <div className="mb-4 rounded-xl border border-slate-200 bg-white p-3">
-        <div className="flex flex-wrap items-end justify-between gap-3">
+        <div className="flex flex-wrap items-center gap-2">
           <div>
-            <p className="text-xs font-semibold text-slate-500">当天日期</p>
-            <p className="mt-1 text-lg font-semibold text-slate-900">{today}</p>
+            <p className="text-sm font-semibold text-slate-700">📅 {today}</p>
           </div>
           <div className="flex flex-wrap items-end gap-2">
             <div>
-              <p className="mb-1 text-[11px] font-semibold text-slate-500">开始日期</p>
+              <p className="text-[10px] font-semibold text-slate-500">开始</p>
               <SmallInput value={financeDateStart} onChange={(v: string) => { setFinanceDateStart(v); if (dateMode === "single") setFinanceDateEnd(v); }} type="date" />
             </div>
             {dateMode === "range" && (
             <div>
-              <p className="mb-1 text-[11px] font-semibold text-slate-500">结束日期</p>
+              <p className="text-[10px] font-semibold text-slate-500">结束</p>
               <SmallInput value={financeDateEnd} onChange={setFinanceDateEnd} type="date" />
             </div>
             )}
@@ -3371,7 +3370,7 @@ function FinanceSection({ orders, setOrders, expenses, setExpenses, cashEntries,
             <ActionBtn onClick={() => { setFinanceDateStart(""); setFinanceDateEnd(""); }}>全部时间</ActionBtn>
           </div>
         </div>
-        <div className="mt-2 flex flex-wrap items-center gap-3">
+        <div className="mt-1.5 flex flex-wrap items-center gap-2">
           {sub === "ledger" ? (
             <div className="flex flex-wrap items-center gap-2">
               <select value={ledgerYear} onChange={(e) => setLedgerYear(e.target.value)} className="h-8 rounded-lg border border-slate-300 bg-white px-2 text-xs text-slate-700">
@@ -3404,10 +3403,8 @@ function FinanceSection({ orders, setOrders, expenses, setExpenses, cashEntries,
             </>
           )}
         </div>
-        <div className="mt-3 grid gap-3 sm:grid-cols-2 xl:grid-cols-4">
-        </div>
-        <div className="mt-3 grid gap-3 sm:grid-cols-2 xl:grid-cols-4">
-          {sub === "income" ? <div className="rounded-xl border border-slate-100 bg-slate-50 p-3"><p className="text-[11px] text-slate-500">筛选收入</p><p className="mt-1 text-base font-semibold text-emerald-600">{formatMoney(totalIncome)}</p></div> : null}
+        <div className="mt-2 grid gap-2 sm:grid-cols-2 xl:grid-cols-4">
+          {sub === "income" ? <div className="rounded-lg border border-slate-100 bg-slate-50 p-2"><p className="text-[11px] text-slate-500">筛选收入</p><p className="mt-1 text-base font-semibold text-emerald-600">{formatMoney(totalIncome)}</p></div> : null}
           {sub === "expense" ? <div className="rounded-xl border border-slate-100 bg-slate-50 p-3"><p className="text-[11px] text-slate-500">筛选支出</p><p className="mt-1 text-base font-semibold text-rose-600">{formatMoney(totalExpense)}</p></div> : null}
           {sub === "cash" ? <div className="rounded-xl border border-slate-100 bg-slate-50 p-3"><p className="text-[11px] text-slate-500">办公室净额</p><p className="mt-1 text-base font-semibold text-slate-900">{formatMoney(cashBalance)}</p></div> : null}
           {sub === "ledger" ? <div className="rounded-xl border border-slate-100 bg-slate-50 p-3"><p className="text-[11px] text-slate-500">公司余额</p><p className="mt-1 text-base font-semibold text-emerald-600">{formatMoney(ledgerBalance)}</p></div> : null}
@@ -3416,7 +3413,7 @@ function FinanceSection({ orders, setOrders, expenses, setExpenses, cashEntries,
         </div>
       </div>
       <div className="mb-4 flex flex-wrap border-b-2 border-slate-200 bg-white self-start">
-        {FINANCE_SUBS.map((t) => <button key={t.key} onClick={() => setSub(t.key)} className={`border-b-2 px-4 py-2 text-xs font-semibold transition-colors ${sub === t.key ? "border-gray-200 text-slate-800" : "border-transparent text-slate-500 hover:text-slate-700"}`}>{t.label}</button>)}
+        {FINANCE_SUBS.map((t) => <button key={t.key} onClick={() => setSub(t.key)} className={`border-b-2 px-3 py-1.5 text-xs font-semibold transition-colors ${sub === t.key ? "border-gray-200 text-slate-800" : "border-transparent text-slate-500 hover:text-slate-700"}`}>{t.label}</button>)}
       </div>
 
 

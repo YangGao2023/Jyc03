@@ -1370,7 +1370,7 @@ function OrderDetailView({
   onSave: (updated: BizOrder) => void;
   onOfficeEntry: (entry: CashEntry) => void;
 }) {
-  const today = new Date().toISOString().slice(0, 10);
+  const today = formatLocalDate(new Date());
   const isCustom = order.order_type === "定制单";
 
   const [draft, setDraft] = useState<DraftFields>({
@@ -1867,7 +1867,7 @@ function NewOrderModal({
   initialPhone?: string;
   editOrder?: BizOrder;
 }) {
-  const today = new Date().toISOString().slice(0, 10);
+  const today = formatLocalDate(new Date());
   const [fields, setFields] = useState({
     client_name: editOrder?.client_name ?? initialClientName ?? "",
     phone: editOrder?.phone ?? initialPhone ?? "",
@@ -3043,7 +3043,7 @@ function FinanceSection({ orders, setOrders, expenses, setExpenses, cashEntries,
   const [showIncomeForm, setShowIncomeForm] = useState(false);
   const [editingIncomeId, setEditingIncomeId] = useState<string | null>(null);
   const [incomeDraft, setIncomeDraft] = useState({ date: "", amount: "", method: OFFICE_PAYMENT_METHOD, note: "" });
-  const today = new Date().toISOString().slice(0, 10);
+  const today = formatLocalDate(new Date());
   const expenseTypeOptions = useMemo(() => getExpenseTypeOptions(settings), [settings]);
   const officeTargets = useMemo(() => Array.from(new Set([...suppliers.map((item) => item.name), ...employees.map((item) => item.name), ...clients.map((item) => item.name)])), [suppliers, employees, clients]);
   const [draft, setDraft] = useState<FinanceDraft>({ target: "", detail: "", amount: "", expense_type: expenseTypeOptions[0] ?? "采购", payment_method: "转账", expense_date: today, remark: "" });
@@ -3769,7 +3769,7 @@ type ClientDetailTab = "overview" | "orders" | "appointments" | "activity";
 
 function ClientsSection({ clients, setClients, suppliers, setSuppliers, orders, setOrders, appointments, setAppointments, setCashEntries, setExpenses, materials, setMaterials, settings }: { clients: ContactRecord[]; setClients: React.Dispatch<React.SetStateAction<ContactRecord[]>>; suppliers: SupplierRecord[]; setSuppliers: React.Dispatch<React.SetStateAction<SupplierRecord[]>>; orders: BizOrder[]; setOrders: React.Dispatch<React.SetStateAction<BizOrder[]>>; appointments: MeasurementAppointmentRecord[]; setAppointments: React.Dispatch<React.SetStateAction<MeasurementAppointmentRecord[]>>; setCashEntries: React.Dispatch<React.SetStateAction<CashEntry[]>>; setExpenses: React.Dispatch<React.SetStateAction<ExpenseRecord[]>>; materials: MaterialRecord[]; setMaterials: React.Dispatch<React.SetStateAction<MaterialRecord[]>>; settings: BizSettings; }) {
   const [sub, setSub] = useState<ContactSub>("clients");
-  const today = new Date().toISOString().slice(0, 10);
+  const today = formatLocalDate(new Date());
   const [clientDraft, setClientDraft] = useState({ name: "", contact: "", phone: "", wechat: "", address: "", note: "" });
   const supplierCategoryOptions = useMemo(() => getSupplierCategoryOptions(settings), [settings]);
   const [supplierDraft, setSupplierDraft] = useState({ name: "", category: supplierCategoryOptions[0] ?? "布料", contact_person: "", phone: "", email: "", website: "", address: "", remark: "" });
@@ -4875,7 +4875,7 @@ function getCommittedMaterialMap(materials: MaterialRecord[], orders: BizOrder[]
 
 function MaterialsSection({ materials, setMaterials, suppliers, orders, setExpenses, setCashEntries }: { materials: MaterialRecord[]; setMaterials: React.Dispatch<React.SetStateAction<MaterialRecord[]>>; suppliers: SupplierRecord[]; orders: BizOrder[]; setExpenses: React.Dispatch<React.SetStateAction<ExpenseRecord[]>>; setCashEntries: React.Dispatch<React.SetStateAction<CashEntry[]>>; }) {
   const [sub, setSub] = useState<MaterialSub>("inventory");
-  const today = new Date().toISOString().slice(0, 10);
+  const today = formatLocalDate(new Date());
   const [editingMaterialId, setEditingMaterialId] = useState<string | null>(null);
   const [confirmingMaterialId, setConfirmingMaterialId] = useState<string | null>(null);
   const [materialDraft, setMaterialDraft] = useState({ code: "", name: "", specification: "", size: "", unit: "个", stock_quantity: "", factory_price_rmb: "", weight: "", usd_cost: "", sale_price_usd: "", supplier: suppliers[0]?.name ?? "", image: "", remark: "" });

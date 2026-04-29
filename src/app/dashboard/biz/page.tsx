@@ -3037,10 +3037,12 @@ function FinanceSection({ orders, setOrders, expenses, setExpenses, cashEntries,
   settings: BizSettings;
 }) {
   const [sub, setSub] = useState<FinanceSub>("income");
-  const [ledgerView, setLedgerView] = useState<"monthly" | "yearly">("monthly");
   const today = formatLocalDate(new Date());
-  const METHOD_OPTIONS = ["现金", "Bank Check", "Credit Card", "Zelle"] as const;
-  const [activeMethods, setActiveMethods] = useState<string[]>([]);
+  const [ledgerView, setLedgerView] = useState<"monthly" | "yearly">("monthly");
+  const [ledgerYear, setLedgerYear] = useState(today.slice(0, 4));
+  const [ledgerMonth, setLedgerMonth] = useState(today.slice(0, 7));
+  const METHOD_OPTIONS = ["现金", "支票", "刷卡", "Zelle"] as const;
+  const [activeMethods, setActiveMethods] = useState<string[]>([...METHOD_OPTIONS]);
   const [dateMode, setDateMode] = useState<"range" | "single">("range");
   const expenseTypeOptions = useMemo(() => getExpenseTypeOptions(settings), [settings]);
   const officeTargets = useMemo(() => Array.from(new Set([...suppliers.map((item) => item.name), ...employees.map((item) => item.name), ...clients.map((item) => item.name)])), [suppliers, employees, clients]);
@@ -3113,26 +3115,26 @@ function FinanceSection({ orders, setOrders, expenses, setExpenses, cashEntries,
   })();
   const ledgerRows = (() => {
     let cumulative = 0;
-    const rawDays = Array.from(new Set([...filteredPaymentRows.map(({ record }) => (record.date ?? "").slice(0, 10)), ...filteredExpenses.map((e) => e.expense_date.slice(0, 10))])).filter(Boolean).sort().reverse();
+    const allDays = Array.from(new Set([...paymentRows.map(({ record }) => (record.date ?? "").slice(0, 10)), ...expenses.filter((e) => e.expense_date).map((e) => e.expense_date.slice(0, 10))])).filter(Boolean).sort().reverse();
     if (ledgerView === "yearly") {
-      const months = Array.from(new Set(rawDays.map((d) => d.slice(0, 7)))).sort().reverse();
+      const months = Array.from(new Set(allDays.filter((d) => d.startsWith(ledgerYear)).map((d) => d.slice(0, 7)))).sort().reverse();
       return months.map((month) => {
-        const income = filteredPaymentRows.filter(({ record }) => (record.date ?? "").startsWith(month)).reduce((sum, { record }) => sum + (record.type === "refund" ? -record.amount : record.amount), 0);
-        const expense = filteredExpenses.filter((item) => item.expense_date.startsWith(month)).reduce((sum, item) => sum + item.amount, 0);
+        const income = paymentRows.filter(({ record }) => (record.date ?? "").startsWith(month)).reduce((sum, { record }) => sum + (record.type === "refund" ? -record.amount : record.amount), 0);
+        const expense = expenses.filter((item) => item.expense_date.startsWith(month)).reduce((sum, item) => sum + item.amount, 0);
         const net = income - expense;
         cumulative += net;
         return { month, income, expense, net, balance: cumulative, profit: income - expense };
       });
     }
-    return rawDays.map((day) => {
-      const income = filteredPaymentRows.filter(({ record }) => (record.date ?? "").startsWith(day)).reduce((sum, { record }) => sum + (record.type === "refund" ? -record.amount : record.amount), 0);
-      const expense = filteredExpenses.filter((item) => item.expense_date.startsWith(day)).reduce((sum, item) => sum + item.amount, 0);
+    const days = allDays.filter((d) => d.startsWith(ledgerMonth));
+    return days.map((day) => {
+      const income = paymentRows.filter(({ record }) => (record.date ?? "").startsWith(day)).reduce((sum, { record }) => sum + (record.type === "refund" ? -record.amount : record.amount), 0);
+      const expense = expenses.filter((item) => item.expense_date.startsWith(day)).reduce((sum, item) => sum + item.amount, 0);
       const net = income - expense;
       cumulative += net;
       return { month: day, income, expense, net, balance: cumulative, profit: income - expense };
     });
   })();
-
   const financeConfigs: Record<FinanceSub, TabularSchemaConfig> = {
     income: {
       title: "订单收入",
@@ -3370,42 +3372,37 @@ function FinanceSection({ orders, setOrders, expenses, setExpenses, cashEntries,
           </div>
         </div>
         <div className="mt-2 flex flex-wrap items-center gap-3">
-          <div className="flex items-center gap-1">
-            <button onClick={() => setDateMode("single")} className={`rounded px-2 py-1 text-[11px] font-medium transition-colors ${dateMode === "single" ? "bg-slate-800 text-white" : "bg-slate-100 text-slate-600"}`}>单选</button>
-            <button onClick={() => setDateMode("range")} className={`rounded px-2 py-1 text-[11px] font-medium transition-colors ${dateMode === "range" ? "bg-slate-800 text-white" : "bg-slate-100 text-slate-600"}`}>区间</button>
-          </div>
-          <div className="flex flex-wrap items-center gap-2">
-            {METHOD_OPTIONS.map(m => (
-              <label key={m} className="flex cursor-pointer items-center gap-1">
-                <input type="checkbox" checked={activeMethods.includes(m)} onChange={() => setActiveMethods(prev => prev.includes(m) ? prev.filter(x => x !== m) : [...prev, m])} className="h-3 w-3 accent-slate-700" />
-                <span className="text-[11px] text-slate-600">{m}</span>
-              </label>
-            ))}
-            <label className="flex cursor-pointer items-center gap-1">
-              <input type="checkbox" checked={activeMethods.length === METHOD_OPTIONS.length} onChange={() => setActiveMethods(prev => prev.length === METHOD_OPTIONS.length ? [] : [...METHOD_OPTIONS])} className="h-3 w-3 accent-slate-700" />
-              <span className="text-[11px] font-medium text-slate-700">全选</span>
-            </label>
-          </div>
-        </div>
-        <div className="mt-3 grid gap-3 sm:grid-cols-2 xl:grid-cols-4">
-        </div>
-        <div className="mt-2 flex flex-wrap items-center gap-3">
-          <div className="flex items-center gap-1">
-            <button onClick={() => setDateMode("single")} className={`rounded px-2 py-1 text-[11px] font-medium transition-colors ${dateMode === "single" ? "bg-slate-800 text-white" : "bg-slate-100 text-slate-600"}`}>单选</button>
-            <button onClick={() => setDateMode("range")} className={`rounded px-2 py-1 text-[11px] font-medium transition-colors ${dateMode === "range" ? "bg-slate-800 text-white" : "bg-slate-100 text-slate-600"}`}>区间</button>
-          </div>
-          <div className="flex flex-wrap items-center gap-2">
-            {METHOD_OPTIONS.map(m => (
-              <label key={m} className="flex cursor-pointer items-center gap-1">
-                <input type="checkbox" checked={activeMethods.includes(m)} onChange={() => setActiveMethods(prev => prev.includes(m) ? prev.filter(x => x !== m) : [...prev, m])} className="h-3 w-3 accent-slate-700" />
-                <span className="text-[11px] text-slate-600">{m}</span>
-              </label>
-            ))}
-            <label className="flex cursor-pointer items-center gap-1">
-              <input type="checkbox" checked={activeMethods.length === METHOD_OPTIONS.length} onChange={() => setActiveMethods(prev => prev.length === METHOD_OPTIONS.length ? [] : [...METHOD_OPTIONS])} className="h-3 w-3 accent-slate-700" />
-              <span className="text-[11px] font-medium text-slate-700">全选</span>
-            </label>
-          </div>
+          {sub === "ledger" ? (
+            <div className="flex flex-wrap items-center gap-2">
+              <select value={ledgerYear} onChange={(e) => setLedgerYear(e.target.value)} className="h-8 rounded-lg border border-slate-300 bg-white px-2 text-xs text-slate-700">
+                {Array.from({ length: 5 }, (_, i) => String(new Date().getFullYear() - i)).map((y) => <option key={y}>{y}</option>)}
+              </select>
+              {ledgerView === "monthly" && (
+                <select value={ledgerMonth} onChange={(e) => setLedgerMonth(e.target.value)} className="h-8 rounded-lg border border-slate-300 bg-white px-2 text-xs text-slate-700">
+                  {["01","02","03","04","05","06","07","08","09","10","11","12"].map((m) => <option key={m} value={`${ledgerYear}-${m}`}>{m}月</option>)}
+                </select>
+              )}
+            </div>
+          ) : (
+            <>
+              <div className="flex items-center gap-1">
+                <button onClick={() => setDateMode("single")} className={`rounded px-2 py-1 text-[11px] font-medium transition-colors ${dateMode === "single" ? "bg-slate-800 text-white" : "bg-slate-100 text-slate-600"}`}>单选</button>
+                <button onClick={() => setDateMode("range")} className={`rounded px-2 py-1 text-[11px] font-medium transition-colors ${dateMode === "range" ? "bg-slate-800 text-white" : "bg-slate-100 text-slate-600"}`}>区间</button>
+              </div>
+              <div className="flex flex-wrap items-center gap-2">
+                {METHOD_OPTIONS.map(m => (
+                  <label key={m} className="flex cursor-pointer items-center gap-1">
+                    <input type="checkbox" checked={activeMethods.includes(m)} onChange={() => setActiveMethods(prev => prev.includes(m) ? prev.filter(x => x !== m) : [...prev, m])} className="h-3 w-3 accent-slate-700" />
+                    <span className="text-[11px] text-slate-600">{m}</span>
+                  </label>
+                ))}
+                <label className="flex cursor-pointer items-center gap-1">
+                  <input type="checkbox" checked={activeMethods.length === METHOD_OPTIONS.length} onChange={() => setActiveMethods(prev => prev.length === METHOD_OPTIONS.length ? [] : [...METHOD_OPTIONS])} className="h-3 w-3 accent-slate-700" />
+                  <span className="text-[11px] font-medium text-slate-700">全选</span>
+                </label>
+              </div>
+            </>
+          )}
         </div>
         <div className="mt-3 grid gap-3 sm:grid-cols-2 xl:grid-cols-4">
         </div>

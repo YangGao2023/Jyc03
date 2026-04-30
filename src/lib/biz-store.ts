@@ -657,6 +657,9 @@ function rowToPrintArchive(r: Record<string, unknown>): PrintArchiveRecord {
 // ─── Public API ───────────────────────────────────────────────────────────────
 
 export async function readBizStore(): Promise<BizStoreSnapshot> {
+  // 先从旧T表同步新数据（30秒冷却，有更新才跑）
+  const { syncFromOldTablesIfNeeded } = await import('@/lib/dual-write');
+  await syncFromOldTablesIfNeeded();
   return mysqlRead();
 }
 

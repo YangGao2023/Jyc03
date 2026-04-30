@@ -1,4 +1,4 @@
-﻿"use client";
+"use client";
 
 import { Fragment, useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { DashboardPageHeader } from "../components";
@@ -1191,7 +1191,7 @@ function buildCustomerInvoiceHTML(order: BizOrder, draft: DraftFields, rows: Mat
       <div class="photoInner${hasPhoto ? "" : " photoInnerBlank"}">${photo}</div>
       ${hasPhoto ? `<div class="photoCode">${escHtml(order.order_number)}</div>` : ""}
     </div>
-    <div class="descWrap"><div style="padding:10px;font-size:13px;line-height:1.65;color:#111827;min-height:260px">${escHtml(draft.description || "-")}</div></div>
+    <div class="descWrap"><div style="padding:10px;font-size:13px;line-height:1.65;color:#111827;min-height:260px;white-space:pre-wrap">${escHtml(draft.description || "-")}</div></div>
   </div>`
     : `<div style="margin:0 4px 4px">
     <div class="sectionBlue">Product Information / 产品信息</div>
@@ -1393,8 +1393,8 @@ function openPrintWindow(html: string) {
   }
 
   const patchedHtml = html.replace(
-    /<script>window\.onload=function\(\)\{window\.print\(\);\}<\\\/script><\/body><\/html>$/,
-    "</body></html>"
+    /<script>window\.onload\s*=\s*function\s*\(\s*\)\s*\{\s*window\.print\s*\(\s*\)\s*;?\s*\}\s*<\/script>/gi,
+    ""
   );
 
   doc.open();
@@ -4495,6 +4495,26 @@ function ClientsSection({ clients, setClients, suppliers, setSuppliers, orders, 
     setDeleteOrderConfirm(null);
   }
 
+  function handleClientOrderPrint(item: BizOrder, printType: "invoice" | "pickup") {
+    const rows = item.material_rows ?? [];
+    const draft: DraftFields = {
+      client_name: item.client_name ?? "",
+      phone: item.phone ?? "",
+      address: item.address ?? "",
+      preview_image: item.preview_image ?? "",
+      total_price: item.total_price ?? 0,
+      tax_rate: item.tax_rate ?? 0,
+      discount: 0,
+      description: item.description ?? "",
+      install_info: "",
+      remarks: item.remarks ?? "",
+    };
+    const html = printType === "invoice"
+      ? buildCustomerInvoiceHTML(item, draft, rows, settings)
+      : buildWorkerPickupHTML(item, rows, settings);
+    openPrintWindow(html);
+  }
+
   function applyQuickCollectPreset(mode: "balance" | "half", order = selectedCollectOrder) {
     if (!order) return;
     const balance = Math.max(0, order.balance ?? 0);
@@ -4609,12 +4629,12 @@ function ClientsSection({ clients, setClients, suppliers, setSuppliers, orders, 
               <button onClick={() => setShowClientModal(false)} className="rounded-lg border border-slate-200 px-2.5 py-1 text-xs text-slate-700 hover:border-slate-300 hover:text-slate-700 transition-colors">关闭</button>
             </div>
             <div className="grid gap-2 sm:grid-cols-2 xl:grid-cols-3">
-              <SmallInput value={clientDraft.name} onChange={(v) => setClientDraft((d) => ({ ...d, name: v }))} placeholder="客户名称" />
-              <SmallInput value={clientDraft.contact} onChange={(v) => setClientDraft((d) => ({ ...d, contact: v }))} placeholder="联系人" />
-              <SmallInput value={clientDraft.phone} onChange={(v) => setClientDraft((d) => ({ ...d, phone: v }))} placeholder="电话" />
-              <SmallInput value={clientDraft.wechat} onChange={(v) => setClientDraft((d) => ({ ...d, wechat: v }))} placeholder="微信 / 邮箱" />
-              <SmallInput value={clientDraft.address} onChange={(v) => setClientDraft((d) => ({ ...d, address: v }))} placeholder="地址" />
-              <SmallInput value={clientDraft.note} onChange={(v) => setClientDraft((d) => ({ ...d, note: v }))} placeholder="备注" />
+              <div><label className="mb-1 block text-[11px] font-semibold text-slate-700">客户名称</label><SmallInput value={clientDraft.name} onChange={(v) => setClientDraft((d) => ({ ...d, name: v }))} placeholder="客户名称" /></div>
+              <div><label className="mb-1 block text-[11px] font-semibold text-slate-700">联系人</label><SmallInput value={clientDraft.contact} onChange={(v) => setClientDraft((d) => ({ ...d, contact: v }))} placeholder="联系人" /></div>
+              <div><label className="mb-1 block text-[11px] font-semibold text-slate-700">电话</label><SmallInput value={clientDraft.phone} onChange={(v) => setClientDraft((d) => ({ ...d, phone: v }))} placeholder="电话" /></div>
+              <div><label className="mb-1 block text-[11px] font-semibold text-slate-700">微信 / 邮箱</label><SmallInput value={clientDraft.wechat} onChange={(v) => setClientDraft((d) => ({ ...d, wechat: v }))} placeholder="微信 / 邮箱" /></div>
+              <div><label className="mb-1 block text-[11px] font-semibold text-slate-700">地址</label><SmallInput value={clientDraft.address} onChange={(v) => setClientDraft((d) => ({ ...d, address: v }))} placeholder="地址" /></div>
+              <div><label className="mb-1 block text-[11px] font-semibold text-slate-700">备注</label><SmallInput value={clientDraft.note} onChange={(v) => setClientDraft((d) => ({ ...d, note: v }))} placeholder="备注" /></div>
             </div>
             <div className="mt-5 flex justify-end gap-2">
               <ActionBtn onClick={() => setShowClientModal(false)}>取消</ActionBtn>
@@ -4963,7 +4983,10 @@ function ClientsSection({ clients, setClients, suppliers, setSuppliers, orders, 
                           <p className="text-xs font-semibold text-slate-700">关联订单</p>
                           <div className="flex items-center gap-2">
                             <span className="text-[11px] text-slate-700">状态与金额联动</span>
-                            <button onClick={() => setNewOrderTypeForClient("定制单")} className="rounded-md border border-slate-300 bg-white px-2 py-1 text-[11px] font-semibold text-slate-600 hover:border-slate-400 hover:text-slate-700 transition-colors">+ 新建订单</button>
+                            <div className="flex items-center gap-1.5">
+                            <button onClick={() => setNewOrderTypeForClient("定制单")} className="rounded-md border border-slate-300 bg-white px-2 py-1 text-[11px] font-semibold text-slate-600 hover:border-slate-400 hover:text-slate-700 transition-colors">+ 新建定制单</button>
+                            <button onClick={() => setNewOrderTypeForClient("批发单")} className="rounded-md border border-indigo-300 bg-indigo-50 px-2 py-1 text-[11px] font-semibold text-indigo-700 hover:border-indigo-400 hover:bg-indigo-100 transition-colors">+ 新建批发单</button>
+                            </div>
                           </div>
                         </div>
                         {selectedClientOrders.length ? (

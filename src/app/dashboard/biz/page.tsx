@@ -1306,6 +1306,7 @@ function buildPrintShell(title: string, body: string, options?: PrintShellOption
 }
 
 function buildWorkerPickupHTML(order: BizOrder, rows: MaterialRow[], settings?: BizSettings): string {
+  const pickupTitle = settings?.picking_title || "领料单 / Worker Pickup Sheet";
   const rowsHTML = rows.length
     ? rows
         .map(
@@ -1327,9 +1328,9 @@ function buildWorkerPickupHTML(order: BizOrder, rows: MaterialRow[], settings?: 
         .join("")
     : `<tr><td colspan="4" style="padding:24px;text-align:center;color:#94a3b8;border:1px solid #bfdbfe">暂无物料 / No materials</td></tr>`;
 
-  return buildPrintShell("领料单 / Worker Pickup Sheet", `
+  return buildPrintShell(pickupTitle, `
 <div style="border-bottom:3px solid #1e40af;padding-bottom:14px;margin-bottom:18px">
-  <h1 style="font-size:22px;font-weight:800;color:#1e40af">领料单 / Worker Pickup Sheet</h1>
+  <h1 style="font-size:22px;font-weight:800;color:#1e40af">${escHtml(pickupTitle)}</h1>
   <p style="margin-top:6px;color:#475569;font-size:13px">${escHtml(order.order_number)} &nbsp;·&nbsp; ${escHtml(order.client_name)} &nbsp;·&nbsp; ${escHtml(order.order_date ?? "-")}</p>
 </div>
 <table style="width:100%;border-collapse:collapse">
@@ -1342,7 +1343,7 @@ function buildWorkerPickupHTML(order: BizOrder, rows: MaterialRow[], settings?: 
     </tr>
   </thead>
   <tbody>${rowsHTML}</tbody>
-</table>`, { pageTitle: `领料单 · ${order.order_number}` });
+</table>`, { pageTitle: `${pickupTitle} · ${order.order_number}` });
 }
 
 
@@ -6370,12 +6371,12 @@ function SettingsPrintPreview({ settings, onUpdate }: { settings: BizSettings; o
         <button onClick={() => setPreviewType("invoice")} className={`rounded-lg border px-3 py-1 text-[11px] font-semibold transition-colors ${previewType === "invoice" ? "border-slate-900 bg-slate-900 text-white" : "border-slate-300 bg-white text-slate-600 hover:border-slate-400"}`}>发票 Invoice</button>
         <button onClick={() => setPreviewType("pickup")} className={`rounded-lg border px-3 py-1 text-[11px] font-semibold transition-colors ${previewType === "pickup" ? "border-slate-900 bg-slate-900 text-white" : "border-slate-300 bg-white text-slate-600 hover:border-slate-400"}`}>领料单 Pickup</button>
       </div>
-      <div className="overflow-hidden rounded-lg border border-slate-200" style={{ height: 420 }}>
+      <div className="overflow-hidden rounded-lg border border-slate-200" style={{ height: 520 }}>
         <iframe
           srcDoc={html}
           title="打印预览"
           className="h-full w-full border-0"
-          style={{ transform: "scale(0.55)", transformOrigin: "top left", width: `${100 / 0.55}%`, height: `${100 / 0.55}%` }}
+          style={{ transform: "scale(0.65)", transformOrigin: "top left", width: `${100 / 0.65}%`, height: `${100 / 0.65}%` }}
         />
       </div>
       <p className="text-[10px] text-slate-500">预览为缩略显示，实际打印为全尺寸A4</p>
@@ -6474,8 +6475,8 @@ function SettingsSection({ settings, setSettings, saveState, isDirty, lastSavedA
       </div>
 
       <div className="min-h-[320px]">
-                {page === "company-base" ? (
-          <div className="grid gap-3 xl:grid-cols-2">
+                        {page === "company-base" ? (
+          <div className="grid gap-3 xl:grid-cols-[0.85fr_1.15fr]">
             <div className="space-y-3">
               <SettingsGroup title="公司信息">
                 <SettingsField label="公司名称" value={settings.company_name} onChange={(value) => update("company_name", value)} />
@@ -6483,24 +6484,15 @@ function SettingsSection({ settings, setSettings, saveState, isDirty, lastSavedA
                 <SettingsField label="柜台地址" value={settings.address} onChange={(value) => update("address", value)} />
                 <SettingsField label="打印地址" value={settings.company_address ?? ""} onChange={(value) => update("company_address", value)} />
               </SettingsGroup>
-              <SettingsGroup title="打印标题与素材">
+              <SettingsGroup title="打印标题与备注">
                 <SettingsField label="Invoice 标题" value={settings.invoice_title ?? "Invoice"} onChange={(value) => update("invoice_title", value)} />
                 <SettingsField label="领料单标题" value={settings.picking_title ?? "领料单 / Worker Pickup Sheet"} onChange={(value) => update("picking_title", value)} />
                 <SettingsField label="Logo URL" value={settings.logo_url ?? ""} onChange={(value) => update("logo_url", value)} />
-              </SettingsGroup>
-              <SettingsGroup title="模板备注">
-                <SettingsTextArea label="发票备注模板" value={settings.invoice_note ?? ""} rows={7} onChange={(value) => update("invoice_note", value)} />
-                <SettingsTextArea label="报价页脚备注" value={settings.quote_footer ?? ""} rows={5} onChange={(value) => update("quote_footer", value)} />
+                <SettingsTextArea label="发票备注" value={settings.invoice_note ?? ""} rows={5} onChange={(value) => update("invoice_note", value)} />
+                <SettingsTextArea label="报价页脚备注" value={settings.quote_footer ?? ""} rows={3} onChange={(value) => update("quote_footer", value)} />
               </SettingsGroup>
             </div>
-            <div className="space-y-3">
-              <SettingsGroup title="页面预览">
-                <div className="space-y-3 text-xs">
-                  <div className="flex items-center justify-between"><span className="text-slate-700">公司名称</span><span className="max-w-[220px] text-right font-medium text-slate-700">{settings.company_name || "未填写"}</span></div>
-                  <div className="flex items-center justify-between"><span className="text-slate-700">打印名称</span><span className="max-w-[220px] text-right font-medium text-slate-700">{settings.company_name_zh || settings.company_name || "未填写"}</span></div>
-                  <div className="flex items-center justify-between"><span className="text-slate-700">展示地址</span><span className="max-w-[220px] text-right text-slate-700">{settings.company_address || settings.address || "未填写"}</span></div>
-                </div>
-              </SettingsGroup>
+            <div>
               <SettingsGroup title="打印预览">
                 <SettingsPrintPreview settings={settings} onUpdate={update} />
               </SettingsGroup>

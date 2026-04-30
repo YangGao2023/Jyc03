@@ -4921,7 +4921,7 @@ function MaterialsSection({ materials, setMaterials, suppliers, orders, setExpen
   const today = formatLocalDate(new Date());
   const [editingMaterialId, setEditingMaterialId] = useState<string | null>(null);
   const [confirmingMaterialId, setConfirmingMaterialId] = useState<string | null>(null);
-  const [materialDraft, setMaterialDraft] = useState({ code: "", name: "", specification: "", size: "", unit: "个", stock_quantity: "", factory_price_rmb: "", weight: "", usd_cost: "", sale_price_usd: "", supplier: suppliers[0]?.name ?? "", image: "", remark: "", color: "", material: "", other: "", category: "" });
+  const [materialDraft, setMaterialDraft] = useState({ code: "", name: "", specification: "", size: "", unit: "个", stock_quantity: "", factory_price_rmb: "", weight: "", usd_cost: "", sale_price_usd: "", vip_sale_price_usd: "", supplier: suppliers[0]?.name ?? "", image: "", remark: "", color: "", material: "", other: "", category: "" });
   const [showMaterialModal, setShowMaterialModal] = useState(false);
   const [inventoryHint, setInventoryHint] = useState("");
   const [inventoryPage, setInventoryPage] = useState(1);
@@ -4944,7 +4944,7 @@ function MaterialsSection({ materials, setMaterials, suppliers, orders, setExpen
   useEffect(() => { setInventoryPage(1); }, [inventoryRows]);
 
   function resetMaterialDraft() {
-    setMaterialDraft({ code: "", name: "", specification: "", size: "", unit: "个", stock_quantity: "", factory_price_rmb: "", weight: "", usd_cost: "", sale_price_usd: "", supplier: suppliers[0]?.name ?? "", image: "", remark: "", color: "", material: "", other: "", category: "" });
+    setMaterialDraft({ code: "", name: "", specification: "", size: "", unit: "个", stock_quantity: "", factory_price_rmb: "", weight: "", usd_cost: "", sale_price_usd: "", vip_sale_price_usd: "", supplier: suppliers[0]?.name ?? "", image: "", remark: "", color: "", material: "", other: "", category: "" });
     setEditingMaterialId(null);
   }
 
@@ -4969,7 +4969,8 @@ function MaterialsSection({ materials, setMaterials, suppliers, orders, setExpen
     const usdCost = Number(materialDraft.usd_cost) || calcUsdCost(factoryPrice, weight);
     const salePrice = Number(materialDraft.sale_price_usd) || 0;
     const matchedSupplier = findSupplierByReference(suppliers, { supplierName: materialDraft.supplier });
-    const nextItem = { id: editingMaterialId || nextSequentialId(materials.map((item) => item.id), "MAT"), code: materialDraft.code.trim(), name: materialDraft.name.trim(), specification: materialDraft.specification || undefined, size: materialDraft.size || undefined, unit: materialDraft.unit, stock_quantity: Number(materialDraft.stock_quantity) || 0, min_stock: 0, factory_price_rmb: factoryPrice, usd_cost: usdCost, sale_price_usd: salePrice, weight, purchase_price: usdCost, supplier: materialDraft.supplier || undefined, supplier_id: matchedSupplier?.id, image: materialDraft.image || undefined, last_stock_date: today, remark: materialDraft.remark || undefined, color: materialDraft.color || undefined, material: materialDraft.material || undefined, other: materialDraft.other || undefined, category: materialDraft.category || undefined } satisfies MaterialRecord;
+    const vipPrice = Number(materialDraft.vip_sale_price_usd) || 0;
+    const nextItem = { id: editingMaterialId || nextSequentialId(materials.map((item) => item.id), "MAT"), code: materialDraft.code.trim(), name: materialDraft.name.trim(), specification: materialDraft.specification || undefined, size: materialDraft.size || undefined, unit: materialDraft.unit, stock_quantity: Number(materialDraft.stock_quantity) || 0, min_stock: 0, factory_price_rmb: factoryPrice, usd_cost: usdCost, sale_price_usd: salePrice, vip_sale_price_usd: vipPrice || undefined, weight, purchase_price: usdCost, supplier: materialDraft.supplier || undefined, supplier_id: matchedSupplier?.id, image: materialDraft.image || undefined, last_stock_date: today, remark: materialDraft.remark || undefined, color: materialDraft.color || undefined, material: materialDraft.material || undefined, other: materialDraft.other || undefined, category: materialDraft.category || undefined } satisfies MaterialRecord;
     if (editingMaterialId) {
       setMaterials((prev) => prev.map((item) => item.id === editingMaterialId ? nextItem : item));
       setInventoryHint(`已更新物料 ${nextItem.name}${matchedSupplier ? ",已绑定供应商" : ",但供应商名称未唯一匹配"}。`);
@@ -4984,7 +4985,7 @@ function MaterialsSection({ materials, setMaterials, suppliers, orders, setExpen
 
   function openEditMaterial(item: MaterialRecord) {
     setEditingMaterialId(item.id);
-    setMaterialDraft({ code: item.code, name: item.name, specification: item.specification ?? "", size: item.size ?? "", unit: item.unit, stock_quantity: String(item.stock_quantity ?? 0), factory_price_rmb: String(item.factory_price_rmb ?? 0), weight: String(item.weight ?? 1), usd_cost: String(item.usd_cost ?? calcUsdCost(item.factory_price_rmb ?? 0, item.weight)), sale_price_usd: String(item.sale_price_usd ?? 0), supplier: item.supplier ?? suppliers[0]?.name ?? "", image: item.image ?? "", remark: item.remark ?? "", color: item.color ?? "", material: item.material ?? "", other: item.other ?? "", category: item.category ?? "" });
+    setMaterialDraft({ code: item.code, name: item.name, specification: item.specification ?? "", size: item.size ?? "", unit: item.unit, stock_quantity: String(item.stock_quantity ?? 0), factory_price_rmb: String(item.factory_price_rmb ?? 0), weight: String(item.weight ?? 1), usd_cost: String(item.usd_cost ?? calcUsdCost(item.factory_price_rmb ?? 0, item.weight)), sale_price_usd: String(item.sale_price_usd ?? 0), vip_sale_price_usd: String(item.vip_sale_price_usd ?? ""), supplier: item.supplier ?? suppliers[0]?.name ?? "", image: item.image ?? "", remark: item.remark ?? "", color: item.color ?? "", material: item.material ?? "", other: item.other ?? "", category: item.category ?? "" });
     setShowMaterialModal(true);
   }
 
@@ -5029,6 +5030,7 @@ function MaterialsSection({ materials, setMaterials, suppliers, orders, setExpen
               <div><p className="mb-1 text-[11px] font-semibold text-slate-700">单重</p><SmallInput value={materialDraft.weight} onChange={(v) => syncMaterialCosts(materialDraft.factory_price_rmb, v)} type="number" placeholder="默认 1" /></div>
               <div><p className="mb-1 text-[11px] font-semibold text-slate-700">美金成本 USD</p><SmallInput value={materialDraft.usd_cost} onChange={(v) => setMaterialDraft((d) => ({ ...d, usd_cost: v }))} type="number" placeholder="自动可改" /></div>
               <div><p className="mb-1 text-[11px] font-semibold text-slate-700">卖出价 USD</p><SmallInput value={materialDraft.sale_price_usd} onChange={(v) => setMaterialDraft((d) => ({ ...d, sale_price_usd: v }))} type="number" placeholder="普通卖价" /></div>
+              <div><p className="mb-1 text-[11px] font-semibold text-slate-700">VIP 卖出价 USD</p><SmallInput value={materialDraft.vip_sale_price_usd} onChange={(v) => setMaterialDraft((d) => ({ ...d, vip_sale_price_usd: v }))} type="number" placeholder="留空 = 普通价" /></div>
               <div><p className="mb-1 text-[11px] font-semibold text-slate-700">单位</p><SmallSelect value={materialDraft.unit} onChange={(v) => setMaterialDraft((d) => ({ ...d, unit: v }))} options={["个", "米", "根", "套", "张"]} /></div>
               <div><p className="mb-1 text-[11px] font-semibold text-slate-700">供应商</p><SmallSelect value={materialDraft.supplier} onChange={(v) => setMaterialDraft((d) => ({ ...d, supplier: v }))} options={suppliers.length ? suppliers.map((item) => item.name) : ["未指定"]} /></div>
               <div><p className="mb-1 text-[11px] font-semibold text-slate-700">分类</p><SmallSelect value={materialDraft.category} onChange={(v) => setMaterialDraft((d) => ({ ...d, category: v }))} options={materialCategoryOptions} /></div>
@@ -5077,6 +5079,7 @@ function MaterialsSection({ materials, setMaterials, suppliers, orders, setExpen
                   {item.size ? <p className="truncate">尺寸：{item.size}</p> : null}
                   <p>库存：<span className="font-semibold text-slate-700">{item.stock_quantity}</span></p>
                   <p>卖出价：<span className="font-semibold text-slate-700">${item.sale_price_usd ?? 0}</span></p>
+                  {item.vip_sale_price_usd ? <p>VIP价：<span className="font-semibold text-amber-600">${item.vip_sale_price_usd}</span></p> : null}
                 </div>
                 <div className="mt-auto pt-2 flex gap-2">
                   <button onClick={() => openEditMaterial(item)} className="flex-1 rounded-lg border border-slate-200 px-2 py-1.5 text-[11px] text-slate-600 hover:border-slate-300 hover:bg-slate-50 transition-colors text-center">编辑</button>

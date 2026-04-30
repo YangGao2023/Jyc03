@@ -6263,10 +6263,53 @@ function AppointmentsSection({ appointments, setAppointments, clients }: { appoi
   const [confirmDelete, setConfirmDelete] = useState<string | null>(null);
   const [draft, setDraft] = useState({ client_id: "", appointment_date: "", appointment_time: "", phone: "", address: "", description: "" });
   const [copiedId, setCopiedId] = useState<string | null>(null);
+  const [dateFilter, setDateFilter] = useState<"all" | "today" | "tomorrow" | "date">("all");
+  const [specificDate, setSpecificDate] = useState(new Date().toISOString().slice(0, 10));
+
+  const todayStr = new Date().toISOString().slice(0, 10);
+  const tomorrowStr = new Date(Date.now() + 86400000).toISOString().slice(0, 10);
+
+  function format12h(time: string) {
+    if (!time) return "";
+    const [h, m] = time.split(":");
+    const hour = parseInt(h, 10);
+    if (isNaN(hour)) return time;
+    const ampm = hour >= 12 ? "pm" : "am";
+    const h12 = hour === 0 ? 12 : hour > 12 ? hour - 12 : hour;
+    return `${h12}:${m} ${ampm}`;
+  }
+
+  function formatCopyDate(date: string) {
+    if (!date) return "";
+    const [y, m, d] = date.split("-");
+    if (!y || !m || !d) return date;
+    return `${y}/${Number(m)}/${Number(d)}`;
+  }
+
+  function formatAppointmentItem(item: MeasurementAppointmentRecord) {
+    const lines = [
+      `预约日期：${formatCopyDate(item.appointment_date)}`,
+      `预约时间段：${format12h(item.appointment_time ?? "")}`,
+      `描述：`,
+      `${item.description ?? ""}`,
+      `客户名：${item.client_name}`,
+      `地址：${item.address ?? ""}`,
+      `电话：${item.phone ?? ""}`,
+    ];
+    return lines.join("\n");
+  }
+
+  const filteredByDate = dateFilter === "all"
+    ? appointments
+    : dateFilter === "today"
+      ? appointments.filter((a) => a.appointment_date === todayStr)
+      : dateFilter === "tomorrow"
+        ? appointments.filter((a) => a.appointment_date === tomorrowStr)
+        : appointments.filter((a) => a.appointment_date === specificDate);
 
   const filtered = search
-    ? appointments.filter((a) => a.client_name.toLowerCase().includes(search.toLowerCase()) || (a.phone ?? "").includes(search))
-    : appointments;
+    ? filteredByDate.filter((a) => a.client_name.toLowerCase().includes(search.toLowerCase()) || (a.phone ?? "").includes(search))
+    : filteredByDate;
 
   const sorted = [...filtered].sort((a, b) => String(b.appointment_date).localeCompare(String(a.appointment_date)));
   const pageCount = Math.max(1, Math.ceil(sorted.length / pageSize));
@@ -6305,21 +6348,38 @@ function AppointmentsSection({ appointments, setAppointments, clients }: { appoi
   }
 
   function handleCopy(item: MeasurementAppointmentRecord) {
-    const text = `量尺寸预约\n客户：${item.client_name}\n日期：${item.appointment_date}${item.appointment_time ? ` ${item.appointment_time}` : ""}\n电话：${item.phone ?? "-"}\n地址：${item.address ?? "-"}\n备注：${item.description ?? "-"}`;
-    navigator.clipboard.writeText(text).then(() => {
+    navigator.clipboard.writeText(formatAppointmentItem(item)).then(() => {
       setCopiedId(item.id);
       setTimeout(() => setCopiedId(null), 2000);
+    }).catch(() => {});
+  }
+
+  function handleCopyAll() {
+    const separator = "\n----------------------------\n";
+    const text = sorted.map(formatAppointmentItem).join(separator);
+    navigator.clipboard.writeText(text).then(() => {
+      alert(`已复制 ${sorted.length} 条预约信息`);
     }).catch(() => {});
   }
 
   return (
     <>
       <SectionHeader eyebrow="Measurements" title="量尺寸" actions={
-        <div className="flex items-center gap-3">
-          <div className="relative w-60">
+        <div className="flex flex-wrap items-center gap-2">
+          <div className="flex items-center gap-1 rounded-lg border border-slate-200 bg-white p-0.5">
+            <button onClick={() => { setDateFilter("all"); setPage(1); }} className={`rounded-md px-2 py-1 text-[11px] font-medium transition-colors ${dateFilter === "all" ? "bg-slate-700 text-white" : "text-slate-600 hover:bg-slate-100"}`}>全部</button>
+            <button onClick={() => { setDateFilter("today"); setPage(1); }} className={`rounded-md px-2 py-1 text-[11px] font-medium transition-colors ${dateFilter === "today" ? "bg-slate-700 text-white" : "text-slate-600 hover:bg-slate-100"}`}>今天</button>
+            <button onClick={() => { setDateFilter("tomorrow"); setPage(1); }} className={`rounded-md px-2 py-1 text-[11px] font-medium transition-colors ${dateFilter === "tomorrow" ? "bg-slate-700 text-white" : "text-slate-600 hover:bg-slate-100"}`}>明天</button>
+            <button onClick={() => setDateFilter("date")} className={`rounded-md px-2 py-1 text-[11px] font-medium transition-colors ${dateFilter === "date" ? "bg-slate-700 text-white" : "text-slate-600 hover:bg-slate-100"}`}>选择日期</button>
+            {dateFilter === "date" && (
+              <input type="date" value={specificDate} onChange={(e) => { setSpecificDate(e.target.value); setPage(1); }} className="ml-1 h-7 rounded-md border border-slate-300 px-1 text-[11px] text-slate-700" />
+            )}
+          </div>
+          <div className="relative w-52">
             <span className="absolute left-3 top-1/2 -translate-y-1/2 text-xs text-slate-700">⌕</span>
             <input value={search} onChange={(e) => { setSearch(e.target.value); setPage(1); }} placeholder="搜索客户姓名 / 电话" className="h-9 w-full rounded-lg border border-slate-300 bg-white pl-8 pr-3 text-xs text-slate-700" />
           </div>
+          <ActionBtn onClick={handleCopyAll}>{sorted.length > 0 ? `一键复制全部 (${sorted.length})` : "一键复制全部"}</ActionBtn>
           <ActionBtn onClick={openNew} tone="primary">+ 新建预约</ActionBtn>
         </div>
       } />

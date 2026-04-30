@@ -3668,7 +3668,13 @@ function FinanceSection({ orders, setOrders, expenses, setExpenses, cashEntries,
       const allDays = Array.from(new Set([...paymentRows.map(({ record }) => (record.date ?? "").slice(0, 10)), ...ledgerNonOrderIncome.map((e) => e.date.slice(0, 10)), ...expenses.filter((e) => e.expense_date).map((e) => e.expense_date.slice(0, 10))])).filter(Boolean).sort().reverse();
       const inPeriod = allDays.filter((d) => ledgerView === "yearly" ? d.startsWith(ledgerYear) : d.startsWith(ledgerMonth));
       let cum = 0;
-      inPeriod.toReversed().forEach((day) => {
+      const preDays = allDays.filter((d) => d < inPeriod[inPeriod.length - 1]).toReversed();
+      preDays.forEach((day) => {
+        const inc = paymentRows.filter(({ record }) => (record.date ?? "").startsWith(day)).reduce((s, { record }) => s + (record.type === "refund" ? -record.amount : record.amount), 0) + ledgerNonOrderIncome.filter((e) => e.date.startsWith(day)).reduce((s, e) => s + e.amount, 0);
+        const exp = expenses.filter((item) => item.expense_date.startsWith(day)).reduce((s, item) => s + item.amount, 0);
+        cum += inc - exp;
+      });
+inPeriod.toReversed().forEach((day) => {
         const income = paymentRows.filter(({ record }) => (record.date ?? "").startsWith(day)).reduce((s, { record }) => s + (record.type === "refund" ? -record.amount : record.amount), 0) + ledgerNonOrderIncome.filter((e) => e.date.startsWith(day)).reduce((s, e) => s + e.amount, 0);
         const expense = expenses.filter((item) => item.expense_date.startsWith(day)).reduce((s, item) => s + item.amount, 0);
         cum += income - expense;
@@ -3681,7 +3687,13 @@ function FinanceSection({ orders, setOrders, expenses, setExpenses, cashEntries,
     const allDays = Array.from(new Set([...paymentRows.map(({ record }) => (record.date ?? "").slice(0, 10)), ...ledgerNonOrderIncome.map((e) => e.date.slice(0, 10)), ...expenses.filter((e) => e.expense_date).map((e) => e.expense_date.slice(0, 10))])).filter(Boolean).sort().reverse();
     if (ledgerView === "yearly") {
       const months = Array.from(new Set(allDays.filter((d) => d.startsWith(ledgerYear)).map((d) => d.slice(0, 7)))).sort().reverse();
-      return months.map((month) => {
+      const allPriorMonths = Array.from(new Set(allDays.filter((d) => d < months[months.length - 1]).map((d) => d.slice(0, 7)))).sort();
+      allPriorMonths.forEach((m) => {
+        const inc = paymentRows.filter(({ record }) => (record.date ?? "").startsWith(m)).reduce((sum, { record }) => sum + (record.type === "refund" ? -record.amount : record.amount), 0) + ledgerNonOrderIncome.filter((e) => e.date.startsWith(m)).reduce((sum, e) => sum + e.amount, 0);
+        const exp = expenses.filter((item) => item.expense_date.startsWith(m)).reduce((sum, item) => sum + item.amount, 0);
+        cumulative += inc - exp;
+      });
+return months.map((month) => {
         const income = paymentRows.filter(({ record }) => (record.date ?? "").startsWith(month)).reduce((sum, { record }) => sum + (record.type === "refund" ? -record.amount : record.amount), 0) + ledgerNonOrderIncome.filter((e) => e.date.startsWith(month)).reduce((sum, e) => sum + e.amount, 0);
         const expense = expenses.filter((item) => item.expense_date.startsWith(month)).reduce((sum, item) => sum + item.amount, 0);
         const net = income - expense;
@@ -3690,7 +3702,13 @@ function FinanceSection({ orders, setOrders, expenses, setExpenses, cashEntries,
       });
     }
     const days = allDays.filter((d) => d.startsWith(ledgerMonth));
-    return days.map((day) => {
+    const allPriorDays = allDays.filter((d) => d < days[days.length - 1]).toReversed();
+      allPriorDays.forEach((d) => {
+        const inc = paymentRows.filter(({ record }) => (record.date ?? "").startsWith(d)).reduce((sum, { record }) => sum + (record.type === "refund" ? -record.amount : record.amount), 0) + ledgerNonOrderIncome.filter((e) => e.date.startsWith(d)).reduce((sum, e) => sum + e.amount, 0);
+        const exp = expenses.filter((item) => item.expense_date.startsWith(d)).reduce((sum, item) => sum + item.amount, 0);
+        cumulative += inc - exp;
+      });
+return days.map((day) => {
       const income = paymentRows.filter(({ record }) => (record.date ?? "").startsWith(day)).reduce((sum, { record }) => sum + (record.type === "refund" ? -record.amount : record.amount), 0) + ledgerNonOrderIncome.filter((e) => e.date.startsWith(day)).reduce((sum, e) => sum + e.amount, 0);
       const expense = expenses.filter((item) => item.expense_date.startsWith(day)).reduce((sum, item) => sum + item.amount, 0);
       const net = income - expense;

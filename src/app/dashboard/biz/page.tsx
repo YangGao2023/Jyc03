@@ -3436,7 +3436,8 @@ function FinanceSection({ orders, setOrders, expenses, setExpenses, cashEntries,
   const [ledgerYear, setLedgerYear] = useState(today.slice(0, 4));
   const [ledgerMonth, setLedgerMonth] = useState(today.slice(0, 7));
   const METHOD_OPTIONS = ["现金", "支票", "刷卡", "Zelle"] as const;
-  const [activeMethods, setActiveMethods] = useState<string[]>([...METHOD_OPTIONS]);
+  const ALL_METHOD_OPTIONS = [...METHOD_OPTIONS, "旧库导入"] as const;
+  const [activeMethods, setActiveMethods] = useState<string[]>([...ALL_METHOD_OPTIONS]);
   const [dateMode, setDateMode] = useState<"range" | "single">("range");
   const expenseTypeOptions = useMemo(() => getExpenseTypeOptions(settings), [settings]);
   const officeTargets = useMemo(() => Array.from(new Set([...suppliers.map((item) => item.name), ...employees.map((item) => item.name), ...clients.map((item) => item.name)])), [suppliers, employees, clients]);
@@ -3447,6 +3448,23 @@ function FinanceSection({ orders, setOrders, expenses, setExpenses, cashEntries,
   const [editingExpenseId, setEditingExpenseId] = useState<string | null>(null);
   const [quickPayTarget, setQuickPayTarget] = useState<string | null>(null);
   const [quickPayFields, setQuickPayFields] = useState({ date: today, amount: "", method: OFFICE_PAYMENT_METHOD, note: "", office: false });
+  const [resolvingDuplicateKey, setResolvingDuplicateKey] = useState<string | null>(null);
+  function handleMergeDuplicateClients(phoneKey: string, keptName: string) {
+    const issues = activeAudit?.issues.filter((item): item is FinanceDuplicateClientIssue =>
+      item.kind === "duplicate_client" && item.key === phoneKey
+    ) ?? [];
+    if (!issues.length) return;
+    const namesToMerge = issues[0].clientNames.filter((n: string) => n !== keptName);
+    setOrders((prev) => prev.map((order) =>
+      namesToMerge.includes(order.client_name) ? { ...order, client_name: keptName } : order
+    ));
+    setClients((prev) => prev.filter((client) => {
+      const phone = normalizePhone(client.phone);
+      if (phone !== phoneKey) return true;
+      return client.name === keptName;
+    }));
+    setResolvingDuplicateKey(null);
+  }
   const [expenseFromOffice, setExpenseFromOffice] = useState(false);
 
   useEffect(() => {
@@ -3490,10 +3508,10 @@ function FinanceSection({ orders, setOrders, expenses, setExpenses, cashEntries,
     }
     return { object: "-", detail: raw };
   };
-  const filteredPaymentRows = paymentRows.filter(({ record }) => isDateInRange(record.date, financeDateStart, financeDateEnd)).filter(({ record }) => activeMethods.length === 0 || (record.method && activeMethods.includes(record.method)));
-  const filteredExpenses = expenses.filter((item) => isDateInRange(item.expense_date, financeDateStart, financeDateEnd)).filter((item) => activeMethods.length === 0 || (item.payment_method && activeMethods.includes(item.payment_method)));
+  const filteredPaymentRows = paymentRows.filter(({ record }) => isDateInRange(record.date, financeDateStart, financeDateEnd)).filter(({ record }) => activeMethods.length > 0 && (record.method ? activeMethods.includes(record.method) : false));
+  const filteredExpenses = expenses.filter((item) => isDateInRange(item.expense_date, financeDateStart, financeDateEnd)).filter((item) => activeMethods.length > 0 && (item.payment_method ? activeMethods.includes(item.payment_method) : false));
   const officeCashEntries = reconcileCashEntries(cashEntries, orders, expenses).filter((item) => item.office);
-  const filteredCashEntries = officeCashEntries.filter((item) => isDateInRange(item.date, financeDateStart, financeDateEnd)).filter((item) => activeMethods.length === 0 || (item.method && activeMethods.includes(item.method)));
+  const filteredCashEntries = officeCashEntries.filter((item) => isDateInRange(item.date, financeDateStart, financeDateEnd)).filter((item) => activeMethods.length > 0 && (item.method ? activeMethods.includes(item.method) : false));
   const payrollOverlapsFinanceRange = (month: string) => {
     if (!month) return false;
     const monthStart = `${month}-01`;
@@ -3505,6 +3523,8 @@ function FinanceSection({ orders, setOrders, expenses, setExpenses, cashEntries,
   const filteredPayrolls = payrolls.filter((item) => payrollOverlapsFinanceRange(item.month));
   const totalIncome = filteredPaymentRows.reduce((sum, { record }) => sum + (record.type === "refund" ? -record.amount : record.amount), 0);
   const totalExpense = filteredExpenses.reduce((s, item) => s + item.amount, 0);
+  const actualTotalIncome = paymentRows.reduce((sum, { record }) => sum + (record.type === "refund" ? -record.amount : record.amount), 0);
+  const actualTotalExpense = expenses.reduce((s, item) => s + item.amount, 0);
   const totalBalance = orders.reduce((s, o) => s + (o.balance ?? 0), 0);
   const payrollAmount = filteredPayrolls.reduce((s, item) => s + item.net_salary, 0);
   const cashBalance = filteredCashEntries.reduce((s, item) => s + (["收入", "转入"].includes(item.type) ? item.amount : -item.amount), 0);
@@ -3835,8 +3855,8 @@ function FinanceSection({ orders, setOrders, expenses, setExpenses, cashEntries,
             </div>
           </div>
           <div className="flex flex-wrap items-center gap-2">
-            {sub === "income" ? <div className="rounded bg-emerald-50 px-3 py-1.5"><span className="text-xs text-emerald-600">收入 <strong>{formatMoney(totalIncome)}</strong></span></div> : null}
-            {sub === "expense" ? <div className="rounded bg-rose-50 px-3 py-1.5"><span className="text-xs text-rose-600">支出 <strong>{formatMoney(totalExpense)}</strong></span></div> : null}
+            {sub === "income" ? <div className="rounded bg-emerald-50 px-3 py-1.5"><span className="text-xs text-emerald-600">收入 <strong>{formatMoney(totalIncome)}</strong> <span className="text-slate-400">/ 总计 {formatMoney(actualTotalIncome)}</span></span></div> : null}
+            {sub === "expense" ? <div className="rounded bg-rose-50 px-3 py-1.5"><span className="text-xs text-rose-600">支出 <strong>{formatMoney(totalExpense)}</strong> <span className="text-slate-400">/ 总计 {formatMoney(actualTotalExpense)}</span></span></div> : null}
             {sub === "cash" ? <div className="rounded bg-slate-50 px-3 py-1.5"><span className="text-xs text-slate-600">办公室 <strong>{formatMoney(cashBalance)}</strong></span></div> : null}
             {sub === "ledger" ? <div className="rounded bg-slate-50 px-3 py-1.5"><span className="text-xs text-slate-600">余额 <strong>{formatMoney(ledgerBalance)}</strong></span></div> : null}
             {sub === "receivables" ? <div className="rounded bg-amber-50 px-3 py-1.5"><span className="text-xs text-amber-600">应收 <strong>{formatMoney(filteredReceivableOrders.reduce((sum, item) => sum + (item.balance ?? 0), 0))}</strong></span></div> : null}
@@ -3856,16 +3876,16 @@ function FinanceSection({ orders, setOrders, expenses, setExpenses, cashEntries,
                 </select>
               )}
             </div>
-          ) : sub !== "audit" ? (
+          ) : sub !== "audit" && sub !== "cash" && sub !== "receivables" ? (
             <div className="flex flex-wrap items-center gap-2">
-              {METHOD_OPTIONS.map(m => (
+              {ALL_METHOD_OPTIONS.map(m => (
                 <label key={m} className="flex cursor-pointer items-center gap-1">
                   <input type="checkbox" checked={activeMethods.includes(m)} onChange={() => setActiveMethods(prev => prev.includes(m) ? prev.filter(x => x !== m) : [...prev, m])} className="h-3 w-3 accent-slate-700" />
                   <span className="text-[11px] text-slate-600">{m}</span>
                 </label>
               ))}
               <label className="flex cursor-pointer items-center gap-1">
-                <input type="checkbox" checked={activeMethods.length === METHOD_OPTIONS.length} onChange={() => setActiveMethods(prev => prev.length === METHOD_OPTIONS.length ? [] : [...METHOD_OPTIONS])} className="h-3 w-3 accent-slate-700" />
+                <input type="checkbox" checked={activeMethods.length === ALL_METHOD_OPTIONS.length} onChange={() => setActiveMethods(prev => prev.length === ALL_METHOD_OPTIONS.length ? [] : [...METHOD_OPTIONS])} className="h-3 w-3 accent-slate-700" />
                 <span className="text-[11px] font-medium text-slate-700">全选</span>
               </label>
             </div>
@@ -4128,7 +4148,28 @@ function FinanceSection({ orders, setOrders, expenses, setExpenses, cashEntries,
                       <td className="px-4 py-2 font-medium text-slate-700">{item.clientNames.join(" / ")}</td>
                       <td className="px-4 py-2 text-slate-600">{item.issue}</td>
                       <td className="px-4 py-2 text-slate-500">手机号 {item.key}</td>
-                      <td className="px-4 py-2 text-slate-500">请人工合并或保留</td>
+                      <td className="px-4 py-2">
+                        {resolvingDuplicateKey === item.key ? (
+                          <div className="flex flex-wrap items-center gap-1">
+                            {item.clientNames.map((name: string) => (
+                              <button
+                                key={name}
+                                onClick={() => handleMergeDuplicateClients(item.key, name)}
+                                className="rounded-md border border-sky-200 bg-sky-50 px-2 py-0.5 text-[11px] font-semibold text-sky-700 hover:bg-sky-100 transition-colors whitespace-nowrap"
+                              >保留 &quot;{name}&quot;</button>
+                            ))}
+                            <button
+                              onClick={() => setResolvingDuplicateKey(null)}
+                              className="rounded-md border border-slate-200 px-2 py-0.5 text-[11px] text-slate-500 hover:border-slate-300 transition-colors"
+                            >取消</button>
+                          </div>
+                        ) : (
+                          <button
+                            onClick={() => setResolvingDuplicateKey(item.key)}
+                            className="rounded-md border border-sky-200 bg-sky-50 px-2 py-0.5 text-[11px] font-semibold text-sky-700 hover:bg-sky-100 transition-colors"
+                          >合并</button>
+                        )}
+                      </td>
                     </tr>
                   ) : (
                     <tr key={`${item.kind}-${item.kind === "order" ? item.orderNumber : item.clientId}-${item.issue}`} className="border-b border-slate-100 last:border-b-0">

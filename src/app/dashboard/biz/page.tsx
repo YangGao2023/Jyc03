@@ -3556,6 +3556,8 @@ function FinanceSection({ orders, setOrders, expenses, setExpenses, cashEntries,
   }, [expenseFromOffice, draft.payment_method]);
   const [showOfficeTransferModal, setShowOfficeTransferModal] = useState(false);
   const [officeTransferDraft, setOfficeTransferDraft] = useState({ type: "转入", amount: "", date: today, note: "" });
+  const [showMiscIncomeModal, setShowMiscIncomeModal] = useState(false);
+  const [miscIncomeDraft, setMiscIncomeDraft] = useState({ amount: "", date: today, method: "微信", category: "", note: "" });
   const [transferInlineDraft, setTransferInlineDraft] = useState({ type: "转入", amount: "", date: today, note: "" });
   const [transferPage, setTransferPage] = useState(1);
   const [financeDateStart, setFinanceDateStart] = useState(today);
@@ -3565,6 +3567,20 @@ function FinanceSection({ orders, setOrders, expenses, setExpenses, cashEntries,
   const [cashPage, setCashPage] = useState(1);
   const [receivablesPage, setReceivablesPage] = useState(1);
   const paymentRows = orders.flatMap((order) => (order.payment_history ?? []).map((record, index) => ({ order, record, key: `${order.order_number}-${index}` })));
+  const incomeCategories = (settings?.income_categories || '').split(',').map(s => s.trim()).filter(Boolean);
+  const miscIncomeRows = cashEntries
+    .filter(item => item.type === '收入' && !item.order_number && !item.source_type)
+    .sort((a, b) => b.date.localeCompare(a.date))
+    .map(item => ({
+      key: `misc-${item.id}`,
+      type: 'misc' as const,
+      category: item.category || '杂项收入',
+      client_name: '',
+      amount: item.amount,
+      method: item.method,
+      date: item.date,
+      note: item.note,
+    }));
   const getIncomeDetail = (order: BizOrder, record: PaymentRecord) => {
     const note = (record.note ?? "").trim();
     if (note && !/^(定制单|批发单)(定金|收款金?|收款|尾款|退款)?$/.test(note)) return note;
@@ -3587,6 +3603,17 @@ function FinanceSection({ orders, setOrders, expenses, setExpenses, cashEntries,
     return { object: "-", detail: raw };
   };
   const filteredPaymentRows = paymentRows.filter(({ record }) => isDateInRange(record.date, financeDateStart, financeDateEnd)).filter(({ record }) => activeMethods.length > 0 && (record.method ? activeMethods.includes(record.method) : false));
+  const filteredMiscIncomeRows = miscIncomeRows
+    .filter(item => isDateInRange(item.date, financeDateStart, financeDateEnd))
+    .filter(item => activeMethods.length > 0 && (item.method ? activeMethods.includes(item.method) : false));
+  const allIncomeRows = [
+    ...filteredMiscIncomeRows,
+    ...filteredPaymentRows.map(({ order, record, key }) => ({
+      key, type: 'order' as const, category: record.type === 'refund' ? `${order.order_type}退款` : order.order_type,
+      client_name: order.client_name, amount: record.type === 'refund' ? -record.amount : record.amount,
+      method: record.method, date: record.date, note: getIncomeDetail(order, record),
+    })),
+  ].sort((a, b) => b.date.localeCompare(a.date));
   const filteredExpenses = expenses.filter((item) => isDateInRange(item.expense_date, financeDateStart, financeDateEnd)).filter((item) => activeMethods.length > 0 && (item.payment_method ? activeMethods.includes(item.payment_method) : false));
   const officeCashEntries = reconcileCashEntries(cashEntries, orders, expenses).filter((item) => item.office);
   const filteredCashEntries = officeCashEntries.filter((item) => isDateInRange(item.date, financeDateStart, financeDateEnd)).filter((item) => activeMethods.length > 0 && (item.method ? activeMethods.includes(item.method) : false));
@@ -3599,18 +3626,18 @@ function FinanceSection({ orders, setOrders, expenses, setExpenses, cashEntries,
     return true;
   };
   const filteredPayrolls = payrolls.filter((item) => payrollOverlapsFinanceRange(item.month));
-  const totalIncome = filteredPaymentRows.reduce((sum, { record }) => sum + (record.type === "refund" ? -record.amount : record.amount), 0);
+  const totalIncome = allIncomeRows.reduce((sum, item) => sum + item.amount, 0);
   const totalExpense = filteredExpenses.reduce((s, item) => s + item.amount, 0);
-  const actualTotalIncome = paymentRows.reduce((sum, { record }) => sum + (record.type === "refund" ? -record.amount : record.amount), 0);
+  const actualTotalIncome = paymentRows.reduce((sum, { record }) => sum + (record.type === "refund" ? -record.amount : record.amount), 0) + miscIncomeRows.reduce((sum, item) => sum + item.amount, 0);
   const actualTotalExpense = expenses.reduce((s, item) => s + item.amount, 0);
   const totalBalance = orders.reduce((s, o) => s + (o.balance ?? 0), 0);
   const payrollAmount = filteredPayrolls.reduce((s, item) => s + item.net_salary, 0);
   const cashBalance = filteredCashEntries.reduce((s, item) => s + (["收入", "转入"].includes(item.type) ? item.amount : -item.amount), 0);
   const receivableOrders = orders.filter((o) => (o.balance ?? 0) > 0 && o.status !== "已关闭");
   const filteredReceivableOrders = receivableOrders.filter((o) => isDateInRange(o.order_date, financeDateStart, financeDateEnd));
-  const paymentPageSize = 10;
-  const paymentPageCount = Math.max(1, Math.ceil(filteredPaymentRows.length / paymentPageSize));
-  const pagedPaymentRows = filteredPaymentRows.slice((paymentPage - 1) * paymentPageSize, paymentPage * paymentPageSize);
+  const incomePageSize = 10;
+  const incomePageCount = Math.max(1, Math.ceil(allIncomeRows.length / incomePageSize));
+  const pagedIncomeRows = allIncomeRows.slice((paymentPage - 1) * incomePageSize, paymentPage * incomePageSize);
   const expensesPageSize = 10;
   const expensesPageCount = Math.max(1, Math.ceil(filteredExpenses.length / expensesPageSize));
   const pagedExpenses = filteredExpenses.slice((expensesPage - 1) * expensesPageSize, expensesPage * expensesPageSize);
@@ -3672,8 +3699,30 @@ function FinanceSection({ orders, setOrders, expenses, setExpenses, cashEntries,
       title: "订单收入",
       filePrefix: "biz-finance-income",
       columns: ["订单号", "客户", "金额", "支付方式", "日期", "明细", "类型"],
-      exportRows: () => mapRows(filteredPaymentRows, ({ order, record }) => [order.order_number, order.client_name, record.amount, record.method, record.date, getIncomeDetail(order, record), record.type === "refund" ? `${order.order_type}退款` : order.order_type]),
-      printRows: () => mapRows(filteredPaymentRows, ({ order, record }) => [order.order_number, order.client_name, formatMoney(record.amount), record.method, record.date, getIncomeDetail(order, record), record.type === "refund" ? `${order.order_type}退款` : order.order_type]),
+      exportRows: () => {
+        const rows: string[][] = [];
+        for (const item of allIncomeRows) {
+          if (item.type === 'misc') {
+            rows.push(['杂项', '-', String(item.amount), item.method || '', item.date, item.note || '-', item.category]);
+          } else {
+            const src = filteredPaymentRows.find(({ key }) => key === item.key);
+            if (src) rows.push([src.order.order_number, src.order.client_name, String(item.amount), item.method || '', item.date, item.note, item.category]);
+          }
+        }
+        return rows;
+      },
+      printRows: () => {
+        const rows: string[][] = [];
+        for (const item of allIncomeRows) {
+          if (item.type === 'misc') {
+            rows.push(['杂项', '-', formatMoney(item.amount), item.method || '', item.date, item.note || '-', item.category]);
+          } else {
+            const src = filteredPaymentRows.find(({ key }) => key === item.key);
+            if (src) rows.push([src.order.order_number, src.order.client_name, formatMoney(item.amount), item.method || '', item.date, item.note, item.category]);
+          }
+        }
+        return rows;
+      },
     },
     expense: {
       title: "支出清单",
@@ -3901,6 +3950,25 @@ function FinanceSection({ orders, setOrders, expenses, setExpenses, cashEntries,
     onAutoSave?.();
   }
 
+  function addMiscIncome() {
+    const amount = Number(miscIncomeDraft.amount) || 0;
+    if (amount <= 0) return;
+    const category = miscIncomeDraft.category || '杂项收入';
+    const newEntry: CashEntry = {
+      id: nextYearScopedId(cashEntries.map((item) => item.id), "CASH", new Date().getFullYear()),
+      type: '收入',
+      amount,
+      date: miscIncomeDraft.date,
+      method: miscIncomeDraft.method,
+      category,
+      note: miscIncomeDraft.note || undefined,
+    };
+    setCashEntries((prev) => [newEntry, ...prev]);
+    setMiscIncomeDraft({ amount: "", date: today, method: "微信", category: "", note: "" });
+    setShowMiscIncomeModal(false);
+    onAutoSave?.();
+  }
+
   return (
     <div>
       <SectionHeader eyebrow="Finance Management" title="收支管理" actions={<>{sub === "audit" ? <ActionBtn onClick={runFinanceAudit}>↻ 重新扫描</ActionBtn> : null}{sub === "audit" ? <ActionBtn tone="success" onClick={applyFinanceRepair}>🔧 应用自动修复</ActionBtn> : null}{sub === "expense" ? <ActionBtn tone="primary" onClick={() => setShowExpenseModal(true)}>+ 录入支出</ActionBtn> : null}{sub === "cash" ? <ActionBtn tone="primary" onClick={() => setShowOfficeTransferModal(true)}>+ 办公室转入/转出</ActionBtn> : null}</>} />
@@ -4038,6 +4106,33 @@ function FinanceSection({ orders, setOrders, expenses, setExpenses, cashEntries,
         </div>
       )}
 
+      {showMiscIncomeModal && sub === "income" && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-slate-950/45 px-4">
+          <div className="w-full max-w-xl rounded-2xl border border-slate-200 bg-white p-5 shadow-2xl">
+            <div className="mb-4 flex items-start justify-between gap-3">
+              <div>
+                <h3 className="text-base font-semibold text-slate-900">新杂项收入</h3>
+                <p className="mt-1 text-xs text-slate-500">记录一笔没有订单号的杂项收入。</p>
+              </div>
+              <button onClick={() => setShowMiscIncomeModal(false)} className="rounded-lg border border-slate-200 px-2.5 py-1 text-xs text-slate-500 hover:border-slate-300 hover:text-slate-700 transition-colors">关闭</button>
+            </div>
+            <div className="grid gap-2 sm:grid-cols-2">
+              <SmallSelect value={miscIncomeDraft.category} onChange={(v) => setMiscIncomeDraft((d) => ({ ...d, category: v }))} options={incomeCategories.length > 0 ? incomeCategories : ['杂项收入']} />
+              <SmallInput value={miscIncomeDraft.amount} onChange={(v) => setMiscIncomeDraft((d) => ({ ...d, amount: v }))} type="number" placeholder="金额" />
+              <SmallInput value={miscIncomeDraft.date} onChange={(v) => setMiscIncomeDraft((d) => ({ ...d, date: v }))} type="date" />
+              <SmallSelect value={miscIncomeDraft.method} onChange={(v) => setMiscIncomeDraft((d) => ({ ...d, method: v }))} options={PAYMENT_METHODS} />
+              <div className="sm:col-span-2">
+                <SmallInput value={miscIncomeDraft.note} onChange={(v) => setMiscIncomeDraft((d) => ({ ...d, note: v }))} placeholder="备注(可选)" />
+              </div>
+            </div>
+            <div className="mt-5 flex justify-end gap-2">
+              <ActionBtn onClick={() => setShowMiscIncomeModal(false)}>取消</ActionBtn>
+              <ActionBtn tone="primary" onClick={addMiscIncome}>确认记录</ActionBtn>
+            </div>
+          </div>
+        </div>
+      )}
+
       {showExpenseModal && sub === "expense" && (
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-slate-950/45 px-4">
           <div className="w-full max-w-2xl rounded-2xl border border-slate-200 bg-white p-5 shadow-2xl">
@@ -4068,7 +4163,21 @@ function FinanceSection({ orders, setOrders, expenses, setExpenses, cashEntries,
           </div>
         </div>
       )}
-      {sub === "income" && (<><div className="overflow-x-auto rounded-xl border border-slate-200 bg-white"><table className="w-full text-left text-xs"><thead><tr className="border-b border-slate-200 bg-slate-50"><th className="px-4 py-2 font-semibold text-slate-600">订单号</th><th className="px-4 py-2 font-semibold text-slate-600">客户</th><th className="px-4 py-2 font-semibold text-slate-600">金额</th><th className="px-4 py-2 font-semibold text-slate-600">支付方式</th><th className="px-4 py-2 font-semibold text-slate-600">日期</th><th className="px-4 py-2 font-semibold text-slate-600">明细</th></tr></thead><tbody>{filteredPaymentRows.length ? pagedPaymentRows.map(({ key, order, record }) => <tr key={key} className="border-b border-slate-100 last:border-b-0"><td className="px-4 py-2 font-medium text-slate-700">{order.order_number}</td><td className="px-4 py-2 text-slate-700">{order.client_name}</td><td className={`px-4 py-2 font-semibold ${record.type === "refund" ? "text-rose-600" : "text-green-600"}`}>{record.type === "refund" ? "-" : "+"}{formatMoney(record.amount)}</td><td className="px-4 py-2 text-slate-600">{record.method}</td><td className="px-4 py-2 text-slate-500">{record.date}</td><td className="px-4 py-2 text-slate-500">{getIncomeDetail(order, record)}</td></tr>) : <tr><td colSpan={6} className="py-10 text-center text-xs text-slate-400">这个日期范围内没有收入记录</td></tr>}</tbody></table></div><div className="flex flex-wrap items-center justify-between gap-3 rounded-xl border border-slate-200 bg-white px-4 py-3 text-xs text-slate-600"><span>第 {paymentPage} / {paymentPageCount} 页,共 {filteredPaymentRows.length} 条收款</span><div className="flex items-center gap-2"><button type="button" onClick={() => setPaymentPage((p) => Math.max(1, p - 1))} disabled={paymentPage <= 1} className="rounded-lg border border-slate-200 px-3 py-1.5 disabled:cursor-not-allowed disabled:opacity-40">上一页</button><button type="button" onClick={() => setPaymentPage((p) => Math.min(paymentPageCount, p + 1))} disabled={paymentPage >= paymentPageCount} className="rounded-lg border border-slate-200 px-3 py-1.5 disabled:cursor-not-allowed disabled:opacity-40">下一页</button></div></div></>)}
+      {sub === "income" && (<><div className="flex items-center justify-end gap-2 mb-2"><button onClick={() => setShowMiscIncomeModal(true)} className="rounded-lg border border-emerald-300 bg-emerald-50 px-3 py-1.5 text-xs font-medium text-emerald-700 hover:bg-emerald-100 transition-colors">+ 新杂项收入</button></div><div className="overflow-x-auto rounded-xl border border-slate-200 bg-white"><table className="w-full text-left text-xs"><thead><tr className="border-b border-slate-200 bg-slate-50"><th className="px-4 py-2 font-semibold text-slate-600">订单号/来源</th><th className="px-4 py-2 font-semibold text-slate-600">客户</th><th className="px-4 py-2 font-semibold text-slate-600">类型</th><th className="px-4 py-2 font-semibold text-slate-600">金额</th><th className="px-4 py-2 font-semibold text-slate-600">支付方式</th><th className="px-4 py-2 font-semibold text-slate-600">日期</th><th className="px-4 py-2 font-semibold text-slate-600">明细</th></tr></thead><tbody>{allIncomeRows.length ? pagedIncomeRows.map((item) => {
+  const isRefund = item.type === 'order' && item.category.endsWith('退款');
+  const isMisc = item.type === 'misc';
+  return (
+    <tr key={item.key} className="border-b border-slate-100 last:border-b-0">
+      <td className={`px-4 py-2 font-medium ${isMisc ? 'text-emerald-600' : 'text-slate-700'}`}>{isMisc ? '杂项' : item.key.split('-')[0]}</td>
+      <td className="px-4 py-2 text-slate-700">{isMisc ? '-' : item.client_name}</td>
+      <td className="px-4 py-2"><span className={`rounded-full px-2 py-0.5 text-[11px] font-semibold ${isRefund ? 'bg-rose-50 text-rose-700' : isMisc ? 'bg-emerald-50 text-emerald-700' : 'bg-sky-50 text-sky-700'}`}>{item.category}</span></td>
+      <td className={`px-4 py-2 font-semibold ${isRefund ? 'text-rose-600' : 'text-green-600'}`}>{isRefund ? '-' : '+'}{formatMoney(item.amount)}</td>
+      <td className="px-4 py-2 text-slate-600">{item.method || '-'}</td>
+      <td className="px-4 py-2 text-slate-500">{item.date}</td>
+      <td className="px-4 py-2 text-slate-500">{isMisc ? (item.note || '-') : item.note}</td>
+    </tr>
+  );
+}) : <tr><td colSpan={7} className="py-10 text-center text-xs text-slate-400">这个日期范围内没有收入记录</td></tr>}</tbody></table></div><div className="flex flex-wrap items-center justify-between gap-3 rounded-xl border border-slate-200 bg-white px-4 py-3 text-xs text-slate-600"><span>第 {paymentPage} / {incomePageCount} 页,共 {allIncomeRows.length} 条收入</span><div className="flex items-center gap-2"><button type="button" onClick={() => setPaymentPage((p) => Math.max(1, p - 1))} disabled={paymentPage <= 1} className="rounded-lg border border-slate-200 px-3 py-1.5 disabled:cursor-not-allowed disabled:opacity-40">上一页</button><button type="button" onClick={() => setPaymentPage((p) => Math.min(incomePageCount, p + 1))} disabled={paymentPage >= incomePageCount} className="rounded-lg border border-slate-200 px-3 py-1.5 disabled:cursor-not-allowed disabled:opacity-40">下一页</button></div></div></>)}
       {sub === "expense" && (<><div className="overflow-x-auto rounded-xl border border-slate-200 bg-white"><table className="w-full text-left text-xs"><thead><tr className="border-b border-slate-200 bg-slate-50"><th className="px-4 py-2 font-semibold text-slate-600">对象</th><th className="px-4 py-2 font-semibold text-slate-600">明细</th><th className="px-4 py-2 font-semibold text-slate-600">金额</th><th className="px-4 py-2 font-semibold text-slate-600">类型</th><th className="px-4 py-2 font-semibold text-slate-600">方式</th><th className="px-4 py-2 font-semibold text-slate-600">办公室</th><th className="px-4 py-2 font-semibold text-slate-600">日期</th><th className="px-4 py-2 font-semibold text-slate-600">操作</th></tr></thead><tbody>{filteredExpenses.length ? pagedExpenses.map((item) => <tr key={item.id} className="border-b border-slate-100 last:border-b-0"><td className="px-4 py-2 text-slate-700">{item.target}</td><td className="px-4 py-2 text-slate-500">{item.detail}</td><td className="px-4 py-2 font-semibold text-rose-600">{formatMoney(item.amount)}</td><td className="px-4 py-2 text-slate-600">{item.expense_type}</td><td className="px-4 py-2 text-slate-600">{item.payment_method}</td><td className="px-4 py-2 text-slate-600">{item.office ? "是" : "否"}</td><td className="px-4 py-2 text-slate-500">{item.expense_date}</td><td className="px-4 py-2"><div className="flex items-center gap-2">{editingExpenseId === item.id ? <span className="text-xs text-slate-400">编辑中</span> : <><button onClick={() => openEditExpense(item)} className="rounded border border-slate-200 px-2 py-0.5 text-xs text-slate-600 hover:border-slate-300 hover:bg-slate-50 transition-colors">编辑</button>{confirmingExpenseId === item.id ? <><button onClick={() => deleteExpense(item.id)} className="rounded border border-red-400 bg-red-500 px-2 py-0.5 text-xs font-semibold text-slate-700 hover:bg-red-600 transition-colors">确认</button><button onClick={() => setConfirmingExpenseId(null)} className="rounded border border-slate-200 px-2 py-0.5 text-xs text-slate-500 hover:border-slate-300 transition-colors">取消</button></> : <button onClick={() => setConfirmingExpenseId(item.id)} className="rounded border border-red-100 px-2 py-0.5 text-xs text-red-500 hover:border-red-300 hover:bg-red-50 transition-colors">删除</button>}</>}</div></td></tr>) : <tr><td colSpan={8} className="py-10 text-center text-xs text-slate-400">这个日期范围内没有支出记录</td></tr>}</tbody></table></div><div className="flex flex-wrap items-center justify-between gap-3 rounded-xl border border-slate-200 bg-white px-4 py-3 text-xs text-slate-600"><span>第 {expensesPage} / {expensesPageCount} 页,共 {filteredExpenses.length} 条支出</span><div className="flex items-center gap-2"><button type="button" onClick={() => setExpensesPage((p) => Math.max(1, p - 1))} disabled={expensesPage <= 1} className="rounded-lg border border-slate-200 px-3 py-1.5 disabled:cursor-not-allowed disabled:opacity-40">上一页</button><button type="button" onClick={() => setExpensesPage((p) => Math.min(expensesPageCount, p + 1))} disabled={expensesPage >= expensesPageCount} className="rounded-lg border border-slate-200 px-3 py-1.5 disabled:cursor-not-allowed disabled:opacity-40">下一页</button></div></div></>)}
       {sub === "cash" && (<><div className="overflow-x-auto rounded-xl border border-slate-200 bg-white"><table className="w-full text-left text-xs"><thead><tr className="border-b border-slate-200 bg-slate-50"><th className="px-4 py-2 font-semibold text-slate-600">类型</th><th className="px-4 py-2 font-semibold text-slate-600">对象</th><th className="px-4 py-2 font-semibold text-slate-600">金额</th><th className="px-4 py-2 font-semibold text-slate-600">日期</th><th className="px-4 py-2 font-semibold text-slate-600">明细</th></tr></thead><tbody>{filteredCashEntries.length ? pagedCashEntries.map((item) => { const parts = getOfficeNoteParts(item.note); return (<tr key={item.id} className="border-b border-slate-100 last:border-b-0"><td className="px-4 py-2"><span className={`rounded-full px-2 py-0.5 text-[11px] font-semibold ${["收入", "转入"].includes(item.type) ? "bg-green-50 text-green-700" : "bg-rose-50 text-rose-700"}`}>{item.type}</span></td><td className="px-4 py-2 text-slate-700">{parts.object}</td><td className={`px-4 py-2 font-semibold ${["收入", "转入"].includes(item.type) ? "text-green-600" : "text-rose-600"}`}>{formatMoney(item.amount)}</td><td className="px-4 py-2 text-slate-500">{item.date}</td><td className="px-4 py-2 text-slate-500">{parts.detail}</td></tr>); }) : <tr><td colSpan={5} className="py-10 text-center text-xs text-slate-400">这个日期范围内没有现金流水</td></tr>}</tbody></table></div><div className="flex flex-wrap items-center justify-between gap-3 rounded-xl border border-slate-200 bg-white px-4 py-3 text-xs text-slate-600"><span>第 {cashPage} / {cashPageCount} 页,共 {filteredCashEntries.length} 条现金</span><div className="flex items-center gap-2"><button type="button" onClick={() => setCashPage((p) => Math.max(1, p - 1))} disabled={cashPage <= 1} className="rounded-lg border border-slate-200 px-3 py-1.5 disabled:cursor-not-allowed disabled:opacity-40">上一页</button><button type="button" onClick={() => setCashPage((p) => Math.min(cashPageCount, p + 1))} disabled={cashPage >= cashPageCount} className="rounded-lg border border-slate-200 px-3 py-1.5 disabled:cursor-not-allowed disabled:opacity-40">下一页</button></div></div></>)}
 

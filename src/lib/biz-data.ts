@@ -99,6 +99,7 @@ export type CashEntry = {
   date: string;
   note?: string;
   method?: string;
+  category?: string;
   office?: boolean;
   order_number?: string;
   source_type?: string;
@@ -283,6 +284,7 @@ export type BizSettings = {
   auto_attendance_default_minutes?: number;
   auto_attendance_note?: string;
   material_categories?: string;
+  income_categories?: string;
   vip_prices?: string;
   work_start?: string;
   work_end?: string;
@@ -446,6 +448,8 @@ export const bizCashEntries = normalizeList<CashEntry>(rawAssetsRecord.cash_entr
   amount: toNumber(item.amount),
   date: toString(item.date),
   note: toString(item.note) || undefined,
+  method: toString(item.method) || undefined,
+  category: toString(item.category) || undefined,
   voided: Boolean(item.voided),
 }));
 
@@ -614,6 +618,7 @@ export const bizSettings: BizSettings = {
   auto_attendance_default_minutes: toNumber(rawAssetsRecord.settings && (rawAssetsRecord.settings as Record<string, unknown>).auto_attendance_default_minutes) || 600,
   auto_attendance_note: toString(rawAssetsRecord.settings && (rawAssetsRecord.settings as Record<string, unknown>).auto_attendance_note) || "America/New_York 每天 01:00 自动生成 10 小时考勤",
   material_categories: toString(rawAssetsRecord.settings && (rawAssetsRecord.settings as Record<string, unknown>).material_categories) || undefined,
+  income_categories: toString(rawAssetsRecord.settings && (rawAssetsRecord.settings as Record<string, unknown>).income_categories) || undefined,
 };
 
 export function formatMoney(value: number) {

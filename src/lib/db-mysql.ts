@@ -81,5 +81,6 @@ export function rowToSettings(row: Record<string, unknown> | undefined) {
     break_start: row.break_start ? String(row.break_start) : undefined,
     break_end: row.break_end ? String(row.break_end) : undefined,
     material_categories: row.material_categories ? String(row.material_categories) : undefined,
+    income_categories: row.income_categories ? String(row.income_categories) : undefined,
   };
 }

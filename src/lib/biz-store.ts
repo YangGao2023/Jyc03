@@ -220,8 +220,8 @@ async function mysqlWrite(snapshot: BizStoreSnapshot): Promise<void> {
       invoice_title,picking_title,zelle,invoice_note,quote_valid_days,
       quote_footer,logo_url,expense_types,supplier_categories,meal_allowance_amount,
       auto_attendance_timezone,auto_attendance_run_time,auto_attendance_default_minutes,
-      auto_attendance_note,work_start,work_end,break_start,break_end,material_categories)
-    VALUES(1,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)
+      auto_attendance_note,work_start,work_end,break_start,break_end,material_categories,income_categories)
+    VALUES(1,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)
     ON DUPLICATE KEY UPDATE
       company_name=VALUES(company_name),company_name_zh=VALUES(company_name_zh),
       address=VALUES(address),company_address=VALUES(company_address),
@@ -240,7 +240,7 @@ async function mysqlWrite(snapshot: BizStoreSnapshot): Promise<void> {
       auto_attendance_run_time=VALUES(auto_attendance_run_time),
       auto_attendance_default_minutes=VALUES(auto_attendance_default_minutes),
       auto_attendance_note=VALUES(auto_attendance_note),
-      material_categories=VALUES(material_categories)`,
+      material_categories=VALUES(material_categories),income_categories=VALUES(income_categories)`,
     [s.company_name, s.company_name_zh ?? null, s.address, s.company_address ?? null,
       s.phone, s.phones ?? null, s.email, s.website, s.tax_number,
       s.default_tax_rate, s.default_currency, s.fiscal_start_month,
@@ -255,7 +255,8 @@ async function mysqlWrite(snapshot: BizStoreSnapshot): Promise<void> {
       s.auto_attendance_note ?? "",
       s.work_start ?? null, s.work_end ?? null,
       s.break_start ?? null, s.break_end ?? null,
-      s.material_categories ?? null]
+      s.material_categories ?? null,
+      s.income_categories ?? null]
   );
 
   // Helper: batch upsert
@@ -321,7 +322,7 @@ async function mysqlWrite(snapshot: BizStoreSnapshot): Promise<void> {
   await batchUpsert('a3s_cash_entries', snapshot.cashEntries.map(c => ({
     id: c.id, type: c.type || '收入', amount: c.amount ?? 0,
     date: c.date || '', note: c.note || null,
-    method: c.method || '现金', office: c.office ? 1 : 0,
+    method: c.method || '现金', category: c.category || null, office: c.office ? 1 : 0,
     order_number: c.order_number || null,
     source_type: c.source_type || null, source_id: c.source_id || null,
     order_id: c.order_id || null, voided: c.voided ? 1 : 0,
@@ -517,6 +518,7 @@ function rowToCashEntry(r: Record<string, unknown>): CashEntry {
     amount: Number(r.amount ?? 0), date: String(r.date),
     note: nullStr(r.note) ?? undefined,
     method: nullStr(r.method) ?? undefined,
+    category: nullStr(r.category) ?? undefined,
     office: Boolean(r.office),
     order_number: nullStr(r.order_number) ?? undefined,
     source_type: nullStr(r.source_type) ?? undefined,

@@ -193,7 +193,7 @@ async function syncCashFlowFromOld(lastMs: number): Promise<number> {
          ON DUPLICATE KEY UPDATE
            type=VALUES(type), amount=VALUES(amount), date=VALUES(date),
            method=VALUES(method), note=VALUES(note)`,
-        [`old_inc_${p1}`, "收入", amount, fromYyyymmdd(String(t.C6 || "")), codeToMethod(Number(t.C4)), String(t.C7 || t.C3 || ""), p1],
+        [`inc-${p1}`, "收入", amount, fromYyyymmdd(String(t.C6 || "")), codeToMethod(Number(t.C4)), String(t.C7 || t.C3 || ""), p1],
       );
     } else {
       await executeStmt(
@@ -203,7 +203,7 @@ async function syncCashFlowFromOld(lastMs: number): Promise<number> {
            amount=VALUES(amount), expense_date=VALUES(expense_date),
            payment_method=VALUES(payment_method), target=VALUES(target),
            detail=VALUES(detail), remark=VALUES(remark)`,
-        [`old_exp_${p1}`, amount, fromYyyymmdd(String(t.C6 || "")), codeToMethod(Number(t.C4)), String(t.C2 || ""), String(t.C3 || t.C2 || ""), String(t.C7 || ""), p1],
+        [`exp-${p1}`, amount, fromYyyymmdd(String(t.C6 || "")), codeToMethod(Number(t.C4)), String(t.C2 || ""), String(t.C3 || t.C2 || ""), String(t.C7 || ""), p1],
       );
     }
     count++;

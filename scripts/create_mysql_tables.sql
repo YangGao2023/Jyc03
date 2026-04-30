@@ -1,0 +1,354 @@
+-- ============================================================
+-- A3 网站数据库表结构
+-- 建在 db_zhty202410 数据库中，与旧T表共存
+-- 前缀：a3s_ （a3 site）
+-- MariaDB 10.11.6 兼容
+-- ============================================================
+
+-- 1. 系统设置
+CREATE TABLE IF NOT EXISTS a3s_settings (
+  id INT PRIMARY KEY DEFAULT 1,
+  company_name VARCHAR(255) NOT NULL DEFAULT '',
+  company_name_zh VARCHAR(255) DEFAULT '',
+  address TEXT NOT NULL,
+  company_address TEXT DEFAULT NULL,
+  phone VARCHAR(100) NOT NULL DEFAULT '',
+  phones TEXT DEFAULT NULL,
+  email VARCHAR(255) NOT NULL DEFAULT '',
+  website VARCHAR(255) NOT NULL DEFAULT '',
+  tax_number VARCHAR(100) NOT NULL DEFAULT '',
+  default_tax_rate DECIMAL(10,2) NOT NULL DEFAULT 0,
+  default_currency VARCHAR(10) NOT NULL DEFAULT 'USD',
+  fiscal_start_month INT NOT NULL DEFAULT 1,
+  bank_account TEXT NOT NULL,
+  alipay TEXT NOT NULL,
+  wechat_pay TEXT NOT NULL,
+  other_payment TEXT NOT NULL,
+  invoice_title TEXT DEFAULT NULL,
+  picking_title TEXT DEFAULT NULL,
+  zelle TEXT DEFAULT NULL,
+  invoice_note TEXT DEFAULT NULL,
+  quote_valid_days INT NOT NULL DEFAULT 30,
+  quote_footer TEXT NOT NULL,
+  logo_url VARCHAR(500) NOT NULL DEFAULT '',
+  expense_types TEXT DEFAULT NULL,
+  supplier_categories TEXT DEFAULT NULL,
+  meal_allowance_amount DECIMAL(10,2) DEFAULT 15,
+  auto_attendance_timezone VARCHAR(100) DEFAULT 'America/New_York',
+  auto_attendance_run_time VARCHAR(10) DEFAULT '01:00',
+  auto_attendance_default_minutes INT DEFAULT 600,
+  auto_attendance_note TEXT DEFAULT '',
+  work_start VARCHAR(10) DEFAULT '',
+  work_end VARCHAR(10) DEFAULT '',
+  break_start VARCHAR(10) DEFAULT '',
+  break_end VARCHAR(10) DEFAULT '',
+  material_categories TEXT DEFAULT NULL,
+  created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+  updated_at DATETIME DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
+
+-- 2. 订单
+CREATE TABLE IF NOT EXISTS a3s_orders (
+  order_number VARCHAR(50) PRIMARY KEY,
+  order_type VARCHAR(20) NOT NULL DEFAULT '定制单',
+  client_name VARCHAR(200) NOT NULL DEFAULT '',
+  client_id VARCHAR(50) DEFAULT NULL,
+  phone VARCHAR(50) DEFAULT NULL,
+  address TEXT DEFAULT NULL,
+  preview_image TEXT DEFAULT NULL,
+  description TEXT DEFAULT NULL,
+  total_price DECIMAL(12,2) DEFAULT 0,
+  tax_rate DECIMAL(5,2) DEFAULT 0,
+  discount DECIMAL(12,2) DEFAULT 0,
+  total_after_tax DECIMAL(12,2) DEFAULT 0,
+  amount_paid DECIMAL(12,2) DEFAULT 0,
+  balance DECIMAL(12,2) DEFAULT 0,
+  order_date VARCHAR(10) DEFAULT NULL,
+  status VARCHAR(20) DEFAULT '下单',
+  operation_type VARCHAR(20) DEFAULT NULL,
+  install_info TEXT DEFAULT NULL,
+  remarks TEXT DEFAULT NULL,
+  payment_history LONGTEXT DEFAULT NULL,
+  material_rows LONGTEXT DEFAULT NULL,
+  order_images LONGTEXT DEFAULT NULL,
+  old_id BIGINT DEFAULT NULL COMMENT '原T1111.P1',
+  old_status INT DEFAULT NULL COMMENT '原Z1值',
+  created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+  updated_at DATETIME DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+  INDEX idx_client_name (client_name),
+  INDEX idx_order_date (order_date),
+  INDEX idx_status (status)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
+
+-- 3. 客户
+CREATE TABLE IF NOT EXISTS a3s_clients (
+  id VARCHAR(50) PRIMARY KEY,
+  name VARCHAR(200) NOT NULL DEFAULT '',
+  contact VARCHAR(100) DEFAULT NULL,
+  phone VARCHAR(50) DEFAULT NULL,
+  email VARCHAR(255) DEFAULT NULL,
+  address TEXT DEFAULT NULL,
+  created_at VARCHAR(20) DEFAULT NULL,
+  note TEXT DEFAULT NULL,
+  is_vip TINYINT(1) DEFAULT 0,
+  balance DECIMAL(12,2) DEFAULT 0,
+  wechat VARCHAR(100) DEFAULT NULL,
+  master_id VARCHAR(50) DEFAULT NULL COMMENT '主客户ID(用于合并)',
+  roles LONGTEXT DEFAULT NULL,
+  old_id BIGINT DEFAULT NULL COMMENT '原T1002.P1',
+  updated_at DATETIME DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+  INDEX idx_name (name),
+  INDEX idx_phone (phone)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
+
+-- 4. 供应商
+CREATE TABLE IF NOT EXISTS a3s_suppliers (
+  id VARCHAR(50) PRIMARY KEY,
+  name VARCHAR(200) NOT NULL DEFAULT '',
+  category VARCHAR(100) DEFAULT NULL,
+  contact_person VARCHAR(100) DEFAULT NULL,
+  phone VARCHAR(50) DEFAULT NULL,
+  email VARCHAR(255) DEFAULT NULL,
+  website VARCHAR(255) DEFAULT NULL,
+  address TEXT DEFAULT NULL,
+  last_purchase_date VARCHAR(10) DEFAULT NULL,
+  remark TEXT DEFAULT NULL,
+  master_id VARCHAR(50) DEFAULT NULL,
+  roles LONGTEXT DEFAULT NULL,
+  updated_at DATETIME DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+  INDEX idx_name (name)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
+
+-- 5. 支出
+CREATE TABLE IF NOT EXISTS a3s_expenses (
+  id VARCHAR(50) PRIMARY KEY,
+  target VARCHAR(200) NOT NULL DEFAULT '',
+  detail TEXT NOT NULL,
+  amount DECIMAL(12,2) NOT NULL DEFAULT 0,
+  expense_type VARCHAR(100) NOT NULL DEFAULT '',
+  payment_method VARCHAR(20) NOT NULL DEFAULT '',
+  expense_date VARCHAR(10) NOT NULL DEFAULT '',
+  remark TEXT DEFAULT NULL,
+  office TINYINT(1) DEFAULT 0,
+  source_type VARCHAR(50) DEFAULT NULL,
+  source_id VARCHAR(50) DEFAULT NULL,
+  order_id VARCHAR(50) DEFAULT NULL,
+  voided TINYINT(1) DEFAULT 0,
+  old_id BIGINT DEFAULT NULL COMMENT '原T1200.P1',
+  created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+  updated_at DATETIME DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+  INDEX idx_expense_date (expense_date),
+  INDEX idx_expense_type (expense_type)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
+
+-- 6. 现金收支记录
+CREATE TABLE IF NOT EXISTS a3s_cash_entries (
+  id VARCHAR(50) PRIMARY KEY,
+  type VARCHAR(10) NOT NULL DEFAULT '收入',
+  amount DECIMAL(12,2) NOT NULL DEFAULT 0,
+  date VARCHAR(10) NOT NULL DEFAULT '',
+  note TEXT DEFAULT NULL,
+  method VARCHAR(20) DEFAULT NULL,
+  office TINYINT(1) DEFAULT 0,
+  order_number VARCHAR(50) DEFAULT NULL,
+  source_type VARCHAR(50) DEFAULT NULL,
+  source_id VARCHAR(50) DEFAULT NULL,
+  order_id VARCHAR(50) DEFAULT NULL,
+  voided TINYINT(1) DEFAULT 0,
+  old_id BIGINT DEFAULT NULL COMMENT '原T1200.P1',
+  created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+  updated_at DATETIME DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+  INDEX idx_date (date),
+  INDEX idx_type (type),
+  INDEX idx_method (method)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
+
+-- 7. 物料
+CREATE TABLE IF NOT EXISTS a3s_materials (
+  id VARCHAR(50) PRIMARY KEY,
+  code VARCHAR(100) NOT NULL DEFAULT '',
+  name VARCHAR(200) NOT NULL DEFAULT '',
+  specification TEXT DEFAULT NULL,
+  size VARCHAR(100) DEFAULT NULL,
+  unit VARCHAR(20) NOT NULL DEFAULT '个',
+  stock_quantity DECIMAL(12,2) DEFAULT 0,
+  min_stock DECIMAL(12,2) DEFAULT 0,
+  factory_price_rmb DECIMAL(12,2) DEFAULT 0,
+  usd_cost DECIMAL(12,2) DEFAULT 0,
+  sale_price_usd DECIMAL(12,2) DEFAULT 0,
+  vip_sale_price_usd DECIMAL(12,2) DEFAULT NULL,
+  weight DECIMAL(12,4) DEFAULT NULL,
+  purchase_price DECIMAL(12,2) DEFAULT 0,
+  supplier VARCHAR(200) DEFAULT NULL,
+  supplier_id VARCHAR(50) DEFAULT NULL,
+  image TEXT DEFAULT NULL,
+  last_stock_date VARCHAR(10) DEFAULT NULL,
+  last_purchase_date VARCHAR(10) DEFAULT NULL,
+  remark TEXT DEFAULT NULL,
+  color VARCHAR(50) DEFAULT NULL,
+  material VARCHAR(100) DEFAULT NULL,
+  other TEXT DEFAULT NULL,
+  category VARCHAR(100) DEFAULT NULL,
+  old_id BIGINT DEFAULT NULL COMMENT '原T1001.P1',
+  created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+  updated_at DATETIME DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+  INDEX idx_name (name),
+  INDEX idx_code (code),
+  INDEX idx_category (category)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
+
+-- 8. 采购记录
+CREATE TABLE IF NOT EXISTS a3s_purchases (
+  id VARCHAR(50) PRIMARY KEY,
+  supplier VARCHAR(200) NOT NULL DEFAULT '',
+  supplier_id VARCHAR(50) DEFAULT NULL,
+  item_name VARCHAR(200) NOT NULL DEFAULT '',
+  quantity DECIMAL(12,2) NOT NULL DEFAULT 0,
+  unit VARCHAR(20) NOT NULL DEFAULT '个',
+  unit_price DECIMAL(12,2) NOT NULL DEFAULT 0,
+  total_amount DECIMAL(12,2) NOT NULL DEFAULT 0,
+  purchase_date VARCHAR(10) NOT NULL DEFAULT '',
+  status VARCHAR(20) NOT NULL DEFAULT '待收货',
+  expense_id VARCHAR(50) DEFAULT NULL,
+  created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+  updated_at DATETIME DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+  INDEX idx_purchase_date (purchase_date),
+  INDEX idx_supplier (supplier)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
+
+-- 9. 员工
+CREATE TABLE IF NOT EXISTS a3s_employees (
+  id VARCHAR(50) PRIMARY KEY,
+  code VARCHAR(50) DEFAULT NULL,
+  name VARCHAR(100) NOT NULL DEFAULT '',
+  position VARCHAR(100) DEFAULT NULL,
+  phone VARCHAR(50) DEFAULT NULL,
+  hire_date VARCHAR(10) DEFAULT NULL,
+  contract_end VARCHAR(10) DEFAULT NULL,
+  monthly_salary DECIMAL(12,2) DEFAULT 0,
+  hourly_rate DECIMAL(10,2) DEFAULT NULL,
+  workdays LONGTEXT DEFAULT NULL,
+  meal_allowance_eligible TINYINT(1) DEFAULT NULL,
+  ethnicity VARCHAR(50) DEFAULT NULL,
+  status VARCHAR(20) NOT NULL DEFAULT '在职',
+  old_id BIGINT DEFAULT NULL COMMENT '原T1003.P1',
+  created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+  updated_at DATETIME DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+  INDEX idx_name (name)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
+
+-- 10. 考勤
+CREATE TABLE IF NOT EXISTS a3s_attendances (
+  id VARCHAR(50) PRIMARY KEY,
+  date VARCHAR(10) NOT NULL DEFAULT '',
+  employee_id VARCHAR(50) DEFAULT NULL,
+  employee_name VARCHAR(100) NOT NULL DEFAULT '',
+  employee_code VARCHAR(50) DEFAULT NULL,
+  leave_minutes INT DEFAULT 0,
+  overtime_minutes INT DEFAULT 0,
+  worked_minutes INT DEFAULT 0,
+  meal_allowance TINYINT(1) DEFAULT 0,
+  generated_by VARCHAR(100) DEFAULT NULL,
+  note TEXT DEFAULT NULL,
+  created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+  updated_at DATETIME DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+  INDEX idx_date (date),
+  INDEX idx_employee (employee_name)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
+
+-- 11. 预约上门
+CREATE TABLE IF NOT EXISTS a3s_appointments (
+  id VARCHAR(50) PRIMARY KEY,
+  client_name VARCHAR(200) NOT NULL DEFAULT '',
+  client_id VARCHAR(50) DEFAULT NULL,
+  phone VARCHAR(50) DEFAULT NULL,
+  address TEXT DEFAULT NULL,
+  appointment_date VARCHAR(10) NOT NULL DEFAULT '',
+  appointment_time VARCHAR(50) DEFAULT NULL,
+  description TEXT DEFAULT NULL,
+  gcal_event_id VARCHAR(100) DEFAULT NULL,
+  old_id BIGINT DEFAULT NULL COMMENT '原T1114.P1',
+  created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+  updated_at DATETIME DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+  INDEX idx_appointment_date (appointment_date),
+  INDEX idx_client_name (client_name)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
+
+-- 12. 工资发放
+CREATE TABLE IF NOT EXISTS a3s_payrolls (
+  id VARCHAR(50) PRIMARY KEY,
+  month VARCHAR(7) NOT NULL DEFAULT '',
+  employee_id VARCHAR(50) DEFAULT NULL,
+  employee_name VARCHAR(100) NOT NULL DEFAULT '',
+  employee_code VARCHAR(50) DEFAULT NULL,
+  employee_ethnicity VARCHAR(50) DEFAULT NULL,
+  total_hours DECIMAL(10,2) DEFAULT NULL,
+  hourly_rate DECIMAL(10,2) DEFAULT NULL,
+  meal_allowance_total DECIMAL(10,2) DEFAULT 0,
+  base_salary DECIMAL(12,2) NOT NULL DEFAULT 0,
+  bonus DECIMAL(12,2) DEFAULT 0,
+  deduction DECIMAL(12,2) DEFAULT 0,
+  net_salary DECIMAL(12,2) NOT NULL DEFAULT 0,
+  payment_status VARCHAR(20) NOT NULL DEFAULT '未支付',
+  paid_at VARCHAR(20) DEFAULT NULL,
+  expense_id VARCHAR(50) DEFAULT NULL,
+  created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+  updated_at DATETIME DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+  INDEX idx_month (month),
+  INDEX idx_employee (employee_name)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
+
+-- 13. 报价
+CREATE TABLE IF NOT EXISTS a3s_quotes (
+  id VARCHAR(50) PRIMARY KEY,
+  client_name VARCHAR(200) NOT NULL DEFAULT '',
+  client_id VARCHAR(50) DEFAULT NULL,
+  title VARCHAR(200) NOT NULL DEFAULT '',
+  amount DECIMAL(12,2) NOT NULL DEFAULT 0,
+  created_at VARCHAR(20) NOT NULL DEFAULT '',
+  valid_until VARCHAR(20) NOT NULL DEFAULT '',
+  status VARCHAR(20) NOT NULL DEFAULT '待确认',
+  updated_at DATETIME DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+  INDEX idx_client_name (client_name)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
+
+-- 14. 作品展示
+CREATE TABLE IF NOT EXISTS a3s_showcases (
+  id VARCHAR(50) PRIMARY KEY,
+  name VARCHAR(200) NOT NULL DEFAULT '',
+  category VARCHAR(100) NOT NULL DEFAULT '',
+  image_count INT DEFAULT 0,
+  description TEXT DEFAULT NULL,
+  created_at VARCHAR(20) NOT NULL DEFAULT '',
+  status VARCHAR(20) NOT NULL DEFAULT '展示中',
+  updated_at DATETIME DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
+
+-- 15. 打印存档
+CREATE TABLE IF NOT EXISTS a3s_print_archives (
+  id VARCHAR(50) PRIMARY KEY,
+  order_number VARCHAR(50) NOT NULL DEFAULT '',
+  client_name VARCHAR(200) NOT NULL DEFAULT '',
+  order_type VARCHAR(20) NOT NULL DEFAULT '',
+  print_type VARCHAR(20) NOT NULL DEFAULT 'invoice',
+  title VARCHAR(200) NOT NULL DEFAULT '',
+  created_at VARCHAR(20) NOT NULL DEFAULT '',
+  created_by VARCHAR(100) DEFAULT NULL,
+  amount DECIMAL(12,2) DEFAULT NULL,
+  file_name VARCHAR(255) NOT NULL DEFAULT '',
+  html LONGTEXT NOT NULL,
+  summary TEXT DEFAULT NULL,
+  updated_at DATETIME DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+  INDEX idx_order_number (order_number)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
+
+-- 16. VIP价格
+CREATE TABLE IF NOT EXISTS a3s_vip_prices (
+  id INT AUTO_INCREMENT PRIMARY KEY,
+  client_name VARCHAR(200) NOT NULL DEFAULT '',
+  material_name VARCHAR(200) NOT NULL DEFAULT '',
+  price DECIMAL(12,2) NOT NULL DEFAULT 0,
+  created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+  updated_at DATETIME DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+  INDEX idx_client_name (client_name)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;

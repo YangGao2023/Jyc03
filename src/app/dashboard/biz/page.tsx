@@ -6533,10 +6533,11 @@ export default function DashboardBizPage() {
     materials,
     employees,
     attendances,
+    appointments,
     payrolls,
     printArchives,
     settings,
-  }), [storeRevision, orders, clients, suppliers, expenses, cashEntries, materials, employees, attendances, payrolls, printArchives, settings]);
+  }), [storeRevision, orders, clients, suppliers, expenses, cashEntries, materials, employees, attendances, appointments, payrolls, printArchives, settings]);
   const snapshotJson = useMemo(() => serializeBizSnapshot(snapshot), [snapshot]);
   const isDirty = isHydrated && snapshotJson !== savedSnapshotJson;
 
@@ -6580,6 +6581,7 @@ export default function DashboardBizPage() {
         setMaterials(hydratedSnapshot.materials);
         setEmployees(hydratedSnapshot.employees);
         setAttendances(hydratedSnapshot.attendances);
+        setAppointments(hydratedSnapshot.appointments ?? []);
         setPayrolls(hydratedSnapshot.payrolls);
         setPrintArchives(hydratedSnapshot.printArchives);
         setSettings(hydratedSnapshot.settings);
@@ -6604,6 +6606,7 @@ export default function DashboardBizPage() {
             setMaterials(backupSnapshot.materials);
             setEmployees(backupSnapshot.employees);
             setAttendances(backupSnapshot.attendances);
+            setAppointments(backupSnapshot.appointments ?? []);
             setPayrolls(backupSnapshot.payrolls);
             setPrintArchives(backupSnapshot.printArchives);
             setSettings(backupSnapshot.settings);

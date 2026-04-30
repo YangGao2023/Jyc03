@@ -184,6 +184,7 @@ export type MeasurementAppointmentRecord = {
   phone?: string;
   address?: string;
   appointment_date: string;
+  appointment_time?: string;
   description?: string;
   gcal_event_id?: string;
 };

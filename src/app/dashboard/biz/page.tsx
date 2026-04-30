@@ -3811,7 +3811,7 @@ function FinanceSection({ orders, setOrders, expenses, setExpenses, cashEntries,
 // ─── Clients ─────────────────────────────────────────────────────────────────
 
 type ContactSub = "clients" | "suppliers";
-type ClientDetailTab = "overview" | "orders" | "appointments" | "activity";
+type ClientDetailTab = "overview" | "orders" | "payments" | "appointments" | "activity";
 
 function ClientsSection({ clients, setClients, suppliers, setSuppliers, orders, setOrders, appointments, setAppointments, setCashEntries, setExpenses, materials, setMaterials, settings, onAutoSave }: { clients: ContactRecord[]; setClients: React.Dispatch<React.SetStateAction<ContactRecord[]>>; suppliers: SupplierRecord[]; setSuppliers: React.Dispatch<React.SetStateAction<SupplierRecord[]>>; orders: BizOrder[]; setOrders: React.Dispatch<React.SetStateAction<BizOrder[]>>; appointments: MeasurementAppointmentRecord[]; setAppointments: React.Dispatch<React.SetStateAction<MeasurementAppointmentRecord[]>>; setCashEntries: React.Dispatch<React.SetStateAction<CashEntry[]>>; setExpenses: React.Dispatch<React.SetStateAction<ExpenseRecord[]>>; materials: MaterialRecord[]; setMaterials: React.Dispatch<React.SetStateAction<MaterialRecord[]>>; settings: BizSettings; onAutoSave?: () => void; }) {
   const [sub, setSub] = useState<ContactSub>("clients");
@@ -3846,7 +3846,7 @@ function ClientsSection({ clients, setClients, suppliers, setSuppliers, orders, 
   const [confirmingDeleteAppointmentId, setConfirmingDeleteAppointmentId] = useState<string | null>(null);
   const [showAppointmentModal, setShowAppointmentModal] = useState(false);
   const [editingAppointment, setEditingAppointment] = useState<MeasurementAppointmentRecord | null>(null);
-  const [appointmentDraft, setAppointmentDraft] = useState({ appointment_date: new Date().toISOString().slice(0, 10), address: '', description: '' });
+  const [appointmentDraft, setAppointmentDraft] = useState({ appointment_date: new Date().toISOString().slice(0, 10), appointment_time: '', phone: '', address: '', description: '' });
   const [selectedClientId, setSelectedClientId] = useState<string>(clients[0]?.id ?? "");
   const [quickCollectDraft, setQuickCollectDraft] = useState({ orderNumber: "", amount: "", date: today, method: OFFICE_PAYMENT_METHOD, note: "", office: false });
 
@@ -4262,6 +4262,35 @@ function ClientsSection({ clients, setClients, suppliers, setSuppliers, orders, 
           <div className="grid gap-3 xl:grid-cols-[320px_minmax(0,1fr)] xl:items-stretch">
             <PanelCard title="客户列表">
               <div className="space-y-3">
+                {selectedClient ? (
+                  <div className="rounded-xl border border-sky-200 bg-sky-50 p-3">
+                    <div className="flex items-start justify-between gap-2 mb-2">
+                      <div className="min-w-0 flex-1">
+                        <div className="flex items-center gap-1.5 flex-wrap">
+                          <span className="text-sm font-semibold text-slate-800">{selectedClient.name}</span>
+                          {selectedClient.is_vip ? <span className="rounded-full bg-sky-100 px-1.5 py-0.5 text-[10px] font-semibold text-sky-700">VIP</span> : null}
+                          {clientBalance > 0 ? <span className="rounded-full bg-amber-50 px-1.5 py-0.5 text-[10px] font-semibold text-amber-700">待跟进</span> : null}
+                        </div>
+                        <div className="mt-1 grid grid-cols-1 gap-x-4 gap-y-0.5 text-[11px] text-slate-600">
+                          <span>联系人 {selectedClient.contact ?? "-"} · 电话 {selectedClient.phone ?? "-"}</span>
+                          <span>微信/邮箱 {selectedClient.wechat ?? selectedClient.email ?? "-"} · 地址 {selectedClient.address ?? "-"}</span>
+                        </div>
+                      </div>
+                      <div className="flex flex-wrap gap-1 shrink-0">
+                        <ActionBtn onClick={() => toggleVip(selectedClient.id)}>{selectedClient.is_vip ? "取消VIP" : "设为VIP"}</ActionBtn>
+                        <ActionBtn onClick={() => openEditClient(selectedClient)}>编辑</ActionBtn>
+                        {confirmingClientId === selectedClient.id ? (
+                          <>
+                            <button onClick={() => deleteClient(selectedClient)} className="rounded-lg border border-red-500 bg-red-500 px-2 py-1 text-[11px] font-semibold text-white hover:bg-red-600 transition-colors">确认</button>
+                            <button onClick={() => setConfirmingClientId(null)} className="rounded-lg border border-slate-200 px-2 py-1 text-[11px] text-slate-700 hover:border-slate-300 transition-colors">取消</button>
+                          </>
+                        ) : (
+                          <ActionBtn tone="danger" onClick={() => setConfirmingClientId(selectedClient.id)}>删除</ActionBtn>
+                        )}
+                      </div>
+                    </div>
+                  </div>
+                ) : null}
                 <div className="relative">
                   <span className="absolute left-3 top-1/2 -translate-y-1/2 text-xs text-slate-700">⌕</span>
                   <input value={clientSearch} onChange={(e) => setClientSearch(e.target.value)} placeholder="搜索客户 / 电话 / 地址" className="h-9 w-full rounded-lg border border-slate-300 bg-white pl-8 pr-3 text-xs text-slate-700" />
@@ -4303,36 +4332,9 @@ function ClientsSection({ clients, setClients, suppliers, setSuppliers, orders, 
               </div>
             </PanelCard>
 
-            <PanelCard title={selectedClient ? `客户详情 · ${selectedClient.name}` : "客户详情"} note="客户相关的业务状态、应收款、预约和联系资料,都直接在这里联动查看。">
+            <PanelCard title={selectedClient ? `客户详情 · ${selectedClient.name}` : "客户详情"}>
               {selectedClient ? (
                 <div className="flex flex-col gap-4 xl:h-[calc(100vh-22rem)]">
-                  <div className="flex flex-wrap items-start justify-between gap-4 rounded-xl border border-slate-200 bg-slate-50 p-4">
-                    <div className="flex-1 min-w-0">
-                      <div className="flex items-center gap-2 mb-3">
-                        <h3 className="text-base font-semibold text-slate-800">{selectedClient.name}</h3>
-                        {selectedClient.is_vip ? <span className="rounded-full bg-sky-100 px-2 py-0.5 text-[11px] font-semibold text-sky-700">VIP客户</span> : null}
-                        {clientBalance > 0 ? <span className="rounded-full bg-amber-50 px-2 py-0.5 text-[11px] font-semibold text-amber-700">待跟进</span> : null}
-                      </div>
-                      <div className="grid grid-cols-2 gap-x-6 gap-y-1.5 text-xs text-slate-600">
-                        <span>联系人 {selectedClient.contact ?? "-"}</span>
-                        <span>电话 {selectedClient.phone ?? "-"}</span>
-                        <span>微信/邮箱 {selectedClient.wechat ?? selectedClient.email ?? "未填写"}</span>
-                        <span>地址 {selectedClient.address ?? "未填写"}</span>
-                      </div>
-                    </div>
-                    <div className="flex flex-wrap gap-2 self-start">
-                      <ActionBtn onClick={() => toggleVip(selectedClient.id)}>{selectedClient.is_vip ? "取消VIP" : "设为VIP"}</ActionBtn>
-                      <ActionBtn onClick={() => openEditClient(selectedClient)}>编辑客户</ActionBtn>
-                      {confirmingClientId === selectedClient.id ? (
-                        <>
-                          <button onClick={() => deleteClient(selectedClient)} className="rounded-lg border border-red-500 bg-red-500 px-3 py-1.5 text-xs font-semibold text-white hover:bg-red-600 transition-colors">确认删除</button>
-                          <button onClick={() => setConfirmingClientId(null)} className="rounded-lg border border-slate-200 px-3 py-1.5 text-xs text-slate-700 hover:border-slate-300 transition-colors">取消</button>
-                        </>
-                      ) : (
-                        <ActionBtn tone="danger" onClick={() => setConfirmingClientId(selectedClient.id)}>删除客户</ActionBtn>
-                      )}
-                    </div>
-                  </div>
 
                   <StatStrip
                     items={[
@@ -4346,8 +4348,9 @@ function ClientsSection({ clients, setClients, suppliers, setSuppliers, orders, 
                   <SegmentedControl
                     options={[
                       { key: "overview", label: "总览" },
-                      { key: "orders", label: "订单与收款" },
-                      { key: "appointments", label: "量衣预约" },
+                      { key: "orders", label: "订单" },
+                      { key: "payments", label: "最近收款" },
+                      { key: "appointments", label: "量尺寸" },
                       { key: "activity", label: "业务动态" },
                     ]}
                     value={clientDetailTab}
@@ -4391,13 +4394,13 @@ function ClientsSection({ clients, setClients, suppliers, setSuppliers, orders, 
                     )}
 
                     {clientDetailTab === "orders" ? (
-                      <div className="grid gap-4 xl:grid-cols-[1.15fr_0.85fr]">
+                      <div className="space-y-4">
                     <div className="space-y-4">
                       <div className="rounded-xl border border-gray-200 bg-gray-50 p-4">
                         <div className="mb-3 flex items-center justify-between">
                           <div>
                             <p className="text-xs font-semibold text-slate-700">快速收款</p>
-                            <p className="text-[11px] text-slate-700">选中未结清订单,录一次收款,就会立即同步客户余额。</p>
+                            <p className="text-[11px] text-slate-700">选中未结清订单，录入收款金额</p>
                           </div>
                           <span className={`rounded-full px-2 py-0.5 text-[11px] font-semibold ${receivableOrders.length ? "bg-amber-50 text-amber-700" : "bg-emerald-50 text-emerald-700"}`}>
                             {receivableOrders.length ? `${receivableOrders.length} 个未结清` : "全部结清"}
@@ -4432,11 +4435,10 @@ function ClientsSection({ clients, setClients, suppliers, setSuppliers, orders, 
                             </div>
                             <div className="grid gap-2 lg:grid-cols-[1fr_auto]">
                               <div className="space-y-2">
-                                <input type="text" value={quickCollectDraft.note} onChange={(e) => setQuickCollectDraft((prev) => ({ ...prev, note: e.target.value }))} className="h-9 w-full rounded-lg border border-slate-300 bg-white px-3 text-xs text-slate-700" placeholder="备注,比如送货时收尾款" />
+                                <input type="text" value={quickCollectDraft.note} onChange={(e) => setQuickCollectDraft((prev) => ({ ...prev, note: e.target.value }))} className="h-9 w-full rounded-lg border border-slate-300 bg-white px-3 text-xs text-slate-700" placeholder="备注" />
                                 <label className="flex items-center gap-2 text-xs text-slate-600"><input type="checkbox" checked={quickCollectDraft.office} onChange={(e) => setQuickCollectDraft((prev) => ({ ...prev, office: e.target.checked, method: e.target.checked ? OFFICE_PAYMENT_METHOD : prev.method }))} /> 进入办公室</label>
                               </div>
                               <div className="flex flex-wrap gap-2">
-                                <ActionBtn onClick={() => applyQuickCollectPreset("half")}>填一半</ActionBtn>
                                 <ActionBtn onClick={() => applyQuickCollectPreset("balance")} tone="success">填全额余款</ActionBtn>
                                 <ActionBtn onClick={handleQuickCollect} tone="primary">确认收款</ActionBtn>
                               </div>
@@ -4458,7 +4460,7 @@ function ClientsSection({ clients, setClients, suppliers, setSuppliers, orders, 
                                   </div>
                                   <div className="text-right">
                                     <p className="font-semibold text-amber-600">{formatMoney(item.balance ?? 0)}</p>
-                                    <p className="mt-1 text-[11px] text-slate-700">点一下填满全部余款</p>
+                                    <p className="mt-1 text-[11px] text-slate-700">点一下自动填入余款</p>
                                   </div>
                                 </button>
                               ))}
@@ -4544,7 +4546,11 @@ function ClientsSection({ clients, setClients, suppliers, setSuppliers, orders, 
                         ) : <div className="rounded-xl border border-dashed border-slate-200 py-10 text-center text-xs text-slate-700">这个客户还没有关联订单</div>}
                       </div>
                     </div>
+                  </div>
+                    ) : null}
 
+                    {clientDetailTab === "payments" ? (
+                      <div className="space-y-4">
                     <div className="rounded-xl border border-gray-200 bg-gray-50 p-3">
                       <div className="mb-3 flex items-center justify-between">
                         <p className="text-xs font-semibold text-slate-700">最近收款</p>
@@ -4580,8 +4586,8 @@ function ClientsSection({ clients, setClients, suppliers, setSuppliers, orders, 
                     {clientDetailTab === "appointments" ? (
                       <div className="space-y-4">
                         <div className="flex items-center justify-between">
-                          <p className="text-xs font-semibold text-slate-700">量衣预约</p>
-                          <button onClick={() => { setEditingAppointment(null); setAppointmentDraft({ appointment_date: new Date().toISOString().slice(0, 10), address: '', description: '' }); setShowAppointmentModal(true); }} className="rounded-md border border-slate-300 bg-white px-2 py-1 text-[11px] font-semibold text-slate-600 hover:border-slate-400 hover:text-slate-700 transition-colors">+ 新建预约</button>
+                          <p className="text-xs font-semibold text-slate-700">量尺寸</p>
+                          <button onClick={() => { setEditingAppointment(null); setAppointmentDraft({ appointment_date: new Date().toISOString().slice(0, 10), appointment_time: '', phone: selectedClient?.phone ?? '', address: selectedClient?.address ?? '', description: '' }); setShowAppointmentModal(true); }} className="rounded-md border border-slate-300 bg-white px-2 py-1 text-[11px] font-semibold text-slate-600 hover:border-slate-400 hover:text-slate-700 transition-colors">+ 新建预约</button>
                         </div>
                         {selectedClientAppointments.length ? (
                           <div className="overflow-x-auto rounded-xl border border-gray-200 bg-gray-50">
@@ -4589,6 +4595,8 @@ function ClientsSection({ clients, setClients, suppliers, setSuppliers, orders, 
                               <thead>
                                 <tr className="border-b border-gray-200 bg-gray-50">
                                   <th className="px-3 py-2 font-semibold text-slate-600">日期</th>
+                                  <th className="px-3 py-2 font-semibold text-slate-600">时间</th>
+                                  <th className="px-3 py-2 font-semibold text-slate-600">电话</th>
                                   <th className="px-3 py-2 font-semibold text-slate-600">地址</th>
                                   <th className="px-3 py-2 font-semibold text-slate-600">描述</th>
                                   <th className="px-3 py-2 font-semibold text-slate-600">操作</th>
@@ -4598,11 +4606,13 @@ function ClientsSection({ clients, setClients, suppliers, setSuppliers, orders, 
                                 {pagedClientAppointments.map((item) => (
                                   <tr key={item.id} className="border-b border-gray-200 last:border-b-0">
                                     <td className="px-3 py-2 text-slate-700">{item.appointment_date}</td>
+                                    <td className="px-3 py-2 text-slate-600">{item.appointment_time ?? "-"}</td>
+                                    <td className="px-3 py-2 text-slate-600">{item.phone ?? "-"}</td>
                                     <td className="px-3 py-2 text-slate-600">{item.address ?? "-"}</td>
                                     <td className="px-3 py-2 text-slate-700">{item.description ?? "-"}</td>
                                     <td className="px-3 py-2">
                                       <div className="flex flex-wrap items-center gap-1">
-                                        <button onClick={() => { setEditingAppointment(item); setAppointmentDraft({ appointment_date: item.appointment_date, address: item.address ?? '', description: item.description ?? '' }); setShowAppointmentModal(true); }} className="rounded-md border border-gray-200 bg-gray-50 px-2 py-1 text-[11px] font-semibold text-slate-600 hover:border-slate-400 transition-colors">编辑</button>
+                                        <button onClick={() => { setEditingAppointment(item); setAppointmentDraft({ appointment_date: item.appointment_date, appointment_time: item.appointment_time ?? '', phone: item.phone ?? '', address: item.address ?? '', description: item.description ?? '' }); setShowAppointmentModal(true); }} className="rounded-md border border-gray-200 bg-gray-50 px-2 py-1 text-[11px] font-semibold text-slate-600 hover:border-slate-400 transition-colors">编辑</button>
                                         {confirmingDeleteAppointmentId === item.id ? (
                                           <>
                                             <button onClick={() => { setAppointments((prev) => prev.filter((a) => a.id !== item.id)); setConfirmingDeleteAppointmentId(null); }} className="rounded-md border border-red-400 bg-red-50 px-2 py-1 text-[11px] font-semibold text-red-700 hover:bg-red-100">确认</button>
@@ -4627,7 +4637,7 @@ function ClientsSection({ clients, setClients, suppliers, setSuppliers, orders, 
                               </div>
                             )}
                           </div>
-                        ) : <div className="rounded-xl border border-dashed border-slate-200 py-10 text-center text-xs text-slate-700">这个客户还没有量衣预约记录</div>}
+                        ) : <div className="rounded-xl border border-dashed border-slate-200 py-10 text-center text-xs text-slate-700">这个客户还没有量尺寸记录</div>}
                         {showAppointmentModal && (
                           <div className="fixed inset-0 z-50 flex items-center justify-center bg-slate-950/45 px-4">
                             <div className="w-full max-w-md rounded-2xl border border-gray-200 bg-gray-50 p-5 shadow-2xl">
@@ -4641,8 +4651,16 @@ function ClientsSection({ clients, setClients, suppliers, setSuppliers, orders, 
                                   <input type="date" value={appointmentDraft.appointment_date} onChange={(e) => setAppointmentDraft((d) => ({ ...d, appointment_date: e.target.value }))} className="h-9 w-full rounded-lg border border-slate-300 bg-white px-3 text-xs text-slate-700" />
                                 </div>
                                 <div>
+                                  <label className="mb-1 block text-[11px] font-semibold text-slate-700">时间</label>
+                                  <input type="time" value={appointmentDraft.appointment_time} onChange={(e) => setAppointmentDraft((d) => ({ ...d, appointment_time: e.target.value }))} className="h-9 w-full rounded-lg border border-slate-300 bg-white px-3 text-xs text-slate-700" />
+                                </div>
+                                <div>
+                                  <label className="mb-1 block text-[11px] font-semibold text-slate-700">电话</label>
+                                  <input type="text" value={appointmentDraft.phone} onChange={(e) => setAppointmentDraft((d) => ({ ...d, phone: e.target.value }))} className="h-9 w-full rounded-lg border border-slate-300 bg-white px-3 text-xs text-slate-700" placeholder="客户电话" />
+                                </div>
+                                <div>
                                   <label className="mb-1 block text-[11px] font-semibold text-slate-700">地址</label>
-                                  <input type="text" value={appointmentDraft.address} onChange={(e) => setAppointmentDraft((d) => ({ ...d, address: e.target.value }))} className="h-9 w-full rounded-lg border border-slate-300 bg-white px-3 text-xs text-slate-700" placeholder="量衣地址" />
+                                  <input type="text" value={appointmentDraft.address} onChange={(e) => setAppointmentDraft((d) => ({ ...d, address: e.target.value }))} className="h-9 w-full rounded-lg border border-slate-300 bg-white px-3 text-xs text-slate-700" placeholder="量尺地址" />
                                 </div>
                                 <div>
                                   <label className="mb-1 block text-[11px] font-semibold text-slate-700">描述</label>
@@ -4654,10 +4672,10 @@ function ClientsSection({ clients, setClients, suppliers, setSuppliers, orders, 
                                 <ActionBtn tone="primary" onClick={() => {
                                   if (!appointmentDraft.appointment_date) return;
                                   if (editingAppointment) {
-                                    setAppointments((prev) => prev.map((a) => a.id === editingAppointment.id ? { ...a, appointment_date: appointmentDraft.appointment_date, address: appointmentDraft.address || undefined, description: appointmentDraft.description || undefined } : a));
+                                    setAppointments((prev) => prev.map((a) => a.id === editingAppointment.id ? { ...a, appointment_date: appointmentDraft.appointment_date, appointment_time: appointmentDraft.appointment_time || undefined, phone: appointmentDraft.phone || undefined, address: appointmentDraft.address || undefined, description: appointmentDraft.description || undefined } : a));
                                   } else {
                                     const newId = nextSequentialId(appointments.map((a) => a.id), "APT");
-                                    setAppointments((prev) => [{ id: newId, client_name: selectedClient?.name ?? "", client_id: selectedClient?.id, phone: selectedClient?.phone ?? undefined, appointment_date: appointmentDraft.appointment_date, address: appointmentDraft.address || undefined, description: appointmentDraft.description || undefined }, ...prev]);
+                                    setAppointments((prev) => [{ id: newId, client_name: selectedClient?.name ?? "", client_id: selectedClient?.id, phone: appointmentDraft.phone || selectedClient?.phone || undefined, appointment_date: appointmentDraft.appointment_date, appointment_time: appointmentDraft.appointment_time || undefined, address: appointmentDraft.address || undefined, description: appointmentDraft.description || undefined }, ...prev]);
                                   }
                                   setShowAppointmentModal(false);
                                   setEditingAppointment(null);

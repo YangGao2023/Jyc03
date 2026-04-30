@@ -1448,6 +1448,46 @@ function OrderDetailView({
   });
 
   const [materialRows, setMaterialRows] = useState<MaterialRow[]>(order.material_rows ?? []);
+  const [materialSearch, setMaterialSearch] = useState("");
+  const [materialCategoryFilter, setMaterialCategoryFilter] = useState("");
+  const [materialSupplierFilter, setMaterialSupplierFilter] = useState("");
+  const [noMaterial, setNoMaterial] = useState(!order.material_rows?.length);
+
+  const isVip = false; // VIP status would need clients list — not available here; falls back to per-client VIP prices only
+
+  const materialCategoryOptions = [...new Set(materials.map((m) => m.category).filter(Boolean))].sort() as string[];
+  const materialSupplierOptions = [...new Set(materials.map((m) => m.supplier).filter(Boolean))].sort() as string[];
+
+  const filteredMaterials = materials.filter((m) => {
+    if (materialSearch && !m.name.toLowerCase().includes(materialSearch.toLowerCase()) && !(m.code && m.code.toLowerCase().includes(materialSearch.toLowerCase()))) return false;
+    if (materialCategoryFilter && m.category !== materialCategoryFilter) return false;
+    if (materialSupplierFilter && m.supplier !== materialSupplierFilter) return false;
+    return true;
+  });
+
+  const materialTotal = materialRows.reduce((sum, r) => sum + r.qty * r.unit_price * (r.is_return ? -1 : 1), 0);
+
+  function getVipPrice(clientName: string, materialName: string): number | null {
+    try {
+      const allPrices: VipPriceRecord[] = settings.vip_prices ? JSON.parse(settings.vip_prices) : [];
+      const match = allPrices.find((p) => p.client_name === clientName && p.material_name === materialName);
+      return match ? match.price : null;
+    } catch { return null; }
+  }
+
+  function addMaterialToOrder(mat: MaterialRecord) {
+    const clientVipPrice = getVipPrice(draft.client_name.trim(), mat.name);
+    const price = clientVipPrice ?? (mat.sale_price_usd ?? 0);
+    setMaterialRows((prev) => [...prev, { name: mat.name, spec: mat.specification || undefined, qty: 1, unit: mat.unit, unit_price: price, image: mat.image || undefined }]);
+  }
+
+  function updateSelectedMaterial(i: number, key: keyof MaterialRow, val: string | number | boolean) {
+    setMaterialRows((prev) => prev.map((r, idx) => (idx === i ? { ...r, [key]: val } : r)));
+  }
+
+  function removeSelectedMaterial(i: number) {
+    setMaterialRows((prev) => prev.filter((_, idx) => idx !== i));
+  }
 
   const [paymentMode, setPaymentMode] = useState<"payment" | "refund">("payment");
   const [showAddPayment, setShowAddPayment] = useState(false);
@@ -1479,21 +1519,24 @@ function OrderDetailView({
   }
 
   function buildUpdated(): BizOrder {
-    const totalAfterTax = calcTotalAfterTax(draft.total_price, draft.tax_rate, draft.discount);
+    // For wholesale: use material total if materials selected, else draft.total_price (no-material mode)
+    const wholesalePrice = !isCustom && !noMaterial ? materialTotal : draft.total_price;
+    const effectivePrice = !isCustom ? wholesalePrice : draft.total_price;
+    const totalAfterTax = calcTotalAfterTax(effectivePrice, draft.tax_rate, draft.discount);
     return {
       ...order,
       client_name: draft.client_name,
       phone: draft.phone || undefined,
       address: draft.address || undefined,
       preview_image: isCustom ? draft.preview_image || undefined : undefined,
-      total_price: draft.total_price,
+      total_price: effectivePrice,
       tax_rate: draft.tax_rate || undefined,
       discount: draft.discount || undefined,
       total_after_tax: totalAfterTax,
-      description: draft.description || undefined,
+      description: isCustom ? draft.description || undefined : undefined,
       install_info: isCustom ? draft.install_info || undefined : undefined,
-      remarks: draft.remarks || undefined,
-      material_rows: isCustom ? undefined : materialRows,
+      remarks: isCustom ? draft.remarks || undefined : undefined,
+      material_rows: isCustom ? undefined : (noMaterial ? undefined : materialRows),
     };
   }
 
@@ -1517,20 +1560,21 @@ function OrderDetailView({
   function handleAddPayment() {
     const amount = Number(newPayment.amount) || 0;
     if (amount <= 0) return;
+    const prevAmountPaid = (order.payment_history ?? []).filter((r) => r.type === "payment").reduce((s, r) => s + r.amount, 0) - (order.payment_history ?? []).filter((r) => r.type === "refund").reduce((s, r) => s + r.amount, 0);
+    const totalAfterTax = calcTotalAfterTax(draft.total_price, draft.tax_rate, draft.discount);
+    const nextAmountPaid = prevAmountPaid + (paymentMode === "payment" ? amount : -amount);
+    const nextBalance = Math.max(0, totalAfterTax - nextAmountPaid);
     const record: PaymentRecord = {
       date: newPayment.date,
       amount,
       method: newPayment.office ? OFFICE_PAYMENT_METHOD : newPayment.method,
-      note: newPayment.note || undefined,
+      note: newPayment.note || (paymentMode === "payment" ? (nextBalance === 0 ? `${order.order_type}全款付清` : `${order.order_type}收款`) : `${order.order_type}退款`) || undefined,
       type: paymentMode,
       office: newPayment.office,
     };
     const history = [...(order.payment_history ?? []), record];
-    const amountPaid =
-      history.filter((r) => r.type === "payment").reduce((s, r) => s + r.amount, 0) -
-      history.filter((r) => r.type === "refund").reduce((s, r) => s + r.amount, 0);
-    const totalAfterTax = calcTotalAfterTax(draft.total_price, draft.tax_rate, draft.discount);
-    const balance = Math.max(0, totalAfterTax - amountPaid);
+    const balance = nextBalance;
+    const amountPaid = nextAmountPaid;
     const status = deriveStatus(totalAfterTax, amountPaid, order.status ?? "下单");
     onSave({
       ...buildUpdated(),
@@ -1657,76 +1701,127 @@ function OrderDetailView({
           </div>
         </div>
 
-        {/* Description section */}
-        <div className="rounded-xl border border-gray-200 bg-gray-50 p-3">
-          <h3 className="mb-3 border-b border-gray-200 pb-2 text-xs font-semibold uppercase tracking-wider text-slate-700">
-            工程说明
-          </h3>
-          <div className={isCustom ? "flex gap-4" : ""}>
-            <div className="flex-1 space-y-3">
-              <EditField
-                label="说明"
-                value={draft.description}
-                onChange={(v) => update("description", v)}
-                multiline
-              />
-              {isCustom && (
-                <EditField
-                  label="安装说明"
-                  value={draft.install_info}
-                  onChange={(v) => update("install_info", v)}
-                  multiline
-                />
-              )}
-              <EditField
-                label="备注"
-                value={draft.remarks}
-                onChange={(v) => update("remarks", v)}
-                multiline
-              />
-            </div>
-
-            {/* 款式图片 - custom orders only */}
-            {isCustom && (
+        {/* Description or Material section - depends on order type */}
+        {isCustom ? (
+          <div className="rounded-xl border border-gray-200 bg-gray-50 p-3">
+            <h3 className="mb-3 border-b border-gray-200 pb-2 text-xs font-semibold uppercase tracking-wider text-slate-700">
+              工程说明
+            </h3>
+            <div className="flex gap-4">
+              <div className="flex-1 space-y-3">
+                <EditField label="说明" value={draft.description} onChange={(v) => update("description", v)} multiline />
+                <EditField label="安装说明" value={draft.install_info} onChange={(v) => update("install_info", v)} multiline />
+                <EditField label="备注" value={draft.remarks} onChange={(v) => update("remarks", v)} multiline />
+              </div>
               <div className="shrink-0">
                 <p className="mb-1 text-[11px] font-semibold text-slate-700">款式图片</p>
                 <label className="group relative block h-[160px] w-[120px] cursor-pointer overflow-hidden rounded-lg border border-slate-200 bg-slate-50">
                   {draft.preview_image ? (
-                    <img
-                      src={draft.preview_image}
-                      alt="款式图片"
-                      className="h-full w-full object-cover"
-                    />
+                    <img src={draft.preview_image} alt="款式图片" className="h-full w-full object-cover" />
                   ) : (
-                    <div className="flex h-full w-full items-center justify-center text-[11px] font-medium text-slate-700 text-center px-2">
-                      暂无图片
-                    </div>
+                    <div className="flex h-full w-full items-center justify-center text-[11px] font-medium text-slate-700 text-center px-2">暂无图片</div>
                   )}
                   <div className="absolute inset-0 flex items-center justify-center bg-black/40 opacity-0 transition-opacity group-hover:opacity-100">
-                    <span className="text-[11px] font-semibold text-slate-700 text-center px-2 leading-snug">
-                      {draft.preview_image ? "点击替换" : "点击上传"}
-                    </span>
+                    <span className="text-[11px] font-semibold text-slate-700 text-center px-2 leading-snug">{draft.preview_image ? "点击替换" : "点击上传"}</span>
                   </div>
-                  <input
-                    type="file"
-                    accept="image/*"
-                    className="hidden"
-                    onChange={(e) => handleImageUpload(e.target.files?.[0])}
-                  />
+                  <input type="file" accept="image/*" className="hidden" onChange={(e) => handleImageUpload(e.target.files?.[0])} />
                 </label>
                 {draft.preview_image && (
-                  <button
-                    type="button"
-                    onClick={() => update("preview_image", "")}
-                    className="mt-1.5 w-full rounded border border-slate-200 py-1 text-[11px] text-slate-700 hover:border-red-300 hover:text-red-500 transition-colors"
-                  >
-                    移除
-                  </button>
+                  <button type="button" onClick={() => update("preview_image", "")} className="mt-1.5 w-full rounded border border-slate-200 py-1 text-[11px] text-slate-700 hover:border-red-300 hover:text-red-500 transition-colors">移除</button>
                 )}
               </div>
-            )}
+            </div>
           </div>
-        </div>
+        ) : (
+          <div className="rounded-xl border border-gray-200 bg-gray-50 p-3">
+            <h3 className="mb-3 border-b border-gray-200 pb-2 text-xs font-semibold uppercase tracking-wider text-slate-700">
+              物料选择
+            </h3>
+            <div>
+              <label className="mb-2 flex items-center gap-2 text-xs text-slate-600">
+                <input type="checkbox" checked={noMaterial} onChange={(e) => { setNoMaterial(e.target.checked); if (e.target.checked) setMaterialRows([]); }} className="h-3.5 w-3.5" />
+                不选物料，直接填总价
+              </label>
+
+              {noMaterial ? (
+                <div>
+                  <label className="mb-1 block text-[11px] font-semibold text-slate-700">总价</label>
+                  <input type="number" min={0} step={0.01} placeholder="0.00" value={draft.total_price || ""} onChange={(e) => setDraft((d) => ({ ...d, total_price: Number(e.target.value) || 0 }))} className="h-8 w-full rounded-lg border border-slate-300 bg-white px-3 text-xs text-slate-700 focus:border-gray-200 focus:outline-none" />
+                </div>
+              ) : (
+                <>
+                  <div className="rounded-lg border border-slate-200 bg-white">
+                    <div className="flex flex-wrap items-center gap-2 border-b border-slate-200 px-3 py-2">
+                      <span className="text-[11px] font-semibold text-slate-700">选择物料</span>
+                      <div className="ml-auto flex flex-wrap items-center gap-2">
+                        <select value={materialCategoryFilter} onChange={(e) => setMaterialCategoryFilter(e.target.value)} className="h-7 rounded border border-slate-300 px-1.5 text-[10px] text-slate-700 focus:border-gray-200 focus:outline-none">
+                          <option value="">全部分类</option>
+                          {materialCategoryOptions.map((cat) => <option key={cat} value={cat}>{cat}</option>)}
+                        </select>
+                        <select value={materialSupplierFilter} onChange={(e) => setMaterialSupplierFilter(e.target.value)} className="h-7 rounded border border-slate-300 px-1.5 text-[10px] text-slate-700 focus:border-gray-200 focus:outline-none">
+                          <option value="">全部供应商</option>
+                          {materialSupplierOptions.map((sup) => <option key={sup} value={sup}>{sup}</option>)}
+                        </select>
+                        <input type="text" placeholder="搜索..." value={materialSearch} onChange={(e) => setMaterialSearch(e.target.value)} className="h-7 w-28 rounded border border-slate-300 px-2 text-[11px] text-slate-700 focus:border-gray-200 focus:outline-none" />
+                      </div>
+                    </div>
+                    <div className="max-h-60 overflow-y-auto p-2">
+                      {filteredMaterials.length === 0 ? (
+                        <p className="py-4 text-center text-[11px] text-slate-500">没有匹配的物料</p>
+                      ) : (
+                        <div className="grid grid-cols-3 gap-2">
+                          {filteredMaterials.map((mat) => {
+                            const clientVipPrice = getVipPrice(draft.client_name.trim(), mat.name);
+                            const displayPrice = clientVipPrice ?? (mat.sale_price_usd ?? 0);
+                            const isClientVipPrice = clientVipPrice != null;
+                            const alreadyAdded = materialRows.some((r) => r.name === mat.name);
+                            return (
+                              <button key={mat.id} type="button" disabled={alreadyAdded} onClick={() => addMaterialToOrder(mat)} className="flex items-center gap-2 rounded-lg border border-slate-200 p-2 text-left hover:border-amber-400 hover:bg-amber-50 transition-colors disabled:opacity-30 disabled:cursor-not-allowed disabled:hover:border-slate-200 disabled:hover:bg-white">
+                                <div className="h-10 w-10 flex-shrink-0 overflow-hidden rounded border border-slate-100 bg-slate-50">
+                                  {mat.image ? <img src={mat.image} alt={mat.name} className="h-full w-full object-contain" /> : <div className="flex h-full w-full items-center justify-center text-[9px] text-slate-400">无图</div>}
+                                </div>
+                                <div className="min-w-0 flex-1">
+                                  <p className="truncate text-[11px] font-medium text-slate-800">{mat.name} <span className="font-normal text-slate-500">{mat.code}</span></p>
+                                  <p className="text-[10px] text-slate-500">
+                                    {isClientVipPrice ? "VIP专属价" : "卖出价"}: <span className={`font-semibold ${isClientVipPrice ? "text-amber-600" : "text-slate-700"}`}>${displayPrice}</span>
+                                    <span className="ml-2">库存: {mat.stock_quantity}</span>
+                                  </p>
+                                </div>
+                              </button>
+                            );
+                          })}
+                        </div>
+                      )}
+                    </div>
+                  </div>
+
+                  {materialRows.length > 0 && (
+                    <div className="mt-3 rounded-lg border border-slate-200 bg-slate-50 p-3">
+                      <p className="mb-2 text-[11px] font-semibold uppercase tracking-wider text-slate-700">已选物料</p>
+                      <div className="space-y-1.5">
+                        {materialRows.map((r, i) => (
+                          <div key={i} className="flex items-center gap-2 rounded-lg border border-slate-200 bg-white px-2 py-1.5">
+                            <div className="min-w-0 flex-1"><p className="truncate text-xs font-medium text-slate-800">{r.name}</p><p className="text-[10px] text-slate-500">{r.spec || ""}</p></div>
+                            <input type="number" min={1} value={r.qty} onChange={(e) => updateSelectedMaterial(i, "qty", Math.max(1, Number(e.target.value) || 1))} className="h-7 w-14 rounded border border-slate-300 px-1.5 text-center text-xs text-slate-700 focus:border-gray-200 focus:outline-none" />
+                            <span className="w-14 text-right text-xs text-slate-700">${(r.qty * r.unit_price).toFixed(2)}</span>
+                            <label className="flex cursor-pointer items-center gap-1 text-[10px] text-slate-600">
+                              <input type="checkbox" checked={!!r.is_return} onChange={(e) => updateSelectedMaterial(i, "is_return", e.target.checked)} className="h-3 w-3" />退货
+                            </label>
+                            <button type="button" onClick={() => removeSelectedMaterial(i)} className="rounded p-0.5 text-xs text-slate-400 hover:text-red-500 transition-colors">✕</button>
+                          </div>
+                        ))}
+                      </div>
+                      <div className="mt-2 flex items-center justify-between rounded-lg bg-slate-100 px-3 py-2">
+                        <span className="text-xs font-semibold text-slate-700">总价</span>
+                        <span className="text-sm font-bold text-slate-700">{formatMoney(materialTotal)}</span>
+                      </div>
+                    </div>
+                  )}
+                </>
+              )}
+            </div>
+          </div>
+        )}
 
 
         {/* Bottom: 金额结算 + 收款记录 */}
@@ -2086,7 +2181,7 @@ function NewOrderModal({
               date: today,
               amount: deposit,
               method: fields.deposit_office ? OFFICE_PAYMENT_METHOD : fields.deposit_method,
-              note: fields.deposit_note || undefined,
+              note: fields.deposit_note || (balance === 0 ? `${type}全款付清` : `${type}定金`) || undefined,
               type: "payment",
               office: fields.deposit_office,
             },
@@ -3374,10 +3469,12 @@ function FinanceSection({ orders, setOrders, expenses, setExpenses, cashEntries,
   const [cashPage, setCashPage] = useState(1);
   const [receivablesPage, setReceivablesPage] = useState(1);
   const paymentRows = orders.flatMap((order) => (order.payment_history ?? []).map((record, index) => ({ order, record, key: `${order.order_number}-${index}` })));
-  const genericIncomeNoteRe = /^(定制单|批发单)(定金|收款金?|收款|尾款|退款)?$/;
   const getIncomeDetail = (order: BizOrder, record: PaymentRecord) => {
     const note = (record.note ?? "").trim();
-    if (note && !genericIncomeNoteRe.test(note)) return note;
+    if (note && !/^(定制单|批发单)(定金|收款金?|收款|尾款|退款)?$/.test(note)) return note;
+    // If note is auto-generated (e.g. "批发定金"), show it
+    if (note && /^(批发单|定制单)(定金|全款付清|收款|退款)$/.test(note)) return note;
+    // Fallback to order description/remarks for custom orders
     return order.description?.trim() || order.remarks?.trim() || note || "-";
   };
   const getOfficeNoteParts = (note?: string) => {
@@ -3465,8 +3562,8 @@ function FinanceSection({ orders, setOrders, expenses, setExpenses, cashEntries,
       title: "订单收入",
       filePrefix: "biz-finance-income",
       columns: ["订单号", "客户", "金额", "支付方式", "日期", "明细", "类型"],
-      exportRows: () => mapRows(filteredPaymentRows, ({ order, record }) => [order.order_number, order.client_name, record.amount, record.method, record.date, getIncomeDetail(order, record), record.type === "refund" ? "退款" : "收款"]),
-      printRows: () => mapRows(filteredPaymentRows, ({ order, record }) => [order.order_number, order.client_name, formatMoney(record.amount), record.method, record.date, getIncomeDetail(order, record), record.type === "refund" ? "退款" : "收款"]),
+      exportRows: () => mapRows(filteredPaymentRows, ({ order, record }) => [order.order_number, order.client_name, record.amount, record.method, record.date, getIncomeDetail(order, record), record.type === "refund" ? `${order.order_type}退款` : order.order_type]),
+      printRows: () => mapRows(filteredPaymentRows, ({ order, record }) => [order.order_number, order.client_name, formatMoney(record.amount), record.method, record.date, getIncomeDetail(order, record), record.type === "refund" ? `${order.order_type}退款` : order.order_type]),
     },
     expense: {
       title: "支出清单",
@@ -3534,18 +3631,21 @@ function FinanceSection({ orders, setOrders, expenses, setExpenses, cashEntries,
       date: quickPayFields.date,
       amount,
       method: quickPayFields.office ? OFFICE_PAYMENT_METHOD : quickPayFields.method,
-      note: quickPayFields.note || undefined,
+      note: quickPayFields.note || undefined, // note auto-set when order known below
       type: "payment",
       office: quickPayFields.office,
     };
     setOrders((prev) =>
       prev.map((o) => {
         if (o.order_number !== orderNumber) return o;
-        const nextHistory = [newRecord, ...(o.payment_history ?? [])];
-        const nextPaid = Number(((o.amount_paid ?? 0) + amount).toFixed(2));
         const total = o.total_after_tax ?? o.total_price ?? 0;
+        const nextPaid = Number(((o.amount_paid ?? 0) + amount).toFixed(2));
         const nextBalance = Math.max(0, Number((total - nextPaid).toFixed(2)));
         const nextStatus = deriveStatus(total, nextPaid, o.status ?? "下单");
+        // Auto-generate note if none provided
+        const paymentNote = quickPayFields.note || (nextBalance === 0 ? `${o.order_type}全款付清` : `${o.order_type}收款`);
+        const finalRecord: PaymentRecord = { ...newRecord, note: paymentNote };
+        const nextHistory = [finalRecord, ...(o.payment_history ?? [])];
         return { ...o, payment_history: nextHistory, amount_paid: nextPaid, balance: nextBalance, status: nextStatus };
       }),
     );
@@ -6051,6 +6151,79 @@ function SettingsTextArea({
 
 type SettingsPageKey = "company-base" | "company-contact" | "finance" | "print" | "lists" | "categories";
 
+function SettingsPrintPreview({ settings, onUpdate }: { settings: BizSettings; onUpdate: (key: keyof BizSettings, value: string) => void; }) {
+  const [previewType, setPreviewType] = useState<"invoice" | "pickup">("invoice");
+
+  // Sample data for preview rendering
+  const sampleOrder: BizOrder = {
+    order_number: "预览-001",
+    order_type: "批发单",
+    client_name: "示例客户",
+    phone: "123-456-7890",
+    address: "123 Main St, New York, NY 10001",
+    total_price: 1500,
+    tax_rate: settings.default_tax_rate || 8,
+    total_after_tax: 1620,
+    amount_paid: 500,
+    balance: 1120,
+    order_date: new Date().toISOString().slice(0, 10),
+    status: "加工中",
+    material_rows: [
+      { name: "Sample Granite", spec: "12×24", qty: 10, unit: "pcs", unit_price: 150 },
+      { name: "Sample Marble", spec: "24×24", qty: 5, unit: "pcs", unit_price: 200 },
+    ],
+    payment_history: [{ date: new Date().toISOString().slice(0, 10), amount: 500, method: "现金", note: "批发定金", type: "payment" }],
+  };
+
+  const sampleDraft: DraftFields = {
+    client_name: "示例客户",
+    phone: "123-456-7890",
+    address: "123 Main St, New York, NY 10001",
+    preview_image: "",
+    total_price: 1500,
+    tax_rate: settings.default_tax_rate || 8,
+    discount: 0,
+    description: "定制加工说明示例",
+    install_info: "安装说明示例",
+    remarks: settings.invoice_note || "备注模板示例",
+  };
+
+  const html = previewType === "invoice"
+    ? buildCustomerInvoiceHTML(sampleOrder, sampleDraft, sampleOrder.material_rows ?? [], settings)
+    : buildWorkerPickupHTML(sampleOrder, sampleOrder.material_rows ?? [], settings);
+
+  return (
+    <div className="grid gap-3 xl:grid-cols-[0.95fr_1.05fr]">
+      <div className="space-y-3">
+        <SettingsGroup title="打印标题与素材">
+          <SettingsField label="Invoice 标题" value={settings.invoice_title ?? "Invoice"} onChange={(value) => onUpdate("invoice_title", value)} />
+          <SettingsField label="领料单标题" value={settings.picking_title ?? "领料单 / Worker Pickup Sheet"} onChange={(value) => onUpdate("picking_title", value)} />
+          <SettingsField label="Logo URL" value={settings.logo_url ?? ""} onChange={(value) => onUpdate("logo_url", value)} />
+        </SettingsGroup>
+        <SettingsGroup title="模板备注">
+          <SettingsTextArea label="发票备注模板" value={settings.invoice_note ?? ""} rows={7} onChange={(value) => onUpdate("invoice_note", value)} />
+          <SettingsTextArea label="报价页脚备注" value={settings.quote_footer ?? ""} rows={5} onChange={(value) => onUpdate("quote_footer", value)} />
+        </SettingsGroup>
+      </div>
+      <SettingsGroup title={`打印预览 — ${previewType === "invoice" ? "发票 (Invoice)" : "领料单 (Pickup)"}`}>
+        <div className="mb-2 flex gap-2">
+          <button onClick={() => setPreviewType("invoice")} className={`rounded-lg border px-3 py-1 text-[11px] font-semibold transition-colors ${previewType === "invoice" ? "border-slate-900 bg-slate-900 text-white" : "border-slate-300 text-slate-600 hover:border-slate-400"}`}>发票 Invoice</button>
+          <button onClick={() => setPreviewType("pickup")} className={`rounded-lg border px-3 py-1 text-[11px] font-semibold transition-colors ${previewType === "pickup" ? "border-slate-900 bg-slate-900 text-white" : "border-slate-300 text-slate-600 hover:border-slate-400"}`}>领料单 Pickup</button>
+        </div>
+        <div className="overflow-hidden rounded-lg border border-slate-200" style={{ height: 420 }}>
+          <iframe
+            srcDoc={html}
+            title="打印预览"
+            className="h-full w-full border-0"
+            style={{ transform: "scale(0.55)", transformOrigin: "top left", width: `${100 / 0.55}%`, height: `${100 / 0.55}%` }}
+          />
+        </div>
+        <p className="mt-1.5 text-[10px] text-slate-500">预览为缩略显示，实际打印为全尺寸A4</p>
+      </SettingsGroup>
+    </div>
+  );
+}
+
 function SettingsSection({ settings, setSettings, saveState, isDirty, lastSavedAt, onSave, isSaving }: { settings: BizSettings; setSettings: React.Dispatch<React.SetStateAction<BizSettings>>; saveState: "idle" | "saving" | "saved" | "error" | "conflict"; isDirty: boolean; lastSavedAt: string; onSave?: () => void; isSaving?: boolean; }) {
   const pages: Array<{ key: SettingsPageKey; label: string; note: string }> = [
     { key: "company-base", label: "1. 公司基础", note: "公司名称、地址和展示预览" },
@@ -6202,17 +6375,7 @@ function SettingsSection({ settings, setSettings, saveState, isDirty, lastSavedA
         ) : null}
 
         {page === "print" ? (
-          <div className="grid gap-3 xl:grid-cols-[0.95fr_1.05fr]">
-            <SettingsGroup title="打印标题与素材">
-              <SettingsField label="Invoice 标题" value={settings.invoice_title ?? "Invoice"} onChange={(value) => update("invoice_title", value)} />
-              <SettingsField label="领料单标题" value={settings.picking_title ?? "领料单 / Worker Pickup Sheet"} onChange={(value) => update("picking_title", value)} />
-              <SettingsField label="Logo URL" value={settings.logo_url ?? ""} onChange={(value) => update("logo_url", value)} />
-            </SettingsGroup>
-            <SettingsGroup title="模板备注">
-              <SettingsTextArea label="发票备注模板" value={settings.invoice_note ?? ""} rows={7} onChange={(value) => update("invoice_note", value)} />
-              <SettingsTextArea label="报价页脚备注" value={settings.quote_footer ?? ""} rows={5} onChange={(value) => update("quote_footer", value)} />
-            </SettingsGroup>
-          </div>
+          <SettingsPrintPreview settings={settings} onUpdate={update} />
         ) : null}
 
         {page === "lists" ? (

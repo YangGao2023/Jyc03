@@ -321,13 +321,19 @@ function safeParseArray<T>(v: unknown): T[] {
   return [];
 }
 
+/** Normalize legacy payment method values. */
+function cleanMethod(method: string): string {
+  if (method === "旧库导入") return "转账";
+  return method;
+}
+
 function normalizeOrder(raw: Record<string, unknown>): BizOrder {
   const totalPrice = toNumber(raw.total_price);
 
   const paymentHistory: PaymentRecord[] = safeParseArray<Record<string, unknown>>(raw.payment_history).map((p) => ({
         date: String(p.date ?? ""),
         amount: toNumber(p.amount),
-        method: String(p.method ?? ""),
+        method: cleanMethod(String(p.method ?? "")),
         note: p.note != null ? String(p.note) : undefined,
         type: p.type === "refund" ? ("refund" as const) : ("payment" as const),
         office: Boolean(p.office),
@@ -423,7 +429,7 @@ export const bizExpenses = normalizeList<ExpenseRecord>(rawAssetsRecord.expenses
   detail: toString(item.detail),
   amount: toNumber(item.amount),
   expense_type: toString(item.expense_type),
-  payment_method: toString(item.payment_method),
+  payment_method: cleanMethod(toString(item.payment_method)),
   expense_date: toString(item.expense_date),
   remark: toString(item.remark) || undefined,
   office: Boolean(item.office),

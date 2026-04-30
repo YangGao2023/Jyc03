@@ -55,7 +55,12 @@ function migrate(db: Database.Database) {
       auto_attendance_timezone TEXT DEFAULT 'America/New_York',
       auto_attendance_run_time TEXT DEFAULT '01:00',
       auto_attendance_default_minutes INTEGER DEFAULT 600,
-      auto_attendance_note TEXT DEFAULT ''
+      auto_attendance_note TEXT DEFAULT '',
+      work_start TEXT DEFAULT '',
+      work_end TEXT DEFAULT '',
+      break_start TEXT DEFAULT '',
+      break_end TEXT DEFAULT '',
+      material_categories TEXT DEFAULT ''
     );
 
     CREATE TABLE IF NOT EXISTS orders (
@@ -161,6 +166,7 @@ function migrate(db: Database.Database) {
       image TEXT,
       last_stock_date TEXT,
       remark TEXT,
+      category TEXT,
       updated_at TEXT DEFAULT (datetime('now'))
     );
 
@@ -301,6 +307,12 @@ function migrate(db: Database.Database) {
   ensureColumn(db, "materials", "supplier_id", "TEXT");
   ensureColumn(db, "purchases", "supplier_id", "TEXT");
   ensureColumn(db, "quotes", "client_id", "TEXT");
+  ensureColumn(db, "materials", "category", "TEXT");
+  ensureColumn(db, "settings", "work_start", "TEXT DEFAULT ''");
+  ensureColumn(db, "settings", "work_end", "TEXT DEFAULT ''");
+  ensureColumn(db, "settings", "break_start", "TEXT DEFAULT ''");
+  ensureColumn(db, "settings", "break_end", "TEXT DEFAULT ''");
+  ensureColumn(db, "settings", "material_categories", "TEXT DEFAULT ''");
 }
 
 function ensureColumn(db: Database.Database, table: string, column: string, definition: string) {
@@ -345,6 +357,11 @@ function rowToSettings(row: Record<string, unknown> | undefined) {
     auto_attendance_run_time: String(row.auto_attendance_run_time ?? "01:00"),
     auto_attendance_default_minutes: Number(row.auto_attendance_default_minutes ?? 600),
     auto_attendance_note: String(row.auto_attendance_note ?? ""),
+    work_start: row.work_start ? String(row.work_start) : undefined,
+    work_end: row.work_end ? String(row.work_end) : undefined,
+    break_start: row.break_start ? String(row.break_start) : undefined,
+    break_end: row.break_end ? String(row.break_end) : undefined,
+    material_categories: row.material_categories ? String(row.material_categories) : undefined,
   };
 }
 

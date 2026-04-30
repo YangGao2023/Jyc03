@@ -376,6 +376,7 @@ async function sqliteRead(): Promise<BizStoreSnapshot> {
     image: nullStr(r.image) ?? undefined,
     last_stock_date: nullStr(r.last_stock_date) ?? undefined,
     remark: nullStr(r.remark) ?? undefined,
+    category: nullStr(r.category) ?? undefined,
   }));
 
   const purchases = db.prepare("SELECT * FROM purchases").all().map((r: any) => ({
@@ -526,7 +527,7 @@ async function sqliteWrite(snapshot: BizStoreSnapshot): Promise<void> {
         invoice_title, picking_title, zelle, invoice_note, quote_valid_days,
         quote_footer, logo_url, expense_types, supplier_categories, meal_allowance_amount,
         auto_attendance_timezone, auto_attendance_run_time, auto_attendance_default_minutes,
-        auto_attendance_note)
+        auto_attendance_note, material_categories)
       VALUES (1,
         @company_name, @company_name_zh, @address, @company_address,
         @phone, @phones, @email, @website, @tax_number, @default_tax_rate, @default_currency,
@@ -534,7 +535,7 @@ async function sqliteWrite(snapshot: BizStoreSnapshot): Promise<void> {
         @invoice_title, @picking_title, @zelle, @invoice_note, @quote_valid_days,
         @quote_footer, @logo_url, @expense_types, @supplier_categories, @meal_allowance_amount,
         @auto_attendance_timezone, @auto_attendance_run_time, @auto_attendance_default_minutes,
-        @auto_attendance_note)
+        @auto_attendance_note, @material_categories)
       ON CONFLICT(id) DO UPDATE SET
         company_name=@company_name, company_name_zh=@company_name_zh,
         address=@address, company_address=@company_address,
@@ -551,7 +552,8 @@ async function sqliteWrite(snapshot: BizStoreSnapshot): Promise<void> {
         auto_attendance_timezone=@auto_attendance_timezone,
         auto_attendance_run_time=@auto_attendance_run_time,
         auto_attendance_default_minutes=@auto_attendance_default_minutes,
-        auto_attendance_note=@auto_attendance_note
+        auto_attendance_note=@auto_attendance_note,
+        material_categories=@material_categories
     `).run({
       company_name: s.company_name,
       company_name_zh: s.company_name_zh ?? null,
@@ -583,6 +585,7 @@ async function sqliteWrite(snapshot: BizStoreSnapshot): Promise<void> {
       auto_attendance_run_time: s.auto_attendance_run_time ?? "01:00",
       auto_attendance_default_minutes: s.auto_attendance_default_minutes ?? 600,
       auto_attendance_note: s.auto_attendance_note ?? "",
+      material_categories: s.material_categories ?? null,
     });
 
     db.prepare(`
@@ -674,10 +677,10 @@ async function sqliteWrite(snapshot: BizStoreSnapshot): Promise<void> {
     const insertMaterial = db.prepare(`
       INSERT INTO materials (id, code, name, specification, size, unit, stock_quantity, min_stock,
         factory_price_rmb, usd_cost, sale_price_usd, vip_sale_price_usd, weight, purchase_price,
-        supplier, supplier_id, image, last_stock_date, remark, updated_at)
+        supplier, supplier_id, image, last_stock_date, remark, category, updated_at)
       VALUES (@id, @code, @name, @specification, @size, @unit, @stock_quantity, @min_stock,
         @factory_price_rmb, @usd_cost, @sale_price_usd, @vip_sale_price_usd, @weight, @purchase_price,
-        @supplier, @supplier_id, @image, @last_stock_date, @remark, @updated_at)
+        @supplier, @supplier_id, @image, @last_stock_date, @remark, @category, @updated_at)
     `);
     for (const m of snapshot.materials) insertMaterial.run({
       id: m.id, code: m.code ?? "", name: m.name, specification: m.specification ?? null,
@@ -688,7 +691,7 @@ async function sqliteWrite(snapshot: BizStoreSnapshot): Promise<void> {
       purchase_price: m.purchase_price ?? 0, supplier: m.supplier ?? null,
       supplier_id: m.supplier_id ?? null,
       image: m.image ?? null, last_stock_date: m.last_stock_date ?? null,
-      remark: m.remark ?? null, updated_at: new Date().toISOString(),
+      remark: m.remark ?? null, category: m.category ?? null, updated_at: new Date().toISOString(),
     });
 
     // Purchases

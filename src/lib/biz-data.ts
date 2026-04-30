@@ -125,7 +125,12 @@ export type MaterialRecord = {
   supplier_id?: string;
   image?: string;
   last_stock_date?: string;
+  last_purchase_date?: string;
   remark?: string;
+  color?: string;
+  material?: string;
+  other?: string;
+  category?: string;
 };
 
 export type PurchaseRecord = {
@@ -269,6 +274,7 @@ export type BizSettings = {
   auto_attendance_run_time?: string;
   auto_attendance_default_minutes?: number;
   auto_attendance_note?: string;
+  material_categories?: string;
 };
 
 function toNumber(value: unknown) {
@@ -443,7 +449,9 @@ export const bizMaterials = normalizeList<MaterialRecord>(rawAssetsRecord.materi
   supplier_id: toString(item.supplier_id) || undefined,
   image: toString(item.image) || undefined,
   last_stock_date: toString(item.last_stock_date) || undefined,
+  last_purchase_date: toString(item.last_purchase_date) || undefined,
   remark: toString(item.remark) || undefined,
+  category: toString(item.category) || undefined,
 }));
 
 export const bizPurchases = normalizeList<PurchaseRecord>(rawAssetsRecord.purchases, (item) => ({
@@ -581,11 +589,12 @@ export const bizSettings: BizSettings = {
   logo_url: toString(rawAssetsRecord.settings && (rawAssetsRecord.settings as Record<string, unknown>).logo_url),
   expense_types: toString(rawAssetsRecord.settings && (rawAssetsRecord.settings as Record<string, unknown>).expense_types),
   supplier_categories: toString(rawAssetsRecord.settings && (rawAssetsRecord.settings as Record<string, unknown>).supplier_categories),
-  meal_allowance_amount: toNumber(rawAssetsRecord.settings && (rawAssetsRecord.settings as Record<string, unknown>).meal_allowance_amount) || 15,
+  meal_allowance_amount: toNumber(rawAssetsRecord.settings && (rawAssetsRecord.settings as Record<string, unknown>).meal_allowance_amount) || 8,
   auto_attendance_timezone: toString(rawAssetsRecord.settings && (rawAssetsRecord.settings as Record<string, unknown>).auto_attendance_timezone) || "America/New_York",
   auto_attendance_run_time: toString(rawAssetsRecord.settings && (rawAssetsRecord.settings as Record<string, unknown>).auto_attendance_run_time) || "01:00",
   auto_attendance_default_minutes: toNumber(rawAssetsRecord.settings && (rawAssetsRecord.settings as Record<string, unknown>).auto_attendance_default_minutes) || 600,
   auto_attendance_note: toString(rawAssetsRecord.settings && (rawAssetsRecord.settings as Record<string, unknown>).auto_attendance_note) || "America/New_York 每天 01:00 自动生成 10 小时考勤",
+  material_categories: toString(rawAssetsRecord.settings && (rawAssetsRecord.settings as Record<string, unknown>).material_categories) || undefined,
 };
 
 export function formatMoney(value: number) {

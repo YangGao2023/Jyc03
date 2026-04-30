@@ -5884,6 +5884,7 @@ type Section =
   | "orders"
   | "finance"
   | "clients"
+  | "appointments"
   | "materials"
   | "employees"
   | "settings";
@@ -5904,6 +5905,7 @@ const NAV_GROUPS: Array<{
     label: "资源管理",
     items: [
       { key: "clients", label: "客户档案", icon: "⊙" },
+      { key: "appointments", label: "量尺寸", icon: "⏰" },
       { key: "materials", label: "物料管理", icon: "◫" },
       { key: "employees", label: "员工管理", icon: "♟" },
     ],
@@ -6191,6 +6193,25 @@ export default function DashboardBizPage() {
           )}
 
           {section === "clients" && (
+            <ClientsSection
+              clients={clients}
+              setClients={setClients}
+              suppliers={suppliers}
+              setSuppliers={setSuppliers}
+              orders={showVoided ? orders : orders.filter((o) => o.status !== "已作废")}
+              setOrders={setOrders}
+              appointments={appointments}
+              setAppointments={setAppointments}
+              setCashEntries={setCashEntries}
+              setExpenses={setExpenses}
+              materials={materials}
+              setMaterials={setMaterials}
+              settings={settings}
+              onAutoSave={autoSave}
+            />
+          )}
+
+          {section === "appointments" && (
             <ClientsSection
               clients={clients}
               setClients={setClients}

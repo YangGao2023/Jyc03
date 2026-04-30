@@ -433,12 +433,6 @@ async function mysqlWrite(snapshot: BizStoreSnapshot): Promise<void> {
       summary: p.summary || null,
     })), 'id');
   }
-
-  // 双向写：同步新记录到旧 T 表（后台执行，不阻塞）
-  const { syncAllNewToOldTables } = await import('@/lib/dual-write');
-  syncAllNewToOldTables().catch((err) =>
-    console.error('[mysqlWrite] dual-write error:', err),
-  );
 }
 
 // ─── Row mappers ──────────────────────────────────────────────────────────────
@@ -600,6 +594,7 @@ function rowToAppointment(r: Record<string, unknown>): MeasurementAppointmentRec
     phone: nullStr(r.phone) ?? undefined,
     address: nullStr(r.address) ?? undefined,
     appointment_date: String(r.appointment_date),
+    appointment_time: nullStr(r.appointment_time) ?? undefined,
     description: nullStr(r.description) ?? undefined,
     gcal_event_id: nullStr(r.gcal_event_id) ?? undefined,
   };

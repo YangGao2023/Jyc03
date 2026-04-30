@@ -532,6 +532,7 @@ export const bizAppointments = normalizeList<MeasurementAppointmentRecord>(rawAs
   phone: toString(item.phone) || undefined,
   address: toString(item.address) || undefined,
   appointment_date: toString(item.appointment_date),
+  appointment_time: toString(item.appointment_time) || undefined,
   description: toString(item.description) || undefined,
   gcal_event_id: toString(item.gcal_event_id) || undefined,
 }));

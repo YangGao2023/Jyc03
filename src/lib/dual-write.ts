@@ -182,28 +182,29 @@ async function syncCashFlowFromOld(lastMs: number): Promise<number> {
   );
 
   for (const t of rows) {
-    const p1 = Number(t.P1);
+    const p1 = String(t.P1);
     const isIncome = Number(t.Z2) === 1;
     const amount = fromCents(Number(t.C5));
+    const isOffice = String(t.P3 || "") === "110" ? 1 : 0;
 
     if (isIncome) {
       await executeStmt(
-        `INSERT INTO a3s_cash_entries(id, type, amount, date, method, note, old_id)
-         VALUES(?,?,?,?,?,?,?)
+        `INSERT INTO a3s_cash_entries(id, type, amount, date, method, note, office, old_id)
+         VALUES(?,?,?,?,?,?,?,?)
          ON DUPLICATE KEY UPDATE
            type=VALUES(type), amount=VALUES(amount), date=VALUES(date),
-           method=VALUES(method), note=VALUES(note)`,
-        [`inc-${p1}`, "收入", amount, fromYyyymmdd(String(t.C6 || "")), codeToMethod(Number(t.C4)), String(t.C7 || t.C3 || ""), p1],
+           method=VALUES(method), note=VALUES(note), office=VALUES(office)`,
+        [`inc-${p1}`, "收入", amount, fromYyyymmdd(String(t.C6 || "")), codeToMethod(Number(t.C4)), String(t.C7 || t.C3 || ""), isOffice, p1],
       );
     } else {
       await executeStmt(
-        `INSERT INTO a3s_expenses(id, amount, expense_date, payment_method, target, detail, remark, old_id)
-         VALUES(?,?,?,?,?,?,?,?)
+        `INSERT INTO a3s_expenses(id, amount, expense_date, payment_method, target, detail, expense_type, remark, office, old_id)
+         VALUES(?,?,?,?,?,?,?,?,?,?)
          ON DUPLICATE KEY UPDATE
            amount=VALUES(amount), expense_date=VALUES(expense_date),
            payment_method=VALUES(payment_method), target=VALUES(target),
-           detail=VALUES(detail), remark=VALUES(remark)`,
-        [`exp-${p1}`, amount, fromYyyymmdd(String(t.C6 || "")), codeToMethod(Number(t.C4)), String(t.C2 || ""), String(t.C3 || t.C2 || ""), String(t.C7 || ""), p1],
+           detail=VALUES(detail), expense_type=VALUES(expense_type), remark=VALUES(remark), office=VALUES(office)`,
+        [`exp-${p1}`, amount, fromYyyymmdd(String(t.C6 || "")), codeToMethod(Number(t.C4)), String(t.C2 || ""), String(t.C3 || t.C2 || ""), String(t.C3 || t.C2 || ""), String(t.C7 || ""), isOffice, p1],
       );
     }
     count++;
@@ -267,16 +268,19 @@ async function syncMaterialsFromOld(lastMs: number): Promise<number> {
 async function syncAppointmentsFromOld(lastMs: number): Promise<number> {
   let count = 0;
   const rows = await queryRows(
-    `SELECT * FROM T1114 WHERE T2 > ? ORDER BY T1 ASC`, [String(Math.floor(lastMs))],
+    `SELECT t.*, c.C6 AS client_phone, c.C4 AS client_address FROM T1114 t LEFT JOIN T1002 c ON t.P4 = c.P1 WHERE t.T2 > ? ORDER BY t.T1 ASC`, [String(Math.floor(lastMs))],
   );
   for (const t of rows) {
     const p1 = Number(t.P1);
+    const client_id = String(t.P4 || "");
     await executeStmt(
-      `INSERT INTO a3s_appointments(id, client_name, appointment_date, appointment_time, description, old_id)
-       VALUES(?,?,?,?,?,?) ON DUPLICATE KEY UPDATE
-         client_name=VALUES(client_name), appointment_date=VALUES(appointment_date),
+      `INSERT INTO a3s_appointments(id, client_name, client_id, phone, address, appointment_date, appointment_time, description, old_id)
+       VALUES(?,?,?,?,?,?,?,?,?) ON DUPLICATE KEY UPDATE
+         client_name=VALUES(client_name), client_id=VALUES(client_id),
+         phone=VALUES(phone), address=VALUES(address),
+         appointment_date=VALUES(appointment_date),
          appointment_time=VALUES(appointment_time), description=VALUES(description)`,
-      [`old_appt_${p1}`, String(t.C1 || ""), fromYyyymmdd(String(t.C2 || "")), String(t.C3 || ""), String(t.C4 || ""), p1],
+      [`old_appt_${p1}`, String(t.C1 || ""), client_id, String(t.client_phone || ""), String(t.client_address || ""), fromYyyymmdd(String(t.C2 || "")), String(t.C3 || ""), String(t.C4 || ""), p1],
     );
     count++;
   }
@@ -331,7 +335,7 @@ async function syncAttendancesFromOld(lastMs: number): Promise<number> {
   let count = 0;
   const empMap = await getOldEmployeeMap();
   const rows = await queryRows(
-    `SELECT * FROM T1300 WHERE T2 > ? ORDER BY T1 ASC`, [String(Math.floor(lastMs))],
+    `SELECT t.*, e.C1 AS emp_code, e.C2 AS emp_name FROM T1300 t LEFT JOIN T1003 e ON t.P2 = e.P1 WHERE t.T2 > ? ORDER BY t.T1 ASC`, [String(Math.floor(lastMs))],
   );
   for (const t of rows) {
     const oldEmpId = Number(t.P2);
@@ -339,22 +343,24 @@ async function syncAttendancesFromOld(lastMs: number): Promise<number> {
     const p1 = Number(t.P1);
     const worked = Number(t.C5);
     const meal = Number(t.C7) === 1;
+    const empName = String(t.emp_name || "");
+    const empCode = String(t.emp_code || "");
 
-    // C1=0 regular work. C1=1 other (leave/overtime). Keep leave_minutes=0 since
-    // T1300 stores actual worked minutes, not leave tracking.
     await executeStmt(
       `INSERT INTO a3s_attendances(id, date, employee_id, employee_name,
         employee_code, worked_minutes, meal_allowance, note, old_id)
        VALUES(?,?,?,?,?,?,?,?,?)
        ON DUPLICATE KEY UPDATE
+         employee_name=VALUES(employee_name),
+         employee_code=VALUES(employee_code),
          worked_minutes=VALUES(worked_minutes),
          meal_allowance=VALUES(meal_allowance), note=VALUES(note)`,
       [
         `old_att_${p1}`,
         fromYyyymmdd(String(t.C2 || "")),
         empId,
-        String(empId ? "" : ""),
-        String(empId ? "" : ""),
+        empName,
+        empCode,
         worked,
         meal ? 1 : 0,
         String(t.C6 || ""),

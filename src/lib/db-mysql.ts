@@ -18,6 +18,8 @@ export function getMysqlPool(): mysql.Pool {
       connectionLimit: 5,
       queueLimit: 0,
       charset: 'utf8mb4',
+      supportBigNumbers: true,
+      bigNumberStrings: true,
     });
   }
   return pool;

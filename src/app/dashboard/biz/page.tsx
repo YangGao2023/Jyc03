@@ -1423,6 +1423,7 @@ function OrderDetailView({
   onBack,
   onSave,
   onOfficeEntry,
+  onSaveVipPrice,
 }: {
   order: BizOrder;
   settings: BizSettings;
@@ -1430,6 +1431,7 @@ function OrderDetailView({
   onBack: () => void;
   onSave: (updated: BizOrder) => void;
   onOfficeEntry: (entry: CashEntry) => void;
+  onSaveVipPrice: (clientName: string, materialName: string, price: number) => void;
 }) {
   const today = formatLocalDate(new Date());
   const isCustom = order.order_type === "定制单";
@@ -1452,6 +1454,8 @@ function OrderDetailView({
   const [materialCategoryFilter, setMaterialCategoryFilter] = useState("");
   const [materialSupplierFilter, setMaterialSupplierFilter] = useState("");
   const [noMaterial, setNoMaterial] = useState(!order.material_rows?.length);
+  const [vipEditMat, setVipEditMat] = useState<string | null>(null);
+  const [vipEditVal, setVipEditVal] = useState("");
 
   const isVip = false; // VIP status would need clients list — not available here; falls back to per-client VIP prices only
 
@@ -1775,6 +1779,33 @@ function OrderDetailView({
                             const displayPrice = clientVipPrice ?? (mat.sale_price_usd ?? 0);
                             const isClientVipPrice = clientVipPrice != null;
                             const alreadyAdded = materialRows.some((r) => r.name === mat.name);
+                            const isEditingThis = vipEditMat === mat.name;
+                            if (isEditingThis) {
+                              return (
+                                <div key={mat.id} className="flex items-center gap-2 rounded-lg border border-amber-300 bg-amber-50 p-2">
+                                  <div className="h-10 w-10 flex-shrink-0 overflow-hidden rounded border border-slate-100 bg-slate-50">
+                                    {mat.image ? <img src={mat.image} alt={mat.name} className="h-full w-full object-contain" /> : <div className="flex h-full w-full items-center justify-center text-[9px] text-slate-400">无图</div>}
+                                  </div>
+                                  <div className="min-w-0 flex-1">
+                                    <p className="truncate text-[11px] font-medium text-slate-800">{mat.name}</p>
+                                    <div className="flex items-center gap-1 mt-0.5">
+                                      <span className="text-[10px] text-amber-600">VIP$</span>
+                                      <input
+                                        autoFocus
+                                        type="number"
+                                        min={0}
+                                        step={0.01}
+                                        value={vipEditVal}
+                                        onChange={(e) => setVipEditVal(e.target.value)}
+                                        onBlur={() => { const p = Number(vipEditVal); if (!isNaN(p) && p >= 0) onSaveVipPrice(draft.client_name.trim(), mat.name, p); setVipEditMat(null); }}
+                                        onKeyDown={(e) => { if (e.key === "Enter") { const p = Number(vipEditVal); if (!isNaN(p) && p >= 0) onSaveVipPrice(draft.client_name.trim(), mat.name, p); setVipEditMat(null); } else if (e.key === "Escape") setVipEditMat(null); }}
+                                        className="h-5 w-16 rounded border border-amber-300 px-1 text-[10px] text-amber-700 focus:outline-none"
+                                      />
+                                    </div>
+                                  </div>
+                                </div>
+                              );
+                            }
                             return (
                               <button key={mat.id} type="button" disabled={alreadyAdded} onClick={() => addMaterialToOrder(mat)} className="flex items-center gap-2 rounded-lg border border-slate-200 p-2 text-left hover:border-amber-400 hover:bg-amber-50 transition-colors disabled:opacity-30 disabled:cursor-not-allowed disabled:hover:border-slate-200 disabled:hover:bg-white">
                                 <div className="h-10 w-10 flex-shrink-0 overflow-hidden rounded border border-slate-100 bg-slate-50">
@@ -1785,6 +1816,7 @@ function OrderDetailView({
                                   <p className="text-[10px] text-slate-500">
                                     {isClientVipPrice ? "VIP专属价" : "卖出价"}: <span className={`font-semibold ${isClientVipPrice ? "text-amber-600" : "text-slate-700"}`}>${displayPrice}</span>
                                     <span className="ml-2">库存: {mat.stock_quantity}</span>
+                                    {isClientVipPrice && <span onClick={(e) => { e.stopPropagation(); e.preventDefault(); setVipEditMat(mat.name); setVipEditVal(String(displayPrice)); }} className="ml-1 cursor-pointer text-[9px] text-amber-500 hover:text-amber-700" title="编辑VIP价格">✎</span>}
                                   </p>
                                 </div>
                               </button>
@@ -2015,6 +2047,7 @@ function NewOrderModal({
   initialPhone,
   editOrder,
   settings,
+  onSaveVipPrice,
 }: {
   type: "定制单" | "批发单";
   existingOrders: BizOrder[];
@@ -2026,6 +2059,7 @@ function NewOrderModal({
   initialClientName?: string;
   initialPhone?: string;
   editOrder?: BizOrder;
+  onSaveVipPrice: (clientName: string, materialName: string, price: number) => void;
 }) {
   const today = formatLocalDate(new Date());
   const [fields, setFields] = useState({
@@ -2045,6 +2079,8 @@ function NewOrderModal({
   const [materialCategoryFilter, setMaterialCategoryFilter] = useState("");
   const [materialSupplierFilter, setMaterialSupplierFilter] = useState("");
   const [noMaterial, setNoMaterial] = useState(!editOrder?.material_rows?.length);
+  const [vipEditMat, setVipEditMat] = useState<string | null>(null);
+  const [vipEditVal, setVipEditVal] = useState("");
 
   const isVip = clients.some((c) => c.name === fields.client_name.trim() && c.is_vip);
   const materialTotal = selectedMaterials.reduce((sum, r) => sum + r.qty * r.unit_price * (r.is_return ? -1 : 1), 0);
@@ -2364,6 +2400,34 @@ function NewOrderModal({
                             const displayPrice = clientVipPrice ?? (isVip && mat.vip_sale_price_usd != null ? mat.vip_sale_price_usd : (mat.sale_price_usd ?? 0));
                             const isClientVipPrice = clientVipPrice != null;
                             const alreadyAdded = selectedMaterials.some((r) => r.name === mat.name);
+                            const showEditIcon = isVip || isClientVipPrice;
+                            const isEditingThis = vipEditMat === mat.name;
+                            if (isEditingThis) {
+                              return (
+                                <div key={mat.id} className="flex items-center gap-2 rounded-lg border border-amber-300 bg-amber-50 p-2">
+                                  <div className="h-10 w-10 flex-shrink-0 overflow-hidden rounded border border-slate-100 bg-slate-50">
+                                    {mat.image ? <img src={mat.image} alt={mat.name} className="h-full w-full object-contain" /> : <div className="flex h-full w-full items-center justify-center text-[9px] text-slate-400">无图</div>}
+                                  </div>
+                                  <div className="min-w-0 flex-1">
+                                    <p className="truncate text-[11px] font-medium text-slate-800">{mat.name}</p>
+                                    <div className="flex items-center gap-1 mt-0.5">
+                                      <span className="text-[10px] text-amber-600">VIP$</span>
+                                      <input
+                                        autoFocus
+                                        type="number"
+                                        min={0}
+                                        step={0.01}
+                                        value={vipEditVal}
+                                        onChange={(e) => setVipEditVal(e.target.value)}
+                                        onBlur={() => { const p = Number(vipEditVal); if (!isNaN(p) && p >= 0) onSaveVipPrice(fields.client_name.trim(), mat.name, p); setVipEditMat(null); }}
+                                        onKeyDown={(e) => { if (e.key === "Enter") { const p = Number(vipEditVal); if (!isNaN(p) && p >= 0) onSaveVipPrice(fields.client_name.trim(), mat.name, p); setVipEditMat(null); } else if (e.key === "Escape") setVipEditMat(null); }}
+                                        className="h-5 w-16 rounded border border-amber-300 px-1 text-[10px] text-amber-700 focus:outline-none"
+                                      />
+                                    </div>
+                                  </div>
+                                </div>
+                              );
+                            }
                             return (
                               <button
                                 key={mat.id}
@@ -2384,6 +2448,7 @@ function NewOrderModal({
                                   <p className="text-[10px] text-slate-500">
                                     {isClientVipPrice ? "VIP专属价" : "卖出价"}: <span className={`font-semibold ${isClientVipPrice ? "text-amber-600" : "text-slate-700"}`}>${displayPrice}</span>
                                     <span className="ml-2">库存: {mat.stock_quantity}</span>
+                                    {showEditIcon && <span onClick={(e) => { e.stopPropagation(); e.preventDefault(); setVipEditMat(mat.name); setVipEditVal(String(displayPrice)); }} className="ml-1 cursor-pointer text-[9px] text-amber-500 hover:text-amber-700" title="编辑VIP价格">✎</span>}
                                   </p>
                                 </div>
                               </button>
@@ -2769,6 +2834,16 @@ function OrdersSection({
     setBulkAction(null);
   }
 
+  function handleSaveVipPrice(clientName: string, materialName: string, price: number) {
+    setSettings((prev) => {
+      const allPrices: VipPriceRecord[] = prev.vip_prices ? JSON.parse(prev.vip_prices) : [];
+      const filtered = allPrices.filter((p) => !(p.client_name === clientName && p.material_name === materialName));
+      filtered.push({ client_name: clientName, material_name: materialName, price });
+      return { ...prev, vip_prices: JSON.stringify(filtered) };
+    });
+    setTimeout(() => onAutoSave?.(), 0);
+  }
+
   if (selectedOrder) {
     return (
       <OrderDetailView
@@ -2778,6 +2853,7 @@ function OrdersSection({
         onBack={() => setSelectedOrder(null)}
         onSave={handleSave}
         onOfficeEntry={(entry) => setCashEntries((prev) => [entry, ...prev])}
+        onSaveVipPrice={handleSaveVipPrice}
       />
     );
   }
@@ -2793,6 +2869,7 @@ function OrdersSection({
           materials={materials}
           onClose={() => setCreateType(null)}
           onCreate={handleCreate}
+          onSaveVipPrice={handleSaveVipPrice}
         />
       )}
 
@@ -4520,6 +4597,16 @@ function ClientsSection({ clients, setClients, suppliers, setSuppliers, orders, 
     });
   }, [selectedClient?.id, orders]);
 
+  function handleSaveVipPrice(clientName: string, materialName: string, price: number) {
+    setSettings((prev) => {
+      const allPrices: VipPriceRecord[] = prev.vip_prices ? JSON.parse(prev.vip_prices) : [];
+      const filtered = allPrices.filter((p) => !(p.client_name === clientName && p.material_name === materialName));
+      filtered.push({ client_name: clientName, material_name: materialName, price });
+      return { ...prev, vip_prices: JSON.stringify(filtered) };
+    });
+    setTimeout(() => onAutoSave?.(), 0);
+  }
+
   function handleClientOrderCreate(order: BizOrder) {
     setOrders((prev) => [order, ...prev]);
     setNewOrderTypeForClient(null);
@@ -4874,6 +4961,7 @@ function ClientsSection({ clients, setClients, suppliers, setSuppliers, orders, 
                   onBack={() => setSelectedClientOrderDetail(null)}
                   onSave={handleClientDetailSave}
                   onOfficeEntry={(entry) => setCashEntries((prev) => [entry, ...prev])}
+                  onSaveVipPrice={handleSaveVipPrice}
                 />
               ) : selectedClient ? (
                 <div className="flex flex-col gap-4 xl:h-[calc(100vh-22rem)]">
@@ -4932,6 +5020,7 @@ function ClientsSection({ clients, setClients, suppliers, setSuppliers, orders, 
                   onCreate={handleClientOrderCreate}
                   initialClientName={selectedClient.name}
                   initialPhone={selectedClient.phone ?? undefined}
+                  onSaveVipPrice={handleSaveVipPrice}
                 />
                     )}
 

@@ -27,6 +27,7 @@ import {
   type MaterialRecord,
   type MaterialRow,
   type MeasurementAppointmentRecord,
+  type VipPriceRecord,
   type PaymentRecord,
   type PayrollRecord,
   type PrintArchiveRecord,
@@ -1912,15 +1913,19 @@ function NewOrderModal({
   type,
   existingOrders,
   clients,
+  materials,
   onClose,
   onCreate,
   initialClientName,
   initialPhone,
   editOrder,
+  settings,
 }: {
   type: "定制单" | "批发单";
   existingOrders: BizOrder[];
   clients: ContactRecord[];
+  settings: BizSettings;
+  materials: MaterialRecord[];
   onClose: () => void;
   onCreate: (order: BizOrder) => void;
   initialClientName?: string;
@@ -1939,6 +1944,60 @@ function NewOrderModal({
     deposit_note: "",
     deposit_office: false,
     preview_image: editOrder?.preview_image ?? "",
+  });
+  const [selectedMaterials, setSelectedMaterials] = useState<MaterialRow[]>(editOrder?.material_rows ?? []);
+  const [materialSearch, setMaterialSearch] = useState("");
+  const [materialCategoryFilter, setMaterialCategoryFilter] = useState("");
+  const [materialSupplierFilter, setMaterialSupplierFilter] = useState("");
+  const [noMaterial, setNoMaterial] = useState(!editOrder?.material_rows?.length);
+
+  const isVip = clients.some((c) => c.name === fields.client_name.trim() && c.is_vip);
+  const materialTotal = selectedMaterials.reduce((sum, r) => sum + r.qty * r.unit_price * (r.is_return ? -1 : 1), 0);
+
+  const materialCategoryOptions = (() => {
+    const cats = [...new Set(materials.map((m) => m.category).filter(Boolean))] as string[];
+    return cats.sort();
+  })();
+  const materialSupplierOptions = (() => {
+    const sups = [...new Set(materials.map((m) => m.supplier).filter(Boolean))] as string[];
+    return sups.sort();
+  })();
+
+  function getVipPrice(clientName: string, materialName: string): number | null {
+    try {
+      const allPrices: VipPriceRecord[] = settings.vip_prices ? JSON.parse(settings.vip_prices) : [];
+      const match = allPrices.find((p) => p.client_name === clientName && p.material_name === materialName);
+      return match ? match.price : null;
+    } catch { return null; }
+  }
+
+  function addMaterialToOrder(mat: MaterialRecord) {
+    // Per-client VIP price first, then blanket VIP price, then default sale price
+    const clientVipPrice = getVipPrice(fields.client_name.trim(), mat.name);
+    const price = clientVipPrice ?? (isVip && mat.vip_sale_price_usd != null ? mat.vip_sale_price_usd : (mat.sale_price_usd ?? 0));
+    setSelectedMaterials((prev) => [...prev, {
+      name: mat.name,
+      spec: mat.specification || undefined,
+      qty: 1,
+      unit: mat.unit,
+      unit_price: price,
+      image: mat.image || undefined,
+    }]);
+  }
+
+  function updateSelectedMaterial(i: number, key: keyof MaterialRow, val: string | number | boolean) {
+    setSelectedMaterials((prev) => prev.map((r, idx) => (idx === i ? { ...r, [key]: val } : r)));
+  }
+
+  function removeSelectedMaterial(i: number) {
+    setSelectedMaterials((prev) => prev.filter((_, idx) => idx !== i));
+  }
+
+  const filteredMaterials = materials.filter((m) => {
+    if (materialSearch && !m.name.toLowerCase().includes(materialSearch.toLowerCase()) && !(m.code && m.code.toLowerCase().includes(materialSearch.toLowerCase()))) return false;
+    if (materialCategoryFilter && m.category !== materialCategoryFilter) return false;
+    if (materialSupplierFilter && m.supplier !== materialSupplierFilter) return false;
+    return true;
   });
 
   function set(key: string, val: string | boolean) {
@@ -1983,8 +2042,10 @@ function NewOrderModal({
   function handleCreate() {
     if (!fields.client_name.trim()) return;
 
+    const wholesaleTotal = type === "批发单" ? (noMaterial ? (Number(fields.total_price) || 0) : materialTotal) : 0;
+
     if (editOrder) {
-      const totalPrice = Number(fields.total_price) || 0;
+      const totalPrice = type === "批发单" ? wholesaleTotal : (Number(fields.total_price) || 0);
       const paymentHistory = editOrder.payment_history ?? [];
       const amountPaid = Math.max(0, paymentHistory.reduce((sum, record) => sum + (record.type === "refund" ? -record.amount : record.amount), 0));
       const balance = Math.max(0, totalPrice - amountPaid);
@@ -1995,13 +2056,14 @@ function NewOrderModal({
         client_id: matchedClient?.id ?? editOrder.client_id,
         phone: fields.phone || undefined,
         address: fields.address || undefined,
-        description: fields.description || undefined,
+        description: editOrder.order_type === "定制单" ? (fields.description || undefined) : undefined,
         preview_image: editOrder.order_type === "定制单" ? fields.preview_image || undefined : undefined,
         total_price: totalPrice,
         total_after_tax: totalPrice,
         amount_paid: Number(amountPaid.toFixed(2)),
         balance: Number(balance.toFixed(2)),
         status: deriveStatus(totalPrice, amountPaid, editOrder.status ?? "下单"),
+        material_rows: editOrder.order_type === "批发单" && !noMaterial ? selectedMaterials : undefined,
       };
       onCreate(updatedOrder);
       onClose();
@@ -2012,7 +2074,7 @@ function NewOrderModal({
     const year = new Date().getFullYear();
     const orderNumber = nextYearScopedId(existingOrders.map((item) => item.order_number), prefix, year, 4);
 
-    const totalPrice = Number(fields.total_price) || 0;
+    const totalPrice = type === "批发单" ? wholesaleTotal : (Number(fields.total_price) || 0);
     const deposit = Number(fields.deposit) || 0;
     const balance = Math.max(0, totalPrice - deposit);
     const status = deriveStatus(totalPrice, deposit, "下单");
@@ -2040,7 +2102,7 @@ function NewOrderModal({
       client_id: matchedClient?.id,
       phone: fields.phone || undefined,
       address: fields.address || undefined,
-      description: fields.description || undefined,
+      description: type === "定制单" ? (fields.description || undefined) : undefined,
       preview_image: type === "定制单" ? fields.preview_image || undefined : undefined,
       total_price: totalPrice,
       amount_paid: deposit,
@@ -2048,17 +2110,20 @@ function NewOrderModal({
       order_date: today,
       status,
       payment_history: paymentHistory,
+      material_rows: type === "批发单" && !noMaterial ? selectedMaterials : undefined,
     };
     onCreate(newOrder);
     onClose();
   }
 
+  const isWholesale = type === "批发单";
+
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 p-3">
-      <div className="w-full max-w-lg rounded-2xl border border-gray-200 bg-gray-50 shadow-2xl">
+      <div className={`w-full ${isWholesale ? "max-w-2xl max-h-[95vh] overflow-y-auto" : "max-w-lg"} rounded-2xl border border-gray-200 bg-gray-50 shadow-2xl`}>
         <div className="flex items-center justify-between border-b border-gray-200 px-5 py-4">
           <h2 className="text-sm font-bold text-slate-700">
-            {editOrder ? `编辑 ${editOrder.order_number}` : `新建${type}`}
+            {editOrder ? `编辑 ${editOrder.order_number}` : `新建${type}`}{isVip ? <span className="ml-2 rounded bg-amber-100 px-1.5 py-0.5 text-[10px] font-semibold text-amber-700">VIP</span> : null}
           </h2>
           <button
             onClick={onClose}
@@ -2109,27 +2174,181 @@ function NewOrderModal({
               className="h-8 w-full rounded-lg border border-slate-300 bg-white px-3 text-xs text-slate-700 focus:border-gray-200 focus:outline-none"
             />
           </div>
-          <div>
-            <label className="mb-1 block text-[11px] font-semibold text-slate-700">说明</label>
-            <textarea
-              value={fields.description}
-              onChange={(e) => set("description", e.target.value)}
-              rows={2}
-              className="w-full rounded-lg border border-slate-300 bg-white px-3 py-2 text-xs text-slate-700 focus:border-gray-200 focus:outline-none resize-none"
-            />
-          </div>
-          <div>
-            <label className="mb-1 block text-[11px] font-semibold text-slate-700">总价</label>
-            <input
-              type="number"
-              min={0}
-              step={0.01}
-              placeholder="0.00"
-              value={fields.total_price}
-              onChange={(e) => set("total_price", e.target.value)}
-              className="h-8 w-full rounded-lg border border-slate-300 bg-white px-3 text-xs text-slate-700 focus:border-gray-200 focus:outline-none"
-            />
-          </div>
+          {!isWholesale && (
+            <div>
+              <label className="mb-1 block text-[11px] font-semibold text-slate-700">说明</label>
+              <textarea
+                value={fields.description}
+                onChange={(e) => set("description", e.target.value)}
+                rows={2}
+                className="w-full rounded-lg border border-slate-300 bg-white px-3 py-2 text-xs text-slate-700 focus:border-gray-200 focus:outline-none resize-none"
+              />
+            </div>
+          )}
+          {!isWholesale && (
+            <div>
+              <label className="mb-1 block text-[11px] font-semibold text-slate-700">总价</label>
+              <input
+                type="number"
+                min={0}
+                step={0.01}
+                placeholder="0.00"
+                value={fields.total_price}
+                onChange={(e) => set("total_price", e.target.value)}
+                className="h-8 w-full rounded-lg border border-slate-300 bg-white px-3 text-xs text-slate-700 focus:border-gray-200 focus:outline-none"
+              />
+            </div>
+          )}
+          {isWholesale && (
+            <div>
+              {/* No material toggle */}
+              <label className="mb-2 flex items-center gap-2 text-xs text-slate-600">
+                <input
+                  type="checkbox"
+                  checked={noMaterial}
+                  onChange={(e) => { setNoMaterial(e.target.checked); if (e.target.checked) setSelectedMaterials([]); }}
+                  className="h-3.5 w-3.5"
+                />
+                不选物料，直接填总价
+              </label>
+
+              {noMaterial ? (
+                <div>
+                  <label className="mb-1 block text-[11px] font-semibold text-slate-700">总价</label>
+                  <input
+                    type="number"
+                    min={0}
+                    step={0.01}
+                    placeholder="0.00"
+                    value={fields.total_price}
+                    onChange={(e) => set("total_price", e.target.value)}
+                    className="h-8 w-full rounded-lg border border-slate-300 bg-white px-3 text-xs text-slate-700 focus:border-gray-200 focus:outline-none"
+                  />
+                </div>
+              ) : (
+                <>
+                  {/* Material grid selector */}
+                  <div className="rounded-lg border border-slate-200 bg-white">
+                    <div className="flex flex-wrap items-center gap-2 border-b border-slate-200 px-3 py-2">
+                      <span className="text-[11px] font-semibold text-slate-700">
+                        选择物料 {isVip ? <span className="ml-1 font-normal text-amber-600">(VIP 价格已启用)</span> : null}
+                      </span>
+                      <div className="ml-auto flex flex-wrap items-center gap-2">
+                        <select
+                          value={materialCategoryFilter}
+                          onChange={(e) => setMaterialCategoryFilter(e.target.value)}
+                          className="h-7 rounded border border-slate-300 px-1.5 text-[10px] text-slate-700 focus:border-gray-200 focus:outline-none"
+                        >
+                          <option value="">全部分类</option>
+                          {materialCategoryOptions.map((cat) => <option key={cat} value={cat}>{cat}</option>)}
+                        </select>
+                        <select
+                          value={materialSupplierFilter}
+                          onChange={(e) => setMaterialSupplierFilter(e.target.value)}
+                          className="h-7 rounded border border-slate-300 px-1.5 text-[10px] text-slate-700 focus:border-gray-200 focus:outline-none"
+                        >
+                          <option value="">全部供应商</option>
+                          {materialSupplierOptions.map((sup) => <option key={sup} value={sup}>{sup}</option>)}
+                        </select>
+                        <input
+                          type="text"
+                          placeholder="搜索..."
+                          value={materialSearch}
+                          onChange={(e) => setMaterialSearch(e.target.value)}
+                          className="h-7 w-28 rounded border border-slate-300 px-2 text-[11px] text-slate-700 focus:border-gray-200 focus:outline-none"
+                        />
+                      </div>
+                    </div>
+                    <div className="max-h-60 overflow-y-auto p-2">
+                      {filteredMaterials.length === 0 ? (
+                        <p className="py-4 text-center text-[11px] text-slate-500">没有匹配的物料</p>
+                      ) : (
+                        <div className="grid grid-cols-3 gap-2">
+                          {filteredMaterials.map((mat) => {
+                            const clientVipPrice = getVipPrice(fields.client_name.trim(), mat.name);
+                            const displayPrice = clientVipPrice ?? (isVip && mat.vip_sale_price_usd != null ? mat.vip_sale_price_usd : (mat.sale_price_usd ?? 0));
+                            const isClientVipPrice = clientVipPrice != null;
+                            const alreadyAdded = selectedMaterials.some((r) => r.name === mat.name);
+                            return (
+                              <button
+                                key={mat.id}
+                                type="button"
+                                disabled={alreadyAdded}
+                                onClick={() => addMaterialToOrder(mat)}
+                                className="flex items-center gap-2 rounded-lg border border-slate-200 p-2 text-left hover:border-amber-400 hover:bg-amber-50 transition-colors disabled:opacity-30 disabled:cursor-not-allowed disabled:hover:border-slate-200 disabled:hover:bg-white"
+                              >
+                                <div className="h-10 w-10 flex-shrink-0 overflow-hidden rounded border border-slate-100 bg-slate-50">
+                                  {mat.image ? (
+                                    <img src={mat.image} alt={mat.name} className="h-full w-full object-contain" />
+                                  ) : (
+                                    <div className="flex h-full w-full items-center justify-center text-[9px] text-slate-400">无图</div>
+                                  )}
+                                </div>
+                                <div className="min-w-0 flex-1">
+                                  <p className="truncate text-[11px] font-medium text-slate-800">{mat.name} <span className="font-normal text-slate-500">{mat.code}</span></p>
+                                  <p className="text-[10px] text-slate-500">
+                                    {isClientVipPrice ? "VIP专属价" : "卖出价"}: <span className={`font-semibold ${isClientVipPrice ? "text-amber-600" : "text-slate-700"}`}>${displayPrice}</span>
+                                    <span className="ml-2">库存: {mat.stock_quantity}</span>
+                                  </p>
+                                </div>
+                              </button>
+                            );
+                          })}
+                        </div>
+                      )}
+                    </div>
+                  </div>
+
+                  {/* Selected materials list */}
+                  {selectedMaterials.length > 0 && (
+                    <div className="mt-3 rounded-lg border border-slate-200 bg-slate-50 p-3">
+                      <p className="mb-2 text-[11px] font-semibold uppercase tracking-wider text-slate-700">已选物料</p>
+                      <div className="space-y-1.5">
+                        {selectedMaterials.map((r, i) => (
+                          <div key={i} className="flex items-center gap-2 rounded-lg border border-slate-200 bg-white px-2 py-1.5">
+                            <div className="min-w-0 flex-1">
+                              <p className="truncate text-xs font-medium text-slate-800">{r.name}</p>
+                              <p className="text-[10px] text-slate-500">{r.spec || ""}</p>
+                            </div>
+                            <input
+                              type="number"
+                              min={1}
+                              value={r.qty}
+                              onChange={(e) => updateSelectedMaterial(i, "qty", Math.max(1, Number(e.target.value) || 1))}
+                              className="h-7 w-14 rounded border border-slate-300 px-1.5 text-center text-xs text-slate-700 focus:border-gray-200 focus:outline-none"
+                            />
+                            <span className="w-14 text-right text-xs text-slate-700">
+                              ${(r.qty * r.unit_price).toFixed(2)}
+                            </span>
+                            <label className="flex cursor-pointer items-center gap-1 text-[10px] text-slate-600">
+                              <input
+                                type="checkbox"
+                                checked={!!r.is_return}
+                                onChange={(e) => updateSelectedMaterial(i, "is_return", e.target.checked)}
+                                className="h-3 w-3"
+                              />
+                              退货
+                            </label>
+                            <button
+                              type="button"
+                              onClick={() => removeSelectedMaterial(i)}
+                              className="rounded p-0.5 text-xs text-slate-400 hover:text-red-500 transition-colors"
+                            >
+                              ✕
+                            </button>
+                          </div>
+                        ))}
+                      </div>
+                      <div className="mt-2 flex items-center justify-between rounded-lg bg-slate-100 px-3 py-2">
+                        <span className="text-xs font-semibold text-slate-700">总价</span>
+                        <span className="text-sm font-bold text-slate-700">{formatMoney(materialTotal)}</span>
+                      </div>
+                    </div>
+                  )}
+                </>
+              )}
+            </div>
+          )}
           {type === "定制单" && (
             <div className="rounded-lg border border-slate-200 bg-slate-50 p-3">
               <p className="mb-2 text-[11px] font-semibold uppercase tracking-wider text-slate-700">参考图片</p>
@@ -2216,6 +2435,7 @@ function OrdersSection({
   setPrintArchives,
   setCashEntries,
   setExpenses,
+  setSettings,
   onAutoSave,
 }: {
   orders: BizOrder[];
@@ -2223,6 +2443,7 @@ function OrdersSection({
   clients: ContactRecord[];
   setOrders: React.Dispatch<React.SetStateAction<BizOrder[]>>;
   settings: BizSettings;
+  setSettings: React.Dispatch<React.SetStateAction<BizSettings>>;
   printArchives: PrintArchiveRecord[];
   setPrintArchives: React.Dispatch<React.SetStateAction<PrintArchiveRecord[]>>;
   setCashEntries: React.Dispatch<React.SetStateAction<CashEntry[]>>;
@@ -2257,6 +2478,16 @@ function OrdersSection({
       prev.map((o) => (o.order_number === updated.order_number ? normalizedUpdated : o))
     );
     setSelectedOrder(normalizedUpdated);
+    // When closing order, also void related expenses/cash entries (same as delete)
+    if (updated.status === "已关闭") {
+      const orderNum = updated.order_number;
+      setExpenses((prev) => prev.map((item) =>
+        expenseReferencesOrder(item, orderNum) ? { ...item, voided: true } : item
+      ));
+      setCashEntries((prev) => prev.map((item) =>
+        cashEntryReferencesOrder(item, orderNum) ? { ...item, voided: true } : item
+      ));
+    }
     onAutoSave?.();
   }
 
@@ -2463,6 +2694,8 @@ function OrdersSection({
           type={createType}
           existingOrders={orders}
           clients={clients}
+          settings={settings}
+          materials={materials}
           onClose={() => setCreateType(null)}
           onCreate={handleCreate}
         />
@@ -3813,7 +4046,7 @@ function FinanceSection({ orders, setOrders, expenses, setExpenses, cashEntries,
 type ContactSub = "clients" | "suppliers";
 type ClientDetailTab = "overview" | "orders" | "appointments" | "activity";
 
-function ClientsSection({ clients, setClients, suppliers, setSuppliers, orders, setOrders, appointments, setAppointments, setCashEntries, setExpenses, materials, setMaterials, settings, onAutoSave }: { clients: ContactRecord[]; setClients: React.Dispatch<React.SetStateAction<ContactRecord[]>>; suppliers: SupplierRecord[]; setSuppliers: React.Dispatch<React.SetStateAction<SupplierRecord[]>>; orders: BizOrder[]; setOrders: React.Dispatch<React.SetStateAction<BizOrder[]>>; appointments: MeasurementAppointmentRecord[]; setAppointments: React.Dispatch<React.SetStateAction<MeasurementAppointmentRecord[]>>; setCashEntries: React.Dispatch<React.SetStateAction<CashEntry[]>>; setExpenses: React.Dispatch<React.SetStateAction<ExpenseRecord[]>>; materials: MaterialRecord[]; setMaterials: React.Dispatch<React.SetStateAction<MaterialRecord[]>>; settings: BizSettings; onAutoSave?: () => void; }) {
+function ClientsSection({ clients, setClients, suppliers, setSuppliers, orders, setOrders, appointments, setAppointments, setCashEntries, setExpenses, materials, setMaterials, settings, setSettings, onAutoSave }: { clients: ContactRecord[]; setClients: React.Dispatch<React.SetStateAction<ContactRecord[]>>; suppliers: SupplierRecord[]; setSuppliers: React.Dispatch<React.SetStateAction<SupplierRecord[]>>; orders: BizOrder[]; setOrders: React.Dispatch<React.SetStateAction<BizOrder[]>>; appointments: MeasurementAppointmentRecord[]; setAppointments: React.Dispatch<React.SetStateAction<MeasurementAppointmentRecord[]>>; setCashEntries: React.Dispatch<React.SetStateAction<CashEntry[]>>; setExpenses: React.Dispatch<React.SetStateAction<ExpenseRecord[]>>; materials: MaterialRecord[]; setMaterials: React.Dispatch<React.SetStateAction<MaterialRecord[]>>; settings: BizSettings; setSettings: React.Dispatch<React.SetStateAction<BizSettings>>; onAutoSave?: () => void; }) {
   const [sub, setSub] = useState<ContactSub>("clients");
   const today = formatLocalDate(new Date());
   const [clientDraft, setClientDraft] = useState({ name: "", contact: "", phone: "", wechat: "", address: "", note: "" });
@@ -3821,6 +4054,9 @@ function ClientsSection({ clients, setClients, suppliers, setSuppliers, orders, 
   const [supplierDraft, setSupplierDraft] = useState({ name: "", category: supplierCategoryOptions[0] ?? "布料", contact_person: "", phone: "", email: "", website: "", address: "", remark: "" });
   const [showClientModal, setShowClientModal] = useState(false);
   const [showSupplierModal, setShowSupplierModal] = useState(false);
+  const [showVipPriceModal, setShowVipPriceModal] = useState(false);
+  const [vipPriceClient, setVipPriceClient] = useState<(typeof clients)[number] | null>(null);
+  const [vipPriceDraft, setVipPriceDraft] = useState<Record<string, number>>({});
   const [editingClientId, setEditingClientId] = useState<string | null>(null);
   const [editingSupplierId, setEditingSupplierId] = useState<string | null>(null);
   const [confirmingClientId, setConfirmingClientId] = useState<string | null>(null);
@@ -4043,6 +4279,51 @@ function ClientsSection({ clients, setClients, suppliers, setSuppliers, orders, 
     setClients((prev) => prev.map((item) => item.id === clientId ? { ...item, is_vip: !item.is_vip } : item));
   }
 
+  function openVipPriceEditor(client: (typeof clients)[number]) {
+    setVipPriceClient(client);
+    const allPrices: VipPriceRecord[] = settings.vip_prices ? JSON.parse(settings.vip_prices) : [];
+    const clientPrices = allPrices.filter((p) => p.client_name === client.name);
+    const draft: Record<string, number> = {};
+    for (const p of clientPrices) {
+      draft[p.material_name] = p.price;
+    }
+    setVipPriceDraft(draft);
+    setShowVipPriceModal(true);
+  }
+
+  function saveVipPrices() {
+    if (!vipPriceClient) return;
+    const allPrices: VipPriceRecord[] = settings.vip_prices ? JSON.parse(settings.vip_prices) : [];
+    const filtered = allPrices.filter((p) => p.client_name !== vipPriceClient.name);
+    for (const [materialName, price] of Object.entries(vipPriceDraft)) {
+      if (price > 0) {
+        filtered.push({ client_name: vipPriceClient.name, material_name: materialName, price });
+      }
+    }
+    const updatedSettings = { ...settings, vip_prices: JSON.stringify(filtered) };
+    setSettings(updatedSettings);
+    onAutoSave?.();
+    setShowVipPriceModal(false);
+    setVipPriceClient(null);
+    setVipPriceDraft({});
+  }
+
+  function removeVipPrice(materialName: string) {
+    setVipPriceDraft((prev) => {
+      const next = { ...prev };
+      delete next[materialName];
+      return next;
+    });
+  }
+
+  function getVipPriceForMaterial(clientName: string, materialName: string): number | null {
+    try {
+      const allPrices: VipPriceRecord[] = settings.vip_prices ? JSON.parse(settings.vip_prices) : [];
+      const match = allPrices.find((p) => p.client_name === clientName && p.material_name === materialName);
+      return match ? match.price : null;
+    } catch { return null; }
+  }
+
   useEffect(() => {
     setClientPage(1);
   }, [clientSearch]);
@@ -4256,6 +4537,88 @@ function ClientsSection({ clients, setClients, suppliers, setSuppliers, orders, 
         </div>
       )}
 
+      {showVipPriceModal && vipPriceClient && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-slate-950/45 px-4">
+          <div className="flex max-h-[85vh] w-full max-w-2xl flex-col rounded-2xl border border-gray-200 bg-gray-50 shadow-2xl">
+            <div className="flex items-start justify-between gap-3 border-b border-gray-200 px-5 py-4">
+              <div>
+                <h3 className="text-base font-semibold text-slate-700">VIP 价格 · {vipPriceClient.name}</h3>
+                <p className="mt-1 text-xs text-slate-700">设置此 VIP 客户对每个物料的独有价格。设了价格的物料会在批发单中自动使用此价格。</p>
+              </div>
+              <button onClick={() => setShowVipPriceModal(false)} className="rounded-lg border border-slate-200 px-2.5 py-1 text-xs text-slate-700 hover:border-slate-300 hover:text-slate-700 transition-colors">关闭</button>
+            </div>
+            <div className="flex-1 overflow-y-auto p-5">
+              <div className="space-y-3">
+                <p className="text-xs font-semibold text-slate-700">物料列表</p>
+                {materials.length === 0 ? (
+                  <p className="text-xs text-slate-500">暂无可选物料</p>
+                ) : (
+                  materials.map((mat) => {
+                    const currentPrice = vipPriceDraft[mat.name];
+                    const hasPrice = currentPrice !== undefined;
+                    const defaultVipPrice = mat.vip_sale_price_usd;
+                    return (
+                      <div key={mat.id} className="flex items-center gap-3 rounded-lg border border-slate-200 bg-white px-3 py-2">
+                        <div className="min-w-0 flex-1">
+                          <p className="text-xs font-medium text-slate-800">{mat.name}</p>
+                          <p className="text-[10px] text-slate-500">
+                            默认VIP价: {defaultVipPrice != null ? `$${defaultVipPrice}` : "未设"}
+                          </p>
+                        </div>
+                        <div className="flex items-center gap-2">
+                          {hasPrice ? (
+                            <>
+                              <input
+                                type="number"
+                                min={0}
+                                step={0.01}
+                                value={currentPrice}
+                                onChange={(e) => setVipPriceDraft((prev) => ({ ...prev, [mat.name]: Number(e.target.value) || 0 }))}
+                                className="h-7 w-20 rounded border border-slate-300 px-2 text-xs text-slate-700 text-center focus:border-gray-200 focus:outline-none"
+                              />
+                              <button
+                                onClick={() => removeVipPrice(mat.name)}
+                                className="rounded p-0.5 text-xs text-slate-400 hover:text-red-500"
+                              >
+                                ✕
+                              </button>
+                            </>
+                          ) : (
+                            <button
+                              onClick={() => setVipPriceDraft((prev) => ({ ...prev, [mat.name]: defaultVipPrice ?? 0 }))}
+                              className="rounded-lg border border-slate-200 px-2.5 py-1 text-[10px] text-slate-600 hover:border-blue-300 hover:text-blue-600 transition-colors"
+                            >
+                              添加价格
+                            </button>
+                          )}
+                        </div>
+                      </div>
+                    );
+                  })
+                )}
+              </div>
+              {Object.keys(vipPriceDraft).length > 0 && (
+                <div className="mt-4 rounded-lg border border-blue-100 bg-blue-50 p-3">
+                  <p className="text-[10px] font-semibold text-blue-700">已设价格 ({Object.keys(vipPriceDraft).length} 项)</p>
+                  <div className="mt-1 space-y-1">
+                    {Object.entries(vipPriceDraft).map(([name, price]) => (
+                      <div key={name} className="flex items-center justify-between text-xs text-blue-800">
+                        <span>{name}</span>
+                        <span className="font-semibold">${price.toFixed(2)}</span>
+                      </div>
+                    ))}
+                  </div>
+                </div>
+              )}
+            </div>
+            <div className="flex justify-end gap-2 border-t border-gray-200 px-5 py-4">
+              <ActionBtn onClick={() => { setShowVipPriceModal(false); setVipPriceClient(null); setVipPriceDraft({}); }}>取消</ActionBtn>
+              <ActionBtn tone="primary" onClick={saveVipPrices}>保存 VIP 价格</ActionBtn>
+            </div>
+          </div>
+        </div>
+      )}
+
 
       {sub === "clients" ? (
         <div className="space-y-3 xl:space-y-2">
@@ -4278,6 +4641,7 @@ function ClientsSection({ clients, setClients, suppliers, setSuppliers, orders, 
                       </div>
                       <div className="flex flex-wrap gap-1 shrink-0">
                         <ActionBtn onClick={() => toggleVip(selectedClient.id)}>{selectedClient.is_vip ? "取消VIP" : "设为VIP"}</ActionBtn>
+                        {selectedClient.is_vip ? <ActionBtn onClick={() => openVipPriceEditor(selectedClient)}>VIP价格</ActionBtn> : null}
                         <ActionBtn onClick={() => openEditClient(selectedClient)}>编辑</ActionBtn>
                         {confirmingClientId === selectedClient.id ? (
                           <>
@@ -4381,15 +4745,17 @@ function ClientsSection({ clients, setClients, suppliers, setSuppliers, orders, 
 
                     {(newOrderTypeForClient || editOrderForClient) && selectedClient && (
                       <NewOrderModal
-                        type={newOrderTypeForClient ?? (editOrderForClient!.order_type as "定制单" | "批发单")}
-                        existingOrders={orders}
-                        clients={clients}
-                        onClose={() => { setNewOrderTypeForClient(null); setEditOrderForClient(null); }}
-                        onCreate={editOrderForClient ? handleClientOrderUpdate : handleClientOrderCreate}
-                        initialClientName={newOrderTypeForClient ? selectedClient.name : undefined}
-                        initialPhone={newOrderTypeForClient ? selectedClient.phone ?? undefined : undefined}
-                        editOrder={editOrderForClient ?? undefined}
-                      />
+                  type={newOrderTypeForClient ?? (editOrderForClient!.order_type as "定制单" | "批发单")}
+                  existingOrders={orders}
+                  clients={clients}
+                  settings={settings}
+                  materials={materials}
+                  onClose={() => { setNewOrderTypeForClient(null); setEditOrderForClient(null); }}
+                  onCreate={editOrderForClient ? handleClientOrderUpdate : handleClientOrderCreate}
+                  initialClientName={newOrderTypeForClient ? selectedClient.name : undefined}
+                  initialPhone={newOrderTypeForClient ? selectedClient.phone ?? undefined : undefined}
+                  editOrder={editOrderForClient ?? undefined}
+                />
                     )}
 
                     {clientDetailTab === "orders" ? (
@@ -6172,7 +6538,7 @@ export default function DashboardBizPage() {
               employees={employees}
             />
           )}
-          {section === "orders" && <OrdersSection orders={showVoided ? orders : orders.filter((o) => o.status !== "已作废")} materials={materials} clients={clients} setOrders={setOrders} settings={settings} printArchives={printArchives} setPrintArchives={setPrintArchives} setCashEntries={setCashEntries} setExpenses={setExpenses} onAutoSave={autoSave} />}
+          {section === "orders" && <OrdersSection orders={showVoided ? orders : orders.filter((o) => o.status !== "已作废")} materials={materials} clients={clients} setOrders={setOrders} settings={settings} setSettings={setSettings} printArchives={printArchives} setPrintArchives={setPrintArchives} setCashEntries={setCashEntries} setExpenses={setExpenses} onAutoSave={autoSave} />}
           {section === "finance" && (
             <FinanceSection
               orders={showVoided ? orders : orders.filter((o) => o.status !== "已作废")}
@@ -6207,6 +6573,7 @@ export default function DashboardBizPage() {
               materials={materials}
               setMaterials={setMaterials}
               settings={settings}
+              setSettings={setSettings}
               onAutoSave={autoSave}
             />
           )}

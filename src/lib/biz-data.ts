@@ -17,6 +17,7 @@ export type MaterialRow = {
   unit: string;
   unit_price: number;
   image?: string;
+  is_return?: boolean;
 };
 
 export type BizOrder = {
@@ -244,6 +245,12 @@ export type PrintArchiveRecord = {
   summary?: string;
 };
 
+export type VipPriceRecord = {
+  client_name: string;
+  material_name: string;
+  price: number;
+};
+
 export type BizSettings = {
   company_name: string;
   company_name_zh?: string;
@@ -276,6 +283,7 @@ export type BizSettings = {
   auto_attendance_default_minutes?: number;
   auto_attendance_note?: string;
   material_categories?: string;
+  vip_prices?: string;
 };
 
 function toNumber(value: unknown) {

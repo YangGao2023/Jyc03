@@ -181,22 +181,39 @@ async function syncCashFlowFromOld(lastMs: number): Promise<number> {
     `SELECT * FROM T1200 WHERE T2 > ? ORDER BY T1 ASC`, [String(Math.floor(lastMs))],
   );
 
+  // 预加载 T1000 类型字典
+  const [incTypeRows, expTypeRows] = await Promise.all([
+    queryRows("SELECT P1, C4 FROM T1000 WHERE C1=2"),
+    queryRows("SELECT P1, C4 FROM T1000 WHERE C1=3"),
+  ]);
+  const incTypeMap: Record<string, string> = {};
+  const expTypeMap: Record<string, string> = {};
+  for (const r of incTypeRows) incTypeMap[String(r.P1)] = String(r.C4 || "");
+  for (const r of expTypeRows) expTypeMap[String(r.P1)] = String(r.C4 || "");
+
   for (const t of rows) {
     const p1 = String(t.P1);
     const isIncome = Number(t.Z2) === 1;
     const amount = fromCents(Number(t.C5));
     const isOffice = String(t.P3 || "") === "110" ? 1 : 0;
+    const p5 = String(t.P5 || "0");
+    const typeName = isIncome
+      ? (incTypeMap[p5] || "")
+      : (expTypeMap[p5] || "");
 
     if (isIncome) {
       await executeStmt(
-        `INSERT INTO a3s_cash_entries(id, type, amount, date, method, note, office, old_id)
-         VALUES(?,?,?,?,?,?,?,?)
+        `INSERT INTO a3s_cash_entries(id, type, amount, date, method, note, office, category, old_id)
+         VALUES(?,?,?,?,?,?,?,?,?)
          ON DUPLICATE KEY UPDATE
            type=VALUES(type), amount=VALUES(amount), date=VALUES(date),
-           method=VALUES(method), note=VALUES(note), office=VALUES(office)`,
-        [`inc-${p1}`, "收入", amount, fromYyyymmdd(String(t.C6 || "")), codeToMethod(Number(t.C4)), String(t.C7 || t.C3 || ""), isOffice, p1],
+           method=VALUES(method), note=VALUES(note), office=VALUES(office), category=VALUES(category)`,
+        [`inc-${p1}`, "收入", amount, fromYyyymmdd(String(t.C6 || "")), codeToMethod(Number(t.C4)), String(t.C7 || t.C3 || ""), isOffice, isOffice ? typeName : null, p1],
       );
     } else {
+      // 办公室支出用T1000类型名作为expense_type，非办公室保留原描述
+      const expType = isOffice && typeName ? typeName : String(t.C3 || t.C2 || "");
+      const expenseId = `exp-${p1}`;
       await executeStmt(
         `INSERT INTO a3s_expenses(id, amount, expense_date, payment_method, target, detail, expense_type, remark, office, old_id)
          VALUES(?,?,?,?,?,?,?,?,?,?)
@@ -204,9 +221,53 @@ async function syncCashFlowFromOld(lastMs: number): Promise<number> {
            amount=VALUES(amount), expense_date=VALUES(expense_date),
            payment_method=VALUES(payment_method), target=VALUES(target),
            detail=VALUES(detail), expense_type=VALUES(expense_type), remark=VALUES(remark), office=VALUES(office)`,
-        [`exp-${p1}`, amount, fromYyyymmdd(String(t.C6 || "")), codeToMethod(Number(t.C4)), String(t.C2 || ""), String(t.C3 || t.C2 || ""), String(t.C3 || t.C2 || ""), String(t.C7 || ""), isOffice, p1],
+        [expenseId, amount, fromYyyymmdd(String(t.C6 || "")), codeToMethod(Number(t.C4)), String(t.C2 || ""), String(t.C3 || t.C2 || ""), expType, String(t.C7 || ""), isOffice, p1],
       );
+      // 办公室支出也写入a3s_cash_entries，以便办公室tab统一展示
+      if (isOffice) {
+        await executeStmt(
+          `INSERT INTO a3s_cash_entries(id, type, amount, date, method, note, office, category, source_type, source_id, old_id)
+           VALUES(?,?,?,?,?,?,?,?,?,?,?)
+           ON DUPLICATE KEY UPDATE
+             type=VALUES(type), amount=VALUES(amount), date=VALUES(date),
+             method=VALUES(method), note=VALUES(note), office=VALUES(office),
+             category=VALUES(category), source_type=VALUES(source_type)`,
+          [`office-exp-${p1}`, "支出", amount, fromYyyymmdd(String(t.C6 || "")),
+           codeToMethod(Number(t.C4)), String(t.C7 || t.C3 || ""), 1,
+           typeName || String(t.C3 || t.C2 || ""), "expense", expenseId, p1],
+        );
+      }
     }
+    count++;
+  }
+  return count;
+}
+
+/**
+ * 从旧 T1210 同步办公室转账
+ * 写入 a3s_cash_entries，source_type='office-transfer' 以便前端统一处理
+ */
+async function syncOfficeTransfersFromOld(lastMs: number): Promise<number> {
+  let count = 0;
+  const rows = await queryRows(
+    `SELECT * FROM T1210 WHERE T2 > ? ORDER BY T1 ASC`, [String(Math.floor(lastMs))],
+  );
+  const fromYmd = (s: string): string => {
+    if (!s || s.length !== 8) return s || "";
+    return `${s.slice(0,4)}-${s.slice(4,6)}-${s.slice(6,8)}`;
+  };
+
+  for (const t of rows) {
+    const type = Number(t.Z2) === 1 ? "转入" : "转出";
+    await executeStmt(
+      `INSERT INTO a3s_cash_entries(id, type, amount, date, method, note, office, source_type, old_id)
+       VALUES(?,?,?,?,?,?,?,?,?)
+       ON DUPLICATE KEY UPDATE
+         type=VALUES(type), amount=VALUES(amount), date=VALUES(date),
+         method=VALUES(method), note=VALUES(note), office=VALUES(office)`,
+      [`transfer-${String(t.P1)}`, type, fromCents(Number(t.C2)),
+       fromYmd(String(t.C3 || "")), "现金", String(t.C4 || ""), 1, "office-transfer", t.P1],
+    );
     count++;
   }
   return count;
@@ -397,6 +458,7 @@ export async function syncFromOldTablesIfNeeded(): Promise<void> {
         syncAppointmentsFromOld(lastTs),
         syncEmployeesFromOld(lastTs),
         syncAttendancesFromOld(lastTs),
+        syncOfficeTransfersFromOld(lastTs),
       ]);
 
       const total = results.reduce((sum, r) => sum + (r.status === "fulfilled" ? r.value : 0), 0);

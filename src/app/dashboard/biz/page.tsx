@@ -3811,7 +3811,7 @@ function FinanceSection({ orders, setOrders, expenses, setExpenses, cashEntries,
 // ─── Clients ─────────────────────────────────────────────────────────────────
 
 type ContactSub = "clients" | "suppliers";
-type ClientDetailTab = "overview" | "orders" | "payments" | "appointments" | "activity";
+type ClientDetailTab = "overview" | "orders" | "appointments" | "activity";
 
 function ClientsSection({ clients, setClients, suppliers, setSuppliers, orders, setOrders, appointments, setAppointments, setCashEntries, setExpenses, materials, setMaterials, settings, onAutoSave }: { clients: ContactRecord[]; setClients: React.Dispatch<React.SetStateAction<ContactRecord[]>>; suppliers: SupplierRecord[]; setSuppliers: React.Dispatch<React.SetStateAction<SupplierRecord[]>>; orders: BizOrder[]; setOrders: React.Dispatch<React.SetStateAction<BizOrder[]>>; appointments: MeasurementAppointmentRecord[]; setAppointments: React.Dispatch<React.SetStateAction<MeasurementAppointmentRecord[]>>; setCashEntries: React.Dispatch<React.SetStateAction<CashEntry[]>>; setExpenses: React.Dispatch<React.SetStateAction<ExpenseRecord[]>>; materials: MaterialRecord[]; setMaterials: React.Dispatch<React.SetStateAction<MaterialRecord[]>>; settings: BizSettings; onAutoSave?: () => void; }) {
   const [sub, setSub] = useState<ContactSub>("clients");
@@ -4349,7 +4349,6 @@ function ClientsSection({ clients, setClients, suppliers, setSuppliers, orders, 
                     options={[
                       { key: "overview", label: "总览" },
                       { key: "orders", label: "订单" },
-                      { key: "payments", label: "最近收款" },
                       { key: "appointments", label: "量尺寸" },
                       { key: "activity", label: "业务动态" },
                     ]}
@@ -4545,40 +4544,6 @@ function ClientsSection({ clients, setClients, suppliers, setSuppliers, orders, 
                           </div>
                         ) : <div className="rounded-xl border border-dashed border-slate-200 py-10 text-center text-xs text-slate-700">这个客户还没有关联订单</div>}
                       </div>
-                    </div>
-                  </div>
-                    ) : null}
-
-                    {clientDetailTab === "payments" ? (
-                      <div className="space-y-4">
-                    <div className="rounded-xl border border-gray-200 bg-gray-50 p-3">
-                      <div className="mb-3 flex items-center justify-between">
-                        <p className="text-xs font-semibold text-slate-700">最近收款</p>
-                        <span className="text-[11px] text-slate-700">从关联订单里自动汇总</span>
-                      </div>
-                      {clientRecentPayments.length ? (
-                        <div className="space-y-2">
-                          {pagedClientPayments.map((item, index) => (
-                            <div key={`${item.order_number}-${item.date}-${index}`} className="rounded-lg border border-slate-200 px-3 py-2">
-                              <div className="flex items-center justify-between gap-2">
-                                <span className="text-xs font-medium text-slate-700">{item.order_number}</span>
-                                <span className={`text-xs font-semibold ${item.type === "refund" ? "text-rose-600" : "text-emerald-600"}`}>{item.type === "refund" ? "退款" : "收款"} {formatMoney(item.amount)}</span>
-                              </div>
-                              <p className="mt-1 text-[11px] text-slate-700">{item.date} · {item.method} · {item.order_status}</p>
-                              <p className="mt-1 text-[11px] text-slate-700">{item.note ?? "无备注"}</p>
-                            </div>
-                          ))}
-                          {clientPaymentsPageCount > 1 && (
-                            <div className="flex items-center justify-between pt-1 text-xs text-slate-700">
-                              <span>第 {clientPaymentsPage} / {clientPaymentsPageCount} 页</span>
-                              <div className="flex gap-1">
-                                <ActionBtn onClick={() => setClientPaymentsPage((p) => Math.max(1, p - 1))} disabled={clientPaymentsPage <= 1}>上一页</ActionBtn>
-                                <ActionBtn onClick={() => setClientPaymentsPage((p) => Math.min(clientPaymentsPageCount, p + 1))} disabled={clientPaymentsPage >= clientPaymentsPageCount}>下一页</ActionBtn>
-                              </div>
-                            </div>
-                          )}
-                        </div>
-                      ) : <div className="rounded-xl border border-dashed border-slate-200 py-10 text-center text-xs text-slate-700">暂时还没有收款记录</div>}
                     </div>
                   </div>
                     ) : null}

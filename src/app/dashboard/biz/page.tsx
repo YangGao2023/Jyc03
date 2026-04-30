@@ -6849,7 +6849,10 @@ function AppointmentsSection({ appointments, setAppointments, clients }: { appoi
 
   function formatCopyDate(date: string) {
     if (!date) return "";
-    const [y, m, d] = date.split("-");
+    // Handle both "YYYY-MM-DD" and "YYYY/M/D" formats
+    const parts = date.includes("/") ? date.split("/") : date.split("-");
+    if (parts.length < 3) return date;
+    const [y, m, d] = parts;
     if (!y || !m || !d) return date;
     return `${y}/${Number(m)}/${Number(d)}`;
   }
@@ -6949,9 +6952,7 @@ function AppointmentsSection({ appointments, setAppointments, clients }: { appoi
   function handleCopyAll() {
     const separator = "\n----------------------------\n";
     const text = sorted.map(formatAppointmentItem).join(separator);
-    copyToClipboard(text, () => {
-      alert(`已复制 ${sorted.length} 条预约信息`);
-    });
+    copyToClipboard(text, () => {});
   }
 
   return (

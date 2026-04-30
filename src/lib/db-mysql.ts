@@ -1,6 +1,6 @@
 /**
  * MySQL 数据库连接管理器
- * 替换原来的 better-sqlite3 + Redis
+ * 替换原来的 SQLite (better-sqlite3) + Redis
  */
 import mysql from 'mysql2/promise';
 

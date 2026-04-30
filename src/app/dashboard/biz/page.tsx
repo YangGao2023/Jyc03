@@ -35,6 +35,13 @@ import {
 } from "@/lib/biz-data";
 import type { BizStoreSnapshot } from "@/lib/biz-store";
 
+const PIC_BASE = 'http://43.166.250.145/pic/';
+function imgUrl(src: string | undefined | null): string {
+  if (!src) return '';
+  if (src.startsWith('http://') || src.startsWith('https://') || src.startsWith('data:')) return src;
+  return PIC_BASE + src;
+}
+
 function escHtml(s: string) {
   return s
     .replace(/&/g, "&amp;")
@@ -1005,15 +1012,12 @@ function EditableMaterialRows({
   function addRow() {
     onChange([...rows, { name: "", qty: 1, unit: "个", unit_price: 0 }]);
   }
-  function handleRowImage(i: number, file?: File | null) {
-    if (!file) return;
-    const reader = new FileReader();
-    reader.onload = () => {
-      const result = typeof reader.result === "string" ? reader.result : "";
-      updateRow(i, "image", result);
-    };
-    reader.readAsDataURL(file);
-  }
+  async function handleRowImage(i: number, file?: File | null) {
+      if (!file) return;
+      const fd = new FormData(); fd.append('file', file);
+      const res = await fetch('/api/upload', { method: 'POST', body: fd }).then(r => r.json());
+      updateRow(i, 'image', res.filename || '');
+    }
   const subtotal = rows.reduce((sum, r) => sum + r.qty * r.unit_price, 0);
 
   return (
@@ -1081,7 +1085,7 @@ function EditableMaterialRows({
                 <td className="px-2 py-1.5">
                   <label className="relative block h-8 w-10 cursor-pointer overflow-hidden rounded border border-slate-200 bg-slate-50">
                     {r.image ? (
-                      <img src={r.image} alt="" className="h-full w-full object-cover" />
+                      <img src={imgUrl(r.image)} alt="" className="h-full w-full object-cover" />
                     ) : (
                       <span className="flex h-full w-full items-center justify-center text-[10px] text-slate-700">+图</span>
                     )}
@@ -1172,7 +1176,7 @@ function buildCustomerInvoiceHTML(order: BizOrder, draft: DraftFields, rows: Mat
   const totalAfterTax = calcTotalAfterTax(draft.total_price || 0, draft.tax_rate || 0, draft.discount || 0);
   const hasPhoto = Boolean(draft.preview_image);
   const photo = hasPhoto
-    ? `<img src="${escHtml(draft.preview_image)}" alt="preview" style="width:100%;height:100%;object-fit:cover;display:block"/>`
+    ? `<img src="${escHtml(imgUrl(draft.preview_image))}" alt="preview" style="width:100%;height:100%;object-fit:cover;display:block"/>`
     : `<div style="width:100%;height:100%;background:#fff"></div>`;
   const template = getPrintTemplateSettings(settings);
   const notes = (draft.remarks || template.invoiceNote)
@@ -1320,7 +1324,7 @@ function buildWorkerPickupHTML(order: BizOrder, rows: MaterialRow[], settings?: 
               <td style="text-align:center;border:1px solid #bfdbfe;padding:10px 8px;font-size:18px;font-weight:800;color:#1e293b">${r.qty}<br><span style="font-size:11px;font-weight:400;color:#64748b">${escHtml(r.unit)}</span></td>
               <td style="text-align:center;border:1px solid #bfdbfe;padding:8px">
                 ${r.image
-                  ? `<img src="${escHtml(r.image)}" style="width:64px;height:64px;object-fit:cover;border-radius:4px;border:1px solid #e2e8f0;display:block;margin:0 auto">`
+                  ? `<img src="${escHtml(imgUrl(r.image))}" style="width:64px;height:64px;object-fit:cover;border-radius:4px;border:1px solid #e2e8f0;display:block;margin:0 auto">`
                   : '<span style="color:#cbd5e1;font-size:22px">□</span>'}
               </td>
             </tr>`
@@ -1513,15 +1517,12 @@ function OrderDetailView({
     setDraft((d) => ({ ...d, [key]: value }));
   }
 
-  function handleImageUpload(file?: File | null) {
-    if (!file) return;
-    const reader = new FileReader();
-    reader.onload = () => {
-      const result = typeof reader.result === "string" ? reader.result : "";
-      update("preview_image", result);
-    };
-    reader.readAsDataURL(file);
-  }
+  async function handleImageUpload(file?: File | null) {
+      if (!file) return;
+      const fd = new FormData(); fd.append('file', file);
+      const res = await fetch('/api/upload', { method: 'POST', body: fd }).then(r => r.json());
+      update("preview_image", res.filename || '');
+    }
 
   function buildUpdated(): BizOrder {
     // For wholesale: use material total if materials selected, else draft.total_price (no-material mode)
@@ -1722,7 +1723,7 @@ function OrderDetailView({
                 <p className="mb-1 text-[11px] font-semibold text-slate-700">款式图片</p>
                 <label className="group relative block h-[160px] w-[120px] cursor-pointer overflow-hidden rounded-lg border border-slate-200 bg-slate-50">
                   {draft.preview_image ? (
-                    <img src={draft.preview_image} alt="款式图片" className="h-full w-full object-cover" />
+                    <img src={imgUrl(draft.preview_image)} alt="款式图片" className="h-full w-full object-cover" />
                   ) : (
                     <div className="flex h-full w-full items-center justify-center text-[11px] font-medium text-slate-700 text-center px-2">暂无图片</div>
                   )}
@@ -1785,7 +1786,7 @@ function OrderDetailView({
                               return (
                                 <div key={mat.id} className="flex items-center gap-2 rounded-lg border border-amber-300 bg-amber-50 p-2">
                                   <div className="h-10 w-10 flex-shrink-0 overflow-hidden rounded border border-slate-100 bg-slate-50">
-                                    {mat.image ? <img src={mat.image} alt={mat.name} className="h-full w-full object-contain" /> : <div className="flex h-full w-full items-center justify-center text-[9px] text-slate-400">无图</div>}
+                                    {mat.image ? <img src={imgUrl(mat.image)} alt={mat.name} className="h-full w-full object-contain" /> : <div className="flex h-full w-full items-center justify-center text-[9px] text-slate-400">无图</div>}
                                   </div>
                                   <div className="min-w-0 flex-1">
                                     <p className="truncate text-[11px] font-medium text-slate-800">{mat.name}</p>
@@ -1810,7 +1811,7 @@ function OrderDetailView({
                             return (
                               <button key={mat.id} type="button" disabled={alreadyAdded} onClick={() => addMaterialToOrder(mat)} className="flex items-center gap-2 rounded-lg border border-slate-200 p-2 text-left hover:border-amber-400 hover:bg-amber-50 transition-colors disabled:opacity-30 disabled:cursor-not-allowed disabled:hover:border-slate-200 disabled:hover:bg-white">
                                 <div className="h-10 w-10 flex-shrink-0 overflow-hidden rounded border border-slate-100 bg-slate-50">
-                                  {mat.image ? <img src={mat.image} alt={mat.name} className="h-full w-full object-contain" /> : <div className="flex h-full w-full items-center justify-center text-[9px] text-slate-400">无图</div>}
+                                  {mat.image ? <img src={imgUrl(mat.image)} alt={mat.name} className="h-full w-full object-contain" /> : <div className="flex h-full w-full items-center justify-center text-[9px] text-slate-400">无图</div>}
                                 </div>
                                 <div className="min-w-0 flex-1">
                                   <p className="truncate text-[11px] font-medium text-slate-800">{mat.name} <span className="font-normal text-slate-500">{mat.code}</span></p>
@@ -2164,12 +2165,12 @@ function NewOrderModal({
     }));
   }, [editOrder, clients, fields.client_name, fields.phone]);
 
-  function handlePreviewUpload(file?: File | null) {
-    if (!file) return;
-    const reader = new FileReader();
-    reader.onload = () => setFields((f) => ({ ...f, preview_image: typeof reader.result === "string" ? reader.result : "" }));
-    reader.readAsDataURL(file);
-  }
+  async function handlePreviewUpload(file?: File | null) {
+      if (!file) return;
+      const fd = new FormData(); fd.append('file', file);
+      const res = await fetch('/api/upload', { method: 'POST', body: fd }).then(r => r.json());
+      setFields((f) => ({ ...f, preview_image: res.filename || "" }));
+    }
 
   function handleCreate() {
     if (!fields.client_name.trim()) return;
@@ -2407,7 +2408,7 @@ function NewOrderModal({
                               return (
                                 <div key={mat.id} className="flex items-center gap-2 rounded-lg border border-amber-300 bg-amber-50 p-2">
                                   <div className="h-10 w-10 flex-shrink-0 overflow-hidden rounded border border-slate-100 bg-slate-50">
-                                    {mat.image ? <img src={mat.image} alt={mat.name} className="h-full w-full object-contain" /> : <div className="flex h-full w-full items-center justify-center text-[9px] text-slate-400">无图</div>}
+                                    {mat.image ? <img src={imgUrl(mat.image)} alt={mat.name} className="h-full w-full object-contain" /> : <div className="flex h-full w-full items-center justify-center text-[9px] text-slate-400">无图</div>}
                                   </div>
                                   <div className="min-w-0 flex-1">
                                     <p className="truncate text-[11px] font-medium text-slate-800">{mat.name}</p>
@@ -2439,7 +2440,7 @@ function NewOrderModal({
                               >
                                 <div className="h-10 w-10 flex-shrink-0 overflow-hidden rounded border border-slate-100 bg-slate-50">
                                   {mat.image ? (
-                                    <img src={mat.image} alt={mat.name} className="h-full w-full object-contain" />
+                                    <img src={imgUrl(mat.image)} alt={mat.name} className="h-full w-full object-contain" />
                                   ) : (
                                     <div className="flex h-full w-full items-center justify-center text-[9px] text-slate-400">无图</div>
                                   )}
@@ -2515,7 +2516,7 @@ function NewOrderModal({
               <p className="mb-2 text-[11px] font-semibold uppercase tracking-wider text-slate-700">参考图片</p>
               <div className="flex items-center gap-3">
                 <label className="flex h-24 w-24 cursor-pointer items-center justify-center overflow-hidden rounded-lg border border-gray-200 bg-gray-50 text-[11px] text-slate-700">
-                  {fields.preview_image ? <img src={fields.preview_image} alt="预览" className="h-full w-full object-cover" /> : "上传图片"}
+                  {fields.preview_image ? <img src={imgUrl(fields.preview_image)} alt="预览" className="h-full w-full object-cover" /> : "上传图片"}
                   <input type="file" accept="image/*" className="hidden" onChange={(e) => handlePreviewUpload(e.target.files?.[0])} />
                 </label>
                 <div className="flex-1 text-[11px] text-slate-700">新建定制单时就可以先放一张参考图,后面进订单详情还能继续替换。</div>
@@ -5371,7 +5372,7 @@ function ClientsSection({ clients, setClients, suppliers, setSuppliers, orders, 
       {lightboxImage && (
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/70" onClick={() => setLightboxImage(null)}>
           <div className="relative max-h-[90vh] max-w-[90vw]" onClick={(e) => e.stopPropagation()}>
-            <img src={`/legacy-materials/${lightboxImage}`} alt="order image" className="max-h-[85vh] max-w-[85vw] rounded-xl border-4 border-white object-contain shadow-2xl" />
+            <img src={`http://43.166.250.145/pic/${lightboxImage}`} alt="order image" className="max-h-[85vh] max-w-[85vw] rounded-xl border-4 border-white object-contain shadow-2xl" />
             <button onClick={() => setLightboxImage(null)} className="absolute -right-3 -top-3 flex h-8 w-8 items-center justify-center rounded-full bg-white text-sm font-bold text-slate-700 shadow-lg hover:bg-gray-100">X</button>
           </div>
         </div>
@@ -5575,11 +5576,11 @@ function MaterialsSection({ materials, setMaterials, suppliers, orders, setExpen
     setMaterialDraft((d) => ({ ...d, factory_price_rmb: nextFactory, weight: nextWeight, usd_cost: String(usd), sale_price_usd: nextSale ?? d.sale_price_usd }));
   }
 
-  function handleMaterialImageUpload(file?: File | null) {
+  async function handleMaterialImageUpload(file?: File | null) {
     if (!file) return;
-    const reader = new FileReader();
-    reader.onload = () => setMaterialDraft((d) => ({ ...d, image: String(reader.result || "") }));
-    reader.readAsDataURL(file);
+    const fd = new FormData(); fd.append('file', file);
+    const res = await fetch('/api/upload', { method: 'POST', body: fd }).then(r => r.json());
+    setMaterialDraft((d) => ({ ...d, image: String(res.filename || "") }));
   }
 
   function addMaterial() {
@@ -5669,7 +5670,7 @@ function MaterialsSection({ materials, setMaterials, suppliers, orders, setExpen
               </div>
               <div className="rounded-xl border border-slate-200 bg-slate-50 p-3">
                 <p className="text-xs font-semibold text-slate-700">图片预览</p>
-                {materialDraft.image ? <img src={materialDraft.image} alt="物料图片" className="mt-2 h-32 w-full rounded-lg object-cover" /> : <div className="mt-2 flex h-32 items-center justify-center rounded-lg border border-dashed border-slate-300 text-xs text-slate-700">暂无图片</div>}
+                {materialDraft.image ? <img src={imgUrl(materialDraft.image)} alt="物料图片" className="mt-2 h-32 w-full rounded-lg object-cover" /> : <div className="mt-2 flex h-32 items-center justify-center rounded-lg border border-dashed border-slate-300 text-xs text-slate-700">暂无图片</div>}
               </div>
             </div>
             <div className="mt-5 flex justify-end gap-2">
@@ -5687,7 +5688,7 @@ function MaterialsSection({ materials, setMaterials, suppliers, orders, setExpen
             <div key={item.id} className="rounded-xl border border-gray-200 bg-gray-50 overflow-hidden flex flex-col">
               <div className="aspect-square w-full bg-slate-100 flex items-center justify-center overflow-hidden">
                 {item.image ? (
-                  <img src={item.image} alt={item.name} className="h-full w-full object-contain" />
+                  <img src={imgUrl(item.image)} alt={item.name} className="h-full w-full object-contain" />
                 ) : (
                   <div className="flex h-full w-full items-center justify-center text-[11px] text-slate-700">暂无图片</div>
                 )}

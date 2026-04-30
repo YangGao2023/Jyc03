@@ -516,10 +516,10 @@ function StatStrip({
   items: Array<{ label: string; value: string; accent?: string }>;
 }) {
   return (
-    <div className="mb-3 flex flex-wrap divide-x divide-blue-800 overflow-hidden rounded-xl border border-gray-200 bg-gray-50">
+    <div className="flex flex-wrap divide-x divide-blue-800 overflow-hidden rounded-xl border border-gray-200 bg-gray-50">
       {items.map((item) => (
-        <div key={item.label} className="flex min-w-[96px] flex-col px-4 py-2.5">
-          <span className={`text-lg font-bold ${item.accent ?? "text-slate-800"}`}>
+        <div key={item.label} className="flex min-w-[80px] flex-col px-3 py-2">
+          <span className={`text-base font-bold ${item.accent ?? "text-slate-800"}`}>
             {item.value}
           </span>
           <span className="mt-0.5 text-[10px] text-slate-700">{item.label}</span>
@@ -4260,7 +4260,7 @@ function ClientsSection({ clients, setClients, suppliers, setSuppliers, orders, 
       {sub === "clients" ? (
         <div className="space-y-3 xl:space-y-2">
           <div className="grid gap-3 xl:grid-cols-[320px_minmax(0,1fr)] xl:items-stretch">
-            <PanelCard title="客户列表" note="点开一个客户后,就能在这里直接看订单、预约、收款情况、联系人和地址。">
+            <PanelCard title="客户列表">
               <div className="space-y-3">
                 <div className="relative">
                   <span className="absolute left-3 top-1/2 -translate-y-1/2 text-xs text-slate-700">⌕</span>
@@ -4356,31 +4356,21 @@ function ClientsSection({ clients, setClients, suppliers, setSuppliers, orders, 
 
                   <div className="min-h-0 flex-1 overflow-y-auto pr-1">
                     {clientDetailTab === "overview" ? (
-                      <div className="grid gap-4 lg:grid-cols-3">
-                    <div className="rounded-xl border border-gray-200 bg-gray-50 p-4">
-                      <p className="text-[11px] uppercase tracking-[0.2em] text-slate-700">联系资料</p>
-                      <div className="mt-3 space-y-2.5 text-xs">
-                        <div className="flex items-start justify-between"><span className="text-slate-500">主要联系人</span><span className="text-right font-medium text-slate-700">{selectedClient.contact ?? selectedClient.name}</span></div>
-                        <div className="flex items-start justify-between"><span className="text-slate-500">电话</span><span className="text-right font-medium text-slate-700">{selectedClient.phone ?? "-"}</span></div>
-                        <div className="flex items-start justify-between"><span className="text-slate-500">微信 / 邮箱</span><span className="text-right font-medium text-slate-700">{selectedClient.wechat ?? selectedClient.email ?? "-"}</span></div>
-                        <div className="flex items-start justify-between"><span className="text-slate-500">地址</span><span className="text-right text-slate-600">{selectedClient.address ?? "未填写"}</span></div>
-                      </div>
-                    </div>
-
-                    <div className="rounded-xl border border-gray-200 bg-gray-50 p-4">
-                      <p className="text-[11px] uppercase tracking-[0.2em] text-slate-700">业务状态</p>
-                      <div className="mt-3 space-y-2.5 text-xs">
+                      <div className="grid gap-3 lg:grid-cols-2">
+                    <div className="rounded-xl border border-gray-200 bg-gray-50 p-3">
+                      <p className="text-[10px] uppercase tracking-[0.2em] text-slate-700">业务状态</p>
+                      <div className="mt-2 space-y-2 text-xs">
                         <div className="flex items-center justify-between"><span className="text-slate-500">最近下单</span><span className="font-medium text-slate-700">{clientLastOrder}</span></div>
                         <div className="flex items-start justify-between"><span className="text-slate-500">备注</span><span className="max-w-[200px] text-right text-slate-600">{selectedClient.note ?? "-"}</span></div>
                       </div>
                     </div>
 
-                    <div className="rounded-xl border border-gray-200 bg-gray-50 p-4">
-                      <p className="text-[11px] uppercase tracking-[0.2em] text-slate-700">收款情况</p>
-                      <div className="mt-3 space-y-2.5 text-xs">
+                    <div className="rounded-xl border border-gray-200 bg-gray-50 p-3">
+                      <p className="text-[10px] uppercase tracking-[0.2em] text-slate-700">收款情况</p>
+                      <div className="mt-2 space-y-2 text-xs">
                         <div className="flex items-center justify-between"><span className="text-slate-500">未收余款</span><span className={`font-semibold ${clientBalance > 0 ? "text-amber-600" : "text-emerald-600"}`}>{formatMoney(clientBalance)}</span></div>
                         <div className="flex items-center justify-between"><span className="text-slate-500">未结清订单</span><span className="font-medium text-slate-700">{clientOrderCountWithBalance}</span></div>
-                        <div className="flex items-start justify-between"><span className="text-slate-500">最近收款</span><span className="max-w-[200px] text-right font-medium text-slate-700">{clientLastPayment ? `${clientLastPayment.date} · ${formatMoney(clientLastPayment.amount)}` : "暂无收款"}</span></div>
+                        <div className="flex items-start justify-between"><span className="text-slate-500">最近收款</span><span className="max-w-[160px] text-right font-medium text-slate-700">{clientLastPayment ? `${clientLastPayment.date} · ${formatMoney(clientLastPayment.amount)}` : "暂无收款"}</span></div>
                         <div className="flex items-center justify-between"><span className="text-slate-500">档案余额</span><span className="font-medium text-slate-700">{formatMoney(selectedClient.balance ?? clientBalance)}</span></div>
                       </div>
                     </div>
@@ -5014,7 +5004,7 @@ function MaterialsSection({ materials, setMaterials, suppliers, orders, setExpen
       {/* Filter Bar — single row */}
       <div className="mb-4 flex flex-nowrap items-center gap-2">
         <div className="min-w-[80px] flex-1"><SmallInput value={nameFilter} onChange={(v) => setNameFilter(v)} placeholder="搜索物料名称..." /></div>
-        <div className="w-[130px]"><SmallSelect value={categoryFilter} onChange={(v) => setCategoryFilter(v)} options={["", ...materialCategoryOptions].filter(Boolean)} labels={{ "": "全部类别" }} /></div>
+        <div className="w-[120px]"><SmallSelect value={categoryFilter} onChange={(v) => setCategoryFilter(v)} options={["", ...materialCategoryOptions.filter(Boolean)]} labels={{ "": "全部" }} /></div>
         <div className="w-[150px]"><SmallSelect value={supplierFilter} onChange={(v) => setSupplierFilter(v)} options={["", ...distinctSuppliers]} labels={{ "": "全部供应商" }} /></div>
         <div className="w-[130px]"><SmallSelect value={monthFilter} onChange={(v) => setMonthFilter(v)} options={["", ...distinctMonths]} labels={{ "": "全部月份" }} /></div>
       </div>

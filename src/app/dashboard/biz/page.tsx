@@ -4444,6 +4444,12 @@ function ClientsSection({ clients, setClients, suppliers, setSuppliers, orders, 
     for (const p of clientPrices) {
       draft[p.material_name] = p.price;
     }
+    // Pre-fill all materials with their current effective price
+    for (const mat of materials) {
+      if (draft[mat.name] === undefined) {
+        draft[mat.name] = mat.vip_sale_price_usd ?? mat.sale_price_usd ?? 0;
+      }
+    }
     setVipPriceDraft(draft);
     setShowVipPriceModal(true);
   }
@@ -4736,43 +4742,24 @@ function ClientsSection({ clients, setClients, suppliers, setSuppliers, orders, 
                   <p className="text-xs text-slate-500">暂无可选物料</p>
                 ) : (
                   materials.map((mat) => {
-                    const currentPrice = vipPriceDraft[mat.name];
-                    const hasPrice = currentPrice !== undefined;
-                    const defaultVipPrice = mat.vip_sale_price_usd;
+                    const currentDisplayPrice = vipPriceDraft[mat.name] ?? mat.vip_sale_price_usd ?? mat.sale_price_usd ?? 0;
                     return (
                       <div key={mat.id} className="flex items-center gap-3 rounded-lg border border-slate-200 bg-white px-3 py-2">
                         <div className="min-w-0 flex-1">
                           <p className="text-xs font-medium text-slate-800">{mat.name}</p>
                           <p className="text-[10px] text-slate-500">
-                            默认VIP价: {defaultVipPrice != null ? `$${defaultVipPrice}` : "未设"}
+                            售价: ${mat.sale_price_usd ?? 0}{mat.vip_sale_price_usd != null ? ` / VIP全局: $${mat.vip_sale_price_usd}` : ""} / 客户价: ${currentDisplayPrice}
                           </p>
                         </div>
                         <div className="flex items-center gap-2">
-                          {hasPrice ? (
-                            <>
-                              <input
-                                type="number"
-                                min={0}
-                                step={0.01}
-                                value={currentPrice}
-                                onChange={(e) => setVipPriceDraft((prev) => ({ ...prev, [mat.name]: Number(e.target.value) || 0 }))}
-                                className="h-7 w-20 rounded border border-slate-300 px-2 text-xs text-slate-700 text-center focus:border-gray-200 focus:outline-none"
-                              />
-                              <button
-                                onClick={() => removeVipPrice(mat.name)}
-                                className="rounded p-0.5 text-xs text-slate-400 hover:text-red-500"
-                              >
-                                ✕
-                              </button>
-                            </>
-                          ) : (
-                            <button
-                              onClick={() => setVipPriceDraft((prev) => ({ ...prev, [mat.name]: defaultVipPrice ?? 0 }))}
-                              className="rounded-lg border border-slate-200 px-2.5 py-1 text-[10px] text-slate-600 hover:border-blue-300 hover:text-blue-600 transition-colors"
-                            >
-                              添加价格
-                            </button>
-                          )}
+                          <input
+                            type="number"
+                            min={0}
+                            step={0.01}
+                            value={currentDisplayPrice}
+                            onChange={(e) => setVipPriceDraft((prev) => ({ ...prev, [mat.name]: Number(e.target.value) || 0 }))}
+                            className="h-7 w-20 rounded border border-slate-300 px-2 text-xs text-slate-700 text-center focus:border-gray-200 focus:outline-none"
+                          />
                         </div>
                       </div>
                     );
@@ -6283,9 +6270,10 @@ function SettingsPrintPreview({ settings, onUpdate }: { settings: BizSettings; o
     remarks: settings.invoice_note || "备注模板示例",
   };
 
-  const html = previewType === "invoice"
+  const rawHtml = previewType === "invoice"
     ? buildCustomerInvoiceHTML(sampleOrder, sampleDraft, sampleOrder.material_rows ?? [], settings)
     : buildWorkerPickupHTML(sampleOrder, sampleOrder.material_rows ?? [], settings);
+  const html = rawHtml.replace(/<script>window\.onload\s*=\s*function\s*\(\s*\)\s*\{\s*window\.print\s*\(\s*\)\s*;?\s*\}<\/script>/gi, "");
 
   return (
     <div className="grid gap-3 xl:grid-cols-[0.95fr_1.05fr]">

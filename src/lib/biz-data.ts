@@ -450,6 +450,11 @@ export const bizCashEntries = normalizeList<CashEntry>(rawAssetsRecord.cash_entr
   note: toString(item.note) || undefined,
   method: toString(item.method) || undefined,
   category: toString(item.category) || undefined,
+  office: Boolean(item.office),
+  order_number: toString(item.order_number) || undefined,
+  source_type: toString(item.source_type) || undefined,
+  source_id: toString(item.source_id) || undefined,
+  order_id: toString(item.order_id) || undefined,
   voided: Boolean(item.voided),
 }));
 

@@ -3567,9 +3567,10 @@ function FinanceSection({ orders, setOrders, expenses, setExpenses, cashEntries,
   const [cashPage, setCashPage] = useState(1);
   const [receivablesPage, setReceivablesPage] = useState(1);
   const paymentRows = orders.flatMap((order) => (order.payment_history ?? []).map((record, index) => ({ order, record, key: `${order.order_number}-${index}` })));
+  const ledgerNonOrderIncome = cashEntries.filter(item => item.type === '收入' && !item.order_number);
   const incomeCategories = (settings?.income_categories || '').split(',').map(s => s.trim()).filter(Boolean);
   const miscIncomeRows = cashEntries
-    .filter(item => item.type === '收入' && !item.order_number && !item.source_type)
+    .filter(item => item.type === '收入' && !item.order_number)
     .sort((a, b) => b.date.localeCompare(a.date))
     .map(item => ({
       key: `misc-${item.id}`,
@@ -3661,11 +3662,11 @@ function FinanceSection({ orders, setOrders, expenses, setExpenses, cashEntries,
     try {
       // ledgerRows is computed below using the correct year/month filter
       // This IIFE runs at declaration time, so use raw data directly
-      const allDays = Array.from(new Set([...paymentRows.map(({ record }) => (record.date ?? "").slice(0, 10)), ...expenses.filter((e) => e.expense_date).map((e) => e.expense_date.slice(0, 10))])).filter(Boolean).sort().reverse();
+      const allDays = Array.from(new Set([...paymentRows.map(({ record }) => (record.date ?? "").slice(0, 10)), ...ledgerNonOrderIncome.map((e) => e.date.slice(0, 10)), ...expenses.filter((e) => e.expense_date).map((e) => e.expense_date.slice(0, 10))])).filter(Boolean).sort().reverse();
       const inPeriod = allDays.filter((d) => ledgerView === "yearly" ? d.startsWith(ledgerYear) : d.startsWith(ledgerMonth));
       let cum = 0;
       inPeriod.toReversed().forEach((day) => {
-        const income = paymentRows.filter(({ record }) => (record.date ?? "").startsWith(day)).reduce((s, { record }) => s + (record.type === "refund" ? -record.amount : record.amount), 0);
+        const income = paymentRows.filter(({ record }) => (record.date ?? "").startsWith(day)).reduce((s, { record }) => s + (record.type === "refund" ? -record.amount : record.amount), 0) + ledgerNonOrderIncome.filter((e) => e.date.startsWith(day)).reduce((s, e) => s + e.amount, 0);
         const expense = expenses.filter((item) => item.expense_date.startsWith(day)).reduce((s, item) => s + item.amount, 0);
         cum += income - expense;
       });
@@ -3674,11 +3675,11 @@ function FinanceSection({ orders, setOrders, expenses, setExpenses, cashEntries,
   })();
   const ledgerRows = (() => {
     let cumulative = 0;
-    const allDays = Array.from(new Set([...paymentRows.map(({ record }) => (record.date ?? "").slice(0, 10)), ...expenses.filter((e) => e.expense_date).map((e) => e.expense_date.slice(0, 10))])).filter(Boolean).sort().reverse();
+    const allDays = Array.from(new Set([...paymentRows.map(({ record }) => (record.date ?? "").slice(0, 10)), ...ledgerNonOrderIncome.map((e) => e.date.slice(0, 10)), ...expenses.filter((e) => e.expense_date).map((e) => e.expense_date.slice(0, 10))])).filter(Boolean).sort().reverse();
     if (ledgerView === "yearly") {
       const months = Array.from(new Set(allDays.filter((d) => d.startsWith(ledgerYear)).map((d) => d.slice(0, 7)))).sort().reverse();
       return months.map((month) => {
-        const income = paymentRows.filter(({ record }) => (record.date ?? "").startsWith(month)).reduce((sum, { record }) => sum + (record.type === "refund" ? -record.amount : record.amount), 0);
+        const income = paymentRows.filter(({ record }) => (record.date ?? "").startsWith(month)).reduce((sum, { record }) => sum + (record.type === "refund" ? -record.amount : record.amount), 0) + ledgerNonOrderIncome.filter((e) => e.date.startsWith(month)).reduce((sum, e) => sum + e.amount, 0);
         const expense = expenses.filter((item) => item.expense_date.startsWith(month)).reduce((sum, item) => sum + item.amount, 0);
         const net = income - expense;
         cumulative += net;
@@ -3687,7 +3688,7 @@ function FinanceSection({ orders, setOrders, expenses, setExpenses, cashEntries,
     }
     const days = allDays.filter((d) => d.startsWith(ledgerMonth));
     return days.map((day) => {
-      const income = paymentRows.filter(({ record }) => (record.date ?? "").startsWith(day)).reduce((sum, { record }) => sum + (record.type === "refund" ? -record.amount : record.amount), 0);
+      const income = paymentRows.filter(({ record }) => (record.date ?? "").startsWith(day)).reduce((sum, { record }) => sum + (record.type === "refund" ? -record.amount : record.amount), 0) + ledgerNonOrderIncome.filter((e) => e.date.startsWith(day)).reduce((sum, e) => sum + e.amount, 0);
       const expense = expenses.filter((item) => item.expense_date.startsWith(day)).reduce((sum, item) => sum + item.amount, 0);
       const net = income - expense;
       cumulative += net;
@@ -6776,36 +6777,24 @@ export default function DashboardBizPage() {
         const payload = (await response.json()) as { ok: boolean; data: BizStoreSnapshot };
         if (cancelled || !payload?.data) return;
         const loadedSnapshot = buildBizSnapshot(payload.data);
+        setStoreRevision(loadedSnapshot.revision);
+        setOrders(loadedSnapshot.orders);
+        setClients(loadedSnapshot.clients);
+        setSuppliers(loadedSnapshot.suppliers);
+        setExpenses(loadedSnapshot.expenses);
+        setCashEntries(loadedSnapshot.cashEntries);
+        setMaterials(loadedSnapshot.materials);
+        setEmployees(loadedSnapshot.employees);
+        setAttendances(loadedSnapshot.attendances);
+        setAppointments(loadedSnapshot.appointments ?? []);
+        setPayrolls(loadedSnapshot.payrolls);
+        setPrintArchives(loadedSnapshot.printArchives);
+        setSettings(loadedSnapshot.settings);
         const loadedSnapshotJson = serializeBizSnapshot(loadedSnapshot);
-        let hydratedSnapshot = loadedSnapshot;
-        try {
-          const liveBackup = localStorage.getItem("biz-store-live-backup");
-          if (liveBackup) {
-            const parsedBackup = JSON.parse(liveBackup) as Partial<BizStoreSnapshot>;
-            const backupSnapshot = buildBizSnapshot(parsedBackup);
-            const backupSnapshotJson = serializeBizSnapshot(backupSnapshot);
-            if (backupSnapshot.revision === loadedSnapshot.revision && backupSnapshotJson !== loadedSnapshotJson) {
-              hydratedSnapshot = backupSnapshot;
-            }
-          }
-        } catch {}
-        setStoreRevision(hydratedSnapshot.revision);
-        setOrders(hydratedSnapshot.orders);
-        setClients(hydratedSnapshot.clients);
-        setSuppliers(hydratedSnapshot.suppliers);
-        setExpenses(hydratedSnapshot.expenses);
-        setCashEntries(hydratedSnapshot.cashEntries);
-        setMaterials(hydratedSnapshot.materials);
-        setEmployees(hydratedSnapshot.employees);
-        setAttendances(hydratedSnapshot.attendances);
-        setAppointments(hydratedSnapshot.appointments ?? []);
-        setPayrolls(hydratedSnapshot.payrolls);
-        setPrintArchives(hydratedSnapshot.printArchives);
-        setSettings(hydratedSnapshot.settings);
         setSavedSnapshotJson(loadedSnapshotJson);
         try {
           localStorage.setItem("biz-store-backup", loadedSnapshotJson);
-          localStorage.setItem("biz-store-live-backup", serializeBizSnapshot(hydratedSnapshot));
+          localStorage.setItem("biz-store-live-backup", loadedSnapshotJson);
         } catch {}
       } catch {
         setSaveState("error");

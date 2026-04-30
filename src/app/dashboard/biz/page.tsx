@@ -3514,7 +3514,7 @@ function FinanceSection({ orders, setOrders, expenses, setExpenses, cashEntries,
   const [ledgerView, setLedgerView] = useState<"monthly" | "yearly">("monthly");
   const [ledgerYear, setLedgerYear] = useState(today.slice(0, 4));
   const [ledgerMonth, setLedgerMonth] = useState(today.slice(0, 7));
-  const METHOD_OPTIONS = ["现金", "支票", "刷卡", "Zelle"] as const;
+  const METHOD_OPTIONS = ["现金", "支票", "刷卡", "转账"] as const;
   const [activeMethods, setActiveMethods] = useState<string[]>([...METHOD_OPTIONS]);
   const [dateMode, setDateMode] = useState<"range" | "single">("range");
   const expenseTypeOptions = useMemo(() => getExpenseTypeOptions(settings), [settings]);

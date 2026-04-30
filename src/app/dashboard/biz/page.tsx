@@ -3531,9 +3531,21 @@ function FinanceSection({ orders, setOrders, expenses, setExpenses, cashEntries,
   const financeAuditPreview = useMemo(() => buildFinanceAuditReport(orders, clients), [orders, clients]);
   const activeAudit = auditReport ?? financeAuditPreview;
   const ledgerBalance = (() => {
-    const allIncome = filteredPaymentRows.reduce((sum, { record }) => sum + (record.type === "refund" ? -record.amount : record.amount), 0);
-    const allExpense = filteredExpenses.reduce((sum, item) => sum + item.amount, 0);
-    return allIncome - allExpense;
+    // Use all payment/expense data (not date-filtered) to compute cumulative balance for the selected period
+    // ledgerRows[0].balance would be the latest cumulative balance
+    try {
+      // ledgerRows is computed below using the correct year/month filter
+      // This IIFE runs at declaration time, so use raw data directly
+      const allDays = Array.from(new Set([...paymentRows.map(({ record }) => (record.date ?? "").slice(0, 10)), ...expenses.filter((e) => e.expense_date).map((e) => e.expense_date.slice(0, 10))])).filter(Boolean).sort().reverse();
+      const inPeriod = allDays.filter((d) => ledgerView === "yearly" ? d.startsWith(ledgerYear) : d.startsWith(ledgerMonth));
+      let cum = 0;
+      inPeriod.toReversed().forEach((day) => {
+        const income = paymentRows.filter(({ record }) => (record.date ?? "").startsWith(day)).reduce((s, { record }) => s + (record.type === "refund" ? -record.amount : record.amount), 0);
+        const expense = expenses.filter((item) => item.expense_date.startsWith(day)).reduce((s, item) => s + item.amount, 0);
+        cum += income - expense;
+      });
+      return cum;
+    } catch { return 0; }
   })();
   const ledgerRows = (() => {
     let cumulative = 0;
@@ -3622,6 +3634,7 @@ function FinanceSection({ orders, setOrders, expenses, setExpenses, cashEntries,
     setOrders(repaired.fixedOrders);
     setClients(repaired.fixedClients);
     setAuditReport(buildFinanceAuditReport(repaired.fixedOrders, repaired.fixedClients));
+    onAutoSave?.();
   }
 
   function handleQuickPay(orderNumber: string) {
@@ -3799,24 +3812,26 @@ function FinanceSection({ orders, setOrders, expenses, setExpenses, cashEntries,
             <p className="text-sm font-semibold text-slate-700">📅</p>
             <p className="text-xs text-slate-500">{today}</p>
             <div className="flex flex-wrap items-end gap-1.5">
-              <div>
-                <p className="text-[10px] font-semibold text-slate-500">开始</p>
-                <SmallInput value={financeDateStart} onChange={(v: string) => { setFinanceDateStart(v); if (dateMode === "single") setFinanceDateEnd(v); }} type="date" />
-              </div>
-              {dateMode === "range" && (
-              <div>
-                <p className="text-[10px] font-semibold text-slate-500">结束</p>
-                <SmallInput value={financeDateEnd} onChange={setFinanceDateEnd} type="date" />
-              </div>
+              {!(sub === "ledger" || sub === "audit") && (
+                <>
+                  <div>
+                    <p className="text-[10px] font-semibold text-slate-500">开始</p>
+                    <SmallInput value={financeDateStart} onChange={(v: string) => { setFinanceDateStart(v); if (dateMode === "single") setFinanceDateEnd(v); }} type="date" />
+                  </div>
+                  {dateMode === "range" && (
+                  <div>
+                    <p className="text-[10px] font-semibold text-slate-500">结束</p>
+                    <SmallInput value={financeDateEnd} onChange={setFinanceDateEnd} type="date" />
+                  </div>
+                  )}
+                  <div className="flex items-center gap-1 self-end pb-[2px]">
+                    <button onClick={() => setDateMode("single")} className={`rounded px-1.5 py-0.5 text-[10px] font-medium transition-colors ${dateMode === "single" ? "bg-slate-700 text-white" : "bg-slate-100 text-slate-500"}`}>单日</button>
+                    <button onClick={() => setDateMode("range")} className={`rounded px-1.5 py-0.5 text-[10px] font-medium transition-colors ${dateMode === "range" ? "bg-slate-700 text-white" : "bg-slate-100 text-slate-500"}`}>区间</button>
+                  </div>
+                  <ActionBtn onClick={() => { setFinanceDateStart(today); setFinanceDateEnd(today); }}>今天</ActionBtn>
+                  <ActionBtn onClick={() => { setFinanceDateStart(""); setFinanceDateEnd(""); }}>全部</ActionBtn>
+                </>
               )}
-              {sub !== "ledger" && (
-              <div className="flex items-center gap-1 self-end pb-[2px]">
-                <button onClick={() => setDateMode("single")} className={`rounded px-1.5 py-0.5 text-[10px] font-medium transition-colors ${dateMode === "single" ? "bg-slate-700 text-white" : "bg-slate-100 text-slate-500"}`}>单日</button>
-                <button onClick={() => setDateMode("range")} className={`rounded px-1.5 py-0.5 text-[10px] font-medium transition-colors ${dateMode === "range" ? "bg-slate-700 text-white" : "bg-slate-100 text-slate-500"}`}>区间</button>
-              </div>
-              )}
-              <ActionBtn onClick={() => { setFinanceDateStart(today); setFinanceDateEnd(today); }}>今天</ActionBtn>
-              <ActionBtn onClick={() => { setFinanceDateStart(""); setFinanceDateEnd(""); }}>全部</ActionBtn>
             </div>
           </div>
           <div className="flex flex-wrap items-center gap-2">
@@ -3841,7 +3856,7 @@ function FinanceSection({ orders, setOrders, expenses, setExpenses, cashEntries,
                 </select>
               )}
             </div>
-          ) : (
+          ) : sub !== "audit" ? (
             <div className="flex flex-wrap items-center gap-2">
               {METHOD_OPTIONS.map(m => (
                 <label key={m} className="flex cursor-pointer items-center gap-1">
@@ -3854,7 +3869,7 @@ function FinanceSection({ orders, setOrders, expenses, setExpenses, cashEntries,
                 <span className="text-[11px] font-medium text-slate-700">全选</span>
               </label>
             </div>
-          )}
+          ) : null}
         </div>
       </div>
       <div className="mb-4 flex flex-wrap border-b-2 border-slate-200 bg-white self-start">
@@ -3874,7 +3889,7 @@ function FinanceSection({ orders, setOrders, expenses, setExpenses, cashEntries,
       )}
       {sub === "audit" && (
         <div className="mb-4">
-          <PanelCard title="财务体检中心" note="参考源里的数据完整性检查与余款修复能力,这里落地为本地订单/客户账务扫描与自动修复。">
+          <PanelCard title="财务体检中心" note="自动对比收款记录与订单字段,发现不一致后一键修复：① 按收款记录重算已付金额 ② 计算正确余款 ③ 更新订单状态(下单/未付清/已付清/已关闭) ④ 同步客户余额与订单应收。">
             <div className="grid gap-3 sm:grid-cols-2 xl:grid-cols-4">
               <div className="rounded-xl border border-rose-100 bg-rose-50 p-3">
                 <p className="text-[11px] uppercase tracking-[0.2em] text-rose-500">订单异常</p>
@@ -3894,7 +3909,7 @@ function FinanceSection({ orders, setOrders, expenses, setExpenses, cashEntries,
               <div className="rounded-xl border border-emerald-100 bg-emerald-50 p-3">
                 <p className="text-[11px] uppercase tracking-[0.2em] text-emerald-500">可自动修复</p>
                 <p className="mt-2 text-2xl font-semibold text-emerald-700">{activeAudit.autoFixableCount}</p>
-                <p className="mt-1 text-xs text-emerald-600">一键重算订单应收并回填客户余额,扫描时间 {activeAudit.scannedAt.slice(0, 16).replace("T", " ")}</p>
+                <p className="mt-1 text-xs text-emerald-600">一键修复 → 重算已付/余款/状态 + 客户余额同步,扫描时间 {activeAudit.scannedAt.slice(0, 16).replace("T", " ")}</p>
               </div>
             </div>
           </PanelCard>
@@ -6877,19 +6892,43 @@ function AppointmentsSection({ appointments, setAppointments, clients }: { appoi
     setEditing(null);
   }
 
+  function copyToClipboard(text: string, onSuccess: () => void) {
+    // Try modern clipboard API first, fall back to textarea select
+    if (navigator.clipboard?.writeText) {
+      navigator.clipboard.writeText(text).then(onSuccess).catch(() => {
+        fallbackCopy(text);
+        onSuccess();
+      });
+    } else {
+      fallbackCopy(text);
+      onSuccess();
+    }
+  }
+
+  function fallbackCopy(text: string) {
+    const ta = document.createElement('textarea');
+    ta.value = text;
+    ta.style.position = 'fixed';
+    ta.style.opacity = '0';
+    document.body.appendChild(ta);
+    ta.select();
+    try { document.execCommand('copy'); } catch {}
+    document.body.removeChild(ta);
+  }
+
   function handleCopy(item: MeasurementAppointmentRecord) {
-    navigator.clipboard.writeText(formatAppointmentItem(item)).then(() => {
+    copyToClipboard(formatAppointmentItem(item), () => {
       setCopiedId(item.id);
       setTimeout(() => setCopiedId(null), 2000);
-    }).catch(() => {});
+    });
   }
 
   function handleCopyAll() {
     const separator = "\n----------------------------\n";
     const text = sorted.map(formatAppointmentItem).join(separator);
-    navigator.clipboard.writeText(text).then(() => {
+    copyToClipboard(text, () => {
       alert(`已复制 ${sorted.length} 条预约信息`);
-    }).catch(() => {});
+    });
   }
 
   return (
@@ -6974,10 +7013,20 @@ function AppointmentsSection({ appointments, setAppointments, clients }: { appoi
             <div className="space-y-3">
               <div>
                 <label className="mb-1 block text-[11px] font-semibold text-slate-700">客户</label>
-                <select value={draft.client_id} onChange={(e) => handleClientChange(e.target.value)} className="h-9 w-full rounded-lg border border-slate-300 bg-white px-3 text-xs text-slate-700">
-                  <option value="">选择客户</option>
-                  {clients.map((c) => <option key={c.id} value={c.id}>{c.name} {c.phone ? `· ${c.phone}` : ""}</option>)}
-                </select>
+                <input
+                  type="text"
+                  list="apt-client-list"
+                  value={clients.find((c) => c.id === draft.client_id)?.name ?? ""}
+                  onChange={(e) => {
+                    const match = clients.find((c) => c.name === e.target.value);
+                    if (match) handleClientChange(match.id);
+                  }}
+                  className="h-9 w-full rounded-lg border border-slate-300 bg-white px-3 text-xs text-slate-700"
+                  placeholder="搜索客户姓名…"
+                />
+                <datalist id="apt-client-list">
+                  {clients.map((c) => <option key={c.id} value={c.name} />)}
+                </datalist>
               </div>
               <div className="grid grid-cols-2 gap-3">
                 <div>

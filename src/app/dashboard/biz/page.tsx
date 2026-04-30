@@ -4190,6 +4190,7 @@ function ClientsSection({ clients, setClients, suppliers, setSuppliers, orders, 
   const [clientFeedPage, setClientFeedPage] = useState(1);
   const [clientReceivablePage, setClientReceivablePage] = useState(1);
   const [newOrderTypeForClient, setNewOrderTypeForClient] = useState<"定制单" | "批发单" | null>(null);
+  const [selectedClientOrderDetail, setSelectedClientOrderDetail] = useState<BizOrder | null>(null);
   const [editOrderForClient, setEditOrderForClient] = useState<BizOrder | null>(null);
   const [deleteOrderConfirm, setDeleteOrderConfirm] = useState<string | null>(null);
   const [lightboxImage, setLightboxImage] = useState<string | null>(null);
@@ -4479,7 +4480,12 @@ function ClientsSection({ clients, setClients, suppliers, setSuppliers, orders, 
 
   function handleClientOrderUpdate(order: BizOrder) {
     setOrders((prev) => prev.map((o) => o.order_number === order.order_number ? order : o));
-    setEditOrderForClient(null);
+    setSelectedClientOrderDetail(null);
+  }
+
+  function handleClientDetailSave(updated: BizOrder) {
+    setOrders((prev) => prev.map((o) => o.order_number === updated.order_number ? updated : o));
+    setSelectedClientOrderDetail(null);
   }
 
   function handleClientOrderDelete(orderNumber: string) {
@@ -4832,7 +4838,16 @@ function ClientsSection({ clients, setClients, suppliers, setSuppliers, orders, 
             </PanelCard>
 
             <PanelCard title={selectedClient ? `客户详情 · ${selectedClient.name}` : "客户详情"}>
-              {selectedClient ? (
+              {selectedClientOrderDetail ? (
+                <OrderDetailView
+                  order={selectedClientOrderDetail}
+                  settings={settings}
+                  materials={materials}
+                  onBack={() => setSelectedClientOrderDetail(null)}
+                  onSave={handleClientDetailSave}
+                  onOfficeEntry={(entry) => setCashEntries((prev) => [entry, ...prev])}
+                />
+              ) : selectedClient ? (
                 <div className="flex flex-col gap-4 xl:h-[calc(100vh-22rem)]">
 
                   <StatStrip
@@ -4878,18 +4893,17 @@ function ClientsSection({ clients, setClients, suppliers, setSuppliers, orders, 
                   </div>
                     ) : null}
 
-                    {(newOrderTypeForClient || editOrderForClient) && selectedClient && (
+                    {newOrderTypeForClient && selectedClient && (
                       <NewOrderModal
-                  type={newOrderTypeForClient ?? (editOrderForClient!.order_type as "定制单" | "批发单")}
+                  type={newOrderTypeForClient}
                   existingOrders={orders}
                   clients={clients}
                   settings={settings}
                   materials={materials}
-                  onClose={() => { setNewOrderTypeForClient(null); setEditOrderForClient(null); }}
-                  onCreate={editOrderForClient ? handleClientOrderUpdate : handleClientOrderCreate}
-                  initialClientName={newOrderTypeForClient ? selectedClient.name : undefined}
-                  initialPhone={newOrderTypeForClient ? selectedClient.phone ?? undefined : undefined}
-                  editOrder={editOrderForClient ?? undefined}
+                  onClose={() => { setNewOrderTypeForClient(null); }}
+                  onCreate={handleClientOrderCreate}
+                  initialClientName={selectedClient.name}
+                  initialPhone={selectedClient.phone ?? undefined}
                 />
                     )}
 
@@ -5021,7 +5035,9 @@ function ClientsSection({ clients, setClients, suppliers, setSuppliers, orders, 
                                     <td className="px-3 py-2">
                                       <div className="flex flex-wrap items-center gap-1">
                                         {(item.balance ?? 0) > 0 ? <button onClick={() => applyQuickCollectPreset("balance", item)} className="rounded-md border border-amber-200 bg-amber-50 px-2 py-1 text-[11px] font-semibold text-amber-700 hover:bg-amber-100">收清</button> : <span className="text-[11px] text-emerald-600">已结清</span>}
-                                        <button onClick={() => setEditOrderForClient(item)} className="rounded-md border border-gray-200 bg-gray-50 px-2 py-1 text-[11px] font-semibold text-slate-600 hover:border-slate-400 transition-colors">编辑</button>
+                                        <button onClick={() => setSelectedClientOrderDetail(item)} className="rounded-md border border-gray-200 bg-gray-50 px-2 py-1 text-[11px] font-semibold text-slate-600 hover:border-slate-400 transition-colors">编辑</button>
+                                        <button onClick={() => handleClientOrderPrint(item, "invoice")} className="rounded-md border border-gray-200 bg-gray-50 px-2 py-1 text-[11px] text-slate-600 hover:border-blue-400 hover:text-blue-600 transition-colors" title="打印发票单">发票</button>
+                                        {item.order_type === "批发单" ? <button onClick={() => handleClientOrderPrint(item, "pickup")} className="rounded-md border border-amber-200 bg-amber-50 px-2 py-1 text-[11px] font-semibold text-amber-700 hover:bg-amber-100 transition-colors" title="打印领料单">领料</button> : null}
                                         {deleteOrderConfirm === item.order_number ? (
                                           <>
                                             <button onClick={() => handleClientOrderDelete(item.order_number)} className="rounded-md border border-red-400 bg-red-50 px-2 py-1 text-[11px] font-semibold text-red-700 hover:bg-red-100">确认</button>

@@ -6231,7 +6231,7 @@ function SettingsTextArea({
   return <div className="flex flex-col gap-1"><label className="text-xs font-semibold text-slate-600">{label}</label><textarea value={value} onChange={(e) => onChange(e.target.value)} rows={rows} className="w-full rounded-lg border border-slate-300 bg-white px-3 py-2 text-xs text-slate-700 focus:border-gray-200 focus:outline-none resize-none" />{note && <p className="text-[11px] text-slate-700">{note}</p>}</div>;
 }
 
-type SettingsPageKey = "company-base" | "company-contact" | "finance" | "print" | "lists" | "categories";
+type SettingsPageKey = "company-base" | "company-contact" | "finance" | "lists" | "categories"
 
 function SettingsPrintPreview({ settings, onUpdate }: { settings: BizSettings; onUpdate: (key: keyof BizSettings, value: string) => void; }) {
   const [previewType, setPreviewType] = useState<"invoice" | "pickup">("invoice");
@@ -6239,7 +6239,7 @@ function SettingsPrintPreview({ settings, onUpdate }: { settings: BizSettings; o
   // Sample data for preview rendering
   const sampleOrder: BizOrder = {
     order_number: "预览-001",
-    order_type: "批发单",
+    order_type: "定制单",
     client_name: "示例客户",
     phone: "123-456-7890",
     address: "123 Main St, New York, NY 10001",
@@ -6254,7 +6254,7 @@ function SettingsPrintPreview({ settings, onUpdate }: { settings: BizSettings; o
       { name: "Sample Granite", spec: "12×24", qty: 10, unit: "pcs", unit_price: 150 },
       { name: "Sample Marble", spec: "24×24", qty: 5, unit: "pcs", unit_price: 200 },
     ],
-    payment_history: [{ date: new Date().toISOString().slice(0, 10), amount: 500, method: "现金", note: "批发定金", type: "payment" }],
+    payment_history: [{ date: new Date().toISOString().slice(0, 10), amount: 500, method: "现金", note: "定金支付", type: "payment" }],
   };
 
   const sampleDraft: DraftFields = {
@@ -6265,7 +6265,7 @@ function SettingsPrintPreview({ settings, onUpdate }: { settings: BizSettings; o
     total_price: 1500,
     tax_rate: settings.default_tax_rate || 8,
     discount: 0,
-    description: "定制加工说明示例",
+    description: "实例加工说明示例",
     install_info: "安装说明示例",
     remarks: settings.invoice_note || "备注模板示例",
   };
@@ -6276,46 +6276,31 @@ function SettingsPrintPreview({ settings, onUpdate }: { settings: BizSettings; o
   const html = rawHtml.replace(/<script>window\.onload\s*=\s*function\s*\(\s*\)\s*\{\s*window\.print\s*\(\s*\)\s*;?\s*\}<\/script>/gi, "");
 
   return (
-    <div className="grid gap-3 xl:grid-cols-[0.95fr_1.05fr]">
-      <div className="space-y-3">
-        <SettingsGroup title="打印标题与素材">
-          <SettingsField label="Invoice 标题" value={settings.invoice_title ?? "Invoice"} onChange={(value) => onUpdate("invoice_title", value)} />
-          <SettingsField label="领料单标题" value={settings.picking_title ?? "领料单 / Worker Pickup Sheet"} onChange={(value) => onUpdate("picking_title", value)} />
-          <SettingsField label="Logo URL" value={settings.logo_url ?? ""} onChange={(value) => onUpdate("logo_url", value)} />
-        </SettingsGroup>
-        <SettingsGroup title="模板备注">
-          <SettingsTextArea label="发票备注模板" value={settings.invoice_note ?? ""} rows={7} onChange={(value) => onUpdate("invoice_note", value)} />
-          <SettingsTextArea label="报价页脚备注" value={settings.quote_footer ?? ""} rows={5} onChange={(value) => onUpdate("quote_footer", value)} />
-        </SettingsGroup>
+    <div className="space-y-2">
+      <div className="flex gap-2">
+        <button onClick={() => setPreviewType("invoice")} className={`rounded-lg border px-3 py-1 text-[11px] font-semibold transition-colors ${previewType === "invoice" ? "border-slate-900 bg-slate-900 text-white" : "border-slate-300 bg-white text-slate-600 hover:border-slate-400"}`}>发票 Invoice</button>
+        <button onClick={() => setPreviewType("pickup")} className={`rounded-lg border px-3 py-1 text-[11px] font-semibold transition-colors ${previewType === "pickup" ? "border-slate-900 bg-slate-900 text-white" : "border-slate-300 bg-white text-slate-600 hover:border-slate-400"}`}>领料单 Pickup</button>
       </div>
-      <SettingsGroup title={`打印预览 — ${previewType === "invoice" ? "发票 (Invoice)" : "领料单 (Pickup)"}`}>
-        <div className="mb-2 flex gap-2">
-          <button onClick={() => setPreviewType("invoice")} className={`rounded-lg border px-3 py-1 text-[11px] font-semibold transition-colors ${previewType === "invoice" ? "border-slate-900 bg-slate-900 text-white" : "border-slate-300 text-slate-600 hover:border-slate-400"}`}>发票 Invoice</button>
-          <button onClick={() => setPreviewType("pickup")} className={`rounded-lg border px-3 py-1 text-[11px] font-semibold transition-colors ${previewType === "pickup" ? "border-slate-900 bg-slate-900 text-white" : "border-slate-300 text-slate-600 hover:border-slate-400"}`}>领料单 Pickup</button>
-        </div>
-        <div className="overflow-hidden rounded-lg border border-slate-200" style={{ height: 420 }}>
-          <iframe
-            srcDoc={html}
-            title="打印预览"
-            className="h-full w-full border-0"
-            style={{ transform: "scale(0.55)", transformOrigin: "top left", width: `${100 / 0.55}%`, height: `${100 / 0.55}%` }}
-          />
-        </div>
-        <p className="mt-1.5 text-[10px] text-slate-500">预览为缩略显示，实际打印为全尺寸A4</p>
-      </SettingsGroup>
+      <div className="overflow-hidden rounded-lg border border-slate-200" style={{ height: 420 }}>
+        <iframe
+          srcDoc={html}
+          title="打印预览"
+          className="h-full w-full border-0"
+          style={{ transform: "scale(0.55)", transformOrigin: "top left", width: `${100 / 0.55}%`, height: `${100 / 0.55}%` }}
+        />
+      </div>
+      <p className="text-[10px] text-slate-500">预览为缩略显示，实际打印为全尺寸A4</p>
     </div>
   );
 }
-
 function SettingsSection({ settings, setSettings, saveState, isDirty, lastSavedAt, onSave, isSaving }: { settings: BizSettings; setSettings: React.Dispatch<React.SetStateAction<BizSettings>>; saveState: "idle" | "saving" | "saved" | "error" | "conflict"; isDirty: boolean; lastSavedAt: string; onSave?: () => void; isSaving?: boolean; }) {
   const pages: Array<{ key: SettingsPageKey; label: string; note: string }> = [
-    { key: "company-base", label: "1. 公司基础", note: "公司名称、地址和展示预览" },
-    { key: "company-contact", label: "2. 联系方式", note: "电话、邮箱、网站和 Logo" },
-    { key: "finance", label: "3. 财务收款", note: "税务默认值和收款方式" },
-    { key: "print", label: "4. 打印模板", note: "发票、领料单和页脚备注" },
-    { key: "lists", label: "5. 分类列表", note: "支出类型和供应商分类" },
-    { key: "categories", label: "6. 物料分类", note: "物料管理分类列表" },
-  ];
+    { key: "company-base", label: "1. 公司基础 + 打印模板", note: "公司信息、打印标题、模板备注、预览" },
+    { key: "company-contact", label: "2. 联系方式", note: "电话、邮箱、网站、 Logo" },
+    { key: "finance", label: "3. 财务收款", note: "税率默认值、收款方式" },
+    { key: "lists", label: "4. 分类列表", note: "支付类型和供应商分类" },
+    { key: "categories", label: "5. 物料分类", note: "物料管理分类列表" },
+  ]
   const [page, setPage] = useState<SettingsPageKey>("company-base");
   const pageIndex = pages.findIndex((item) => item.key === page);
   const currentPage = pages[pageIndex] ?? pages[0];
@@ -6400,22 +6385,37 @@ function SettingsSection({ settings, setSettings, saveState, isDirty, lastSavedA
       </div>
 
       <div className="min-h-[320px]">
-        {page === "company-base" ? (
+                {page === "company-base" ? (
           <div className="grid gap-3 xl:grid-cols-2">
-            <SettingsGroup title="公司基础">
-              <SettingsField label="公司名称" value={settings.company_name} onChange={(value) => update("company_name", value)} />
-              <SettingsField label="公司中文名" value={settings.company_name_zh ?? ""} onChange={(value) => update("company_name_zh", value)} />
-              <SettingsField label="后台地址" value={settings.address} onChange={(value) => update("address", value)} />
-              <SettingsField label="打印地址" value={settings.company_address ?? ""} onChange={(value) => update("company_address", value)} />
-            </SettingsGroup>
-            <SettingsGroup title="页面预览">
-              <div className="space-y-3 text-xs">
-                <div className="flex items-center justify-between"><span className="text-slate-700">公司名称</span><span className="max-w-[220px] text-right font-medium text-slate-700">{settings.company_name || "未填写"}</span></div>
-                <div className="flex items-center justify-between"><span className="text-slate-700">打印名称</span><span className="max-w-[220px] text-right font-medium text-slate-700">{settings.company_name_zh || settings.company_name || "未填写"}</span></div>
-                <div className="flex items-center justify-between"><span className="text-slate-700">展示地址</span><span className="max-w-[220px] text-right text-slate-700">{settings.company_address || settings.address || "未填写"}</span></div>
-              </div>
-            </SettingsGroup>
-
+            <div className="space-y-3">
+              <SettingsGroup title="公司信息">
+                <SettingsField label="公司名称" value={settings.company_name} onChange={(value) => update("company_name", value)} />
+                <SettingsField label="公司名称中" value={settings.company_name_zh ?? ""} onChange={(value) => update("company_name_zh", value)} />
+                <SettingsField label="柜台地址" value={settings.address} onChange={(value) => update("address", value)} />
+                <SettingsField label="打印地址" value={settings.company_address ?? ""} onChange={(value) => update("company_address", value)} />
+              </SettingsGroup>
+              <SettingsGroup title="打印标题与素材">
+                <SettingsField label="Invoice 标题" value={settings.invoice_title ?? "Invoice"} onChange={(value) => update("invoice_title", value)} />
+                <SettingsField label="领料单标题" value={settings.picking_title ?? "领料单 / Worker Pickup Sheet"} onChange={(value) => update("picking_title", value)} />
+                <SettingsField label="Logo URL" value={settings.logo_url ?? ""} onChange={(value) => update("logo_url", value)} />
+              </SettingsGroup>
+              <SettingsGroup title="模板备注">
+                <SettingsTextArea label="发票备注模板" value={settings.invoice_note ?? ""} rows={7} onChange={(value) => update("invoice_note", value)} />
+                <SettingsTextArea label="报价页脚备注" value={settings.quote_footer ?? ""} rows={5} onChange={(value) => update("quote_footer", value)} />
+              </SettingsGroup>
+            </div>
+            <div className="space-y-3">
+              <SettingsGroup title="页面预览">
+                <div className="space-y-3 text-xs">
+                  <div className="flex items-center justify-between"><span className="text-slate-700">公司名称</span><span className="max-w-[220px] text-right font-medium text-slate-700">{settings.company_name || "未填写"}</span></div>
+                  <div className="flex items-center justify-between"><span className="text-slate-700">打印名称</span><span className="max-w-[220px] text-right font-medium text-slate-700">{settings.company_name_zh || settings.company_name || "未填写"}</span></div>
+                  <div className="flex items-center justify-between"><span className="text-slate-700">展示地址</span><span className="max-w-[220px] text-right text-slate-700">{settings.company_address || settings.address || "未填写"}</span></div>
+                </div>
+              </SettingsGroup>
+              <SettingsGroup title="打印预览">
+                <SettingsPrintPreview settings={settings} onUpdate={update} />
+              </SettingsGroup>
+            </div>
           </div>
         ) : null}
 
@@ -6457,9 +6457,7 @@ function SettingsSection({ settings, setSettings, saveState, isDirty, lastSavedA
           </div>
         ) : null}
 
-        {page === "print" ? (
-          <SettingsPrintPreview settings={settings} onUpdate={update} />
-        ) : null}
+
 
         {page === "lists" ? (
           <div className="grid gap-3 xl:grid-cols-2">

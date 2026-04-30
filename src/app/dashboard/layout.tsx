@@ -5,6 +5,7 @@ const navItems = [
   ["/dashboard", "首页"],
   ["/dashboard/overview", "总览"],
   ["/dashboard/biz", "业务"],
+  ["/dashboard/biz", "量尺寸"],
   ["/dashboard/tasks", "任务"],
   ["/dashboard/memory", "记忆"],
   ["/dashboard/system", "系统"],

@@ -284,6 +284,10 @@ export type BizSettings = {
   auto_attendance_note?: string;
   material_categories?: string;
   vip_prices?: string;
+  work_start?: string;
+  work_end?: string;
+  break_start?: string;
+  break_end?: string;
 };
 
 function toNumber(value: unknown) {

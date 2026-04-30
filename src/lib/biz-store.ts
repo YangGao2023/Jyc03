@@ -35,17 +35,7 @@ export type BizStoreSnapshot = {
   settings: BizSettings;
 };
 
-// ─── Storage backend: SQLite (local) | Redis (Vercel) ────────────────────────
-
-// Lazily import backend modules — client-side bundles won't resolve them anyway
-async function getStore(): Promise<"sqlite" | "redis"> {
-  if (typeof window !== "undefined") return "redis"; // client side, never call
-  if (process.env.VERCEL) return "redis";
-  if (process.env.REDIS_URL) return "redis"; // local dev with cloud data
-  return "sqlite"; // pure offline fallback
-}
-
-// ─── SQLite implementation ─────────────────────────────────────────────────────
+// ─── Helpers ──────────────────────────────────────────────────────────────────
 
 function val<T>(v: unknown, fallback: T): T {
   return (v == null || v === undefined) ? fallback : v as T;
@@ -55,7 +45,6 @@ function parseJson<T>(v: unknown, fallback: T): T {
   if (typeof v === "string") {
     try {
       const parsed = JSON.parse(v);
-      // Handle double-encoded JSON (e.g. '"[\"value\"]"' stored as string)
       if (typeof parsed === "string") {
         try { return JSON.parse(parsed); } catch {}
       }
@@ -64,6 +53,388 @@ function parseJson<T>(v: unknown, fallback: T): T {
   }
   return v as T ?? fallback;
 }
+
+function nullStr(v: unknown): string | null {
+  return v == null || v === "" ? null : String(v);
+}
+
+function normalizeRelationText(value?: string | null) {
+  return value?.trim().toLowerCase() ?? "";
+}
+
+function normalizeRelationPhone(value?: string | null) {
+  return value?.replace(/\D+/g, "") ?? "";
+}
+
+function resolveClientId(
+  clients: ContactRecord[],
+  input: { clientId?: string; clientName?: string; phone?: string },
+) {
+  if (input.clientId && clients.some((item) => item.id === input.clientId)) return input.clientId;
+  const normalizedName = normalizeRelationText(input.clientName);
+  const normalizedPhone = normalizeRelationPhone(input.phone);
+  const nameMatches = normalizedName
+    ? clients.filter((item) => normalizeRelationText(item.name) === normalizedName) : [];
+  if (normalizedPhone && nameMatches.length > 1) {
+    const exactMatches = nameMatches.filter((item) => normalizeRelationPhone(item.phone) === normalizedPhone);
+    if (exactMatches.length === 1) return exactMatches[0].id;
+  }
+  if (nameMatches.length === 1) {
+    const matched = nameMatches[0];
+    const matchedPhone = normalizeRelationPhone(matched.phone);
+    if (!normalizedPhone || !matchedPhone || matchedPhone === normalizedPhone) return matched.id;
+  }
+  if (normalizedPhone) {
+    const phoneMatches = clients.filter((item) => normalizeRelationPhone(item.phone) === normalizedPhone);
+    if (phoneMatches.length === 1) return phoneMatches[0].id;
+  }
+  return undefined;
+}
+
+function resolveSupplierId(suppliers: SupplierRecord[], input: { supplierId?: string; supplierName?: string }) {
+  if (input.supplierId && suppliers.some((item) => item.id === input.supplierId)) return input.supplierId;
+  const normalizedName = normalizeRelationText(input.supplierName);
+  if (!normalizedName) return undefined;
+  const matches = suppliers.filter((item) => normalizeRelationText(item.name) === normalizedName);
+  return matches.length === 1 ? matches[0].id : undefined;
+}
+
+export function createStoreRevision() {
+  return `${Date.now()}-${Math.random().toString(36).slice(2, 10)}`;
+}
+
+// ─── Normalization ────────────────────────────────────────────────────────────
+
+function normalizeSnapshot(snapshot: Partial<BizStoreSnapshot>): BizStoreSnapshot {
+  const settings = snapshot.settings;
+  const clients = Array.isArray(snapshot.clients) ? snapshot.clients : [];
+  const suppliers = Array.isArray(snapshot.suppliers) ? snapshot.suppliers : [];
+  const orders = Array.isArray(snapshot.orders)
+    ? snapshot.orders.map((item) => {
+        const payment_history = Array.isArray(item.payment_history)
+          ? item.payment_history
+          : typeof item.payment_history === 'string'
+            ? (() => { try { const p = JSON.parse(item.payment_history); return Array.isArray(p) ? p : []; } catch { return []; } })()
+            : [];
+        return {
+          ...item,
+          payment_history: payment_history.map((record: any) => ({
+            ...record,
+            method: record?.office ? "现金" : (record?.method && record?.method !== "旧库导入" ? String(record.method) : "现金"),
+          })),
+          client_id: resolveClientId(clients, {
+            clientId: item.client_id, clientName: item.client_name, phone: item.phone,
+          }),
+        };
+      })
+    : [];
+  const appointments = Array.isArray(snapshot.appointments)
+    ? snapshot.appointments.map((item) => ({ ...item, client_id: resolveClientId(clients, { clientId: item.client_id, clientName: item.client_name, phone: item.phone }) }))
+    : [];
+  const quotes = Array.isArray(snapshot.quotes)
+    ? snapshot.quotes.map((item) => ({ ...item, client_id: resolveClientId(clients, { clientId: item.client_id, clientName: item.client_name }) }))
+    : [];
+
+  return {
+    revision: typeof snapshot.revision === "string" && snapshot.revision.trim() ? snapshot.revision : createStoreRevision(),
+    orders, clients, suppliers,
+    expenses: Array.isArray(snapshot.expenses)
+      ? snapshot.expenses.map((item) => ({ ...item, payment_method: item.office ? "现金" : (item.payment_method && item.payment_method !== "旧库导入" ? String(item.payment_method) : "现金") })) : [],
+    cashEntries: Array.isArray(snapshot.cashEntries)
+      ? snapshot.cashEntries.map((item) => ({ ...item, method: item.method || "现金", office: item.source_type === "office-transfer" ? true : Boolean(item.office) })) : [],
+    materials: Array.isArray(snapshot.materials) ? snapshot.materials.map((item) => ({ ...item, supplier_id: resolveSupplierId(suppliers, { supplierId: item.supplier_id, supplierName: item.supplier }) })) : [],
+    purchases: Array.isArray(snapshot.purchases) ? snapshot.purchases.map((item) => ({ ...item, supplier_id: resolveSupplierId(suppliers, { supplierId: item.supplier_id, supplierName: item.supplier }) })) : [],
+    employees: Array.isArray(snapshot.employees) ? snapshot.employees : [],
+    attendances: Array.isArray(snapshot.attendances) ? snapshot.attendances : [],
+    appointments, payrolls: Array.isArray(snapshot.payrolls) ? snapshot.payrolls : [],
+    quotes, showcases: Array.isArray(snapshot.showcases) ? snapshot.showcases : [],
+    printArchives: Array.isArray(snapshot.printArchives) ? snapshot.printArchives : [],
+    settings: settings && typeof settings === "object" ? settings : {} as BizSettings,
+  };
+}
+
+// ─── MySQL read ───────────────────────────────────────────────────────────────
+
+async function mysqlRead(): Promise<BizStoreSnapshot> {
+  const { queryRows } = await import("@/lib/db-mysql");
+  const { rowToSettings } = await import("@/lib/db-mysql");
+
+  // Read all tables in parallel
+  const [
+    orderRows, clientRows, supplierRows, expenseRows, cashRows,
+    materialRows, purchaseRows, employeeRows, attendanceRows,
+    appointmentRows, payrollRows, quoteRows, showcaseRows, printRows, settingsRows
+  ] = await Promise.all([
+    queryRows("SELECT * FROM a3s_orders"),
+    queryRows("SELECT * FROM a3s_clients"),
+    queryRows("SELECT * FROM a3s_suppliers"),
+    queryRows("SELECT * FROM a3s_expenses"),
+    queryRows("SELECT * FROM a3s_cash_entries"),
+    queryRows("SELECT * FROM a3s_materials"),
+    queryRows("SELECT * FROM a3s_purchases"),
+    queryRows("SELECT * FROM a3s_employees"),
+    queryRows("SELECT * FROM a3s_attendances"),
+    queryRows("SELECT * FROM a3s_appointments"),
+    queryRows("SELECT * FROM a3s_payrolls"),
+    queryRows("SELECT * FROM a3s_quotes"),
+    queryRows("SELECT * FROM a3s_showcases"),
+    queryRows("SELECT * FROM a3s_print_archives"),
+    queryRows("SELECT * FROM a3s_settings WHERE id = 1"),
+  ]);
+
+  const orders = orderRows.map(rowToOrder);
+  const settings = rowToSettings(settingsRows[0] as Record<string, unknown>) ?? {} as BizSettings;
+
+  return normalizeSnapshot({
+    revision: createStoreRevision(),
+    orders,
+    clients: clientRows.map(rowToClient),
+    suppliers: supplierRows.map(rowToSupplier),
+    expenses: expenseRows.map(rowToExpense),
+    cashEntries: cashRows.map(rowToCashEntry),
+    materials: materialRows.map(rowToMaterial),
+    purchases: purchaseRows.map(rowToPurchase),
+    employees: employeeRows.map(rowToEmployee),
+    attendances: attendanceRows.map(rowToAttendance),
+    appointments: appointmentRows.map(rowToAppointment),
+    payrolls: payrollRows.map(rowToPayroll),
+    quotes: quoteRows.map(rowToQuote),
+    showcases: showcaseRows.map(rowToShowcase),
+    printArchives: printRows.map(rowToPrintArchive),
+    settings,
+  });
+}
+
+// ─── MySQL write ──────────────────────────────────────────────────────────────
+
+async function mysqlWrite(snapshot: BizStoreSnapshot): Promise<void> {
+  const { executeStmt, queryRows } = await import("@/lib/db-mysql");
+  const now = new Date().toISOString();
+
+  // Settings
+  const s = snapshot.settings;
+  await executeStmt(
+    `INSERT INTO a3s_settings(id,company_name,company_name_zh,address,company_address,
+      phone,phones,email,website,tax_number,default_tax_rate,default_currency,
+      fiscal_start_month,bank_account,alipay,wechat_pay,other_payment,
+      invoice_title,picking_title,zelle,invoice_note,quote_valid_days,
+      quote_footer,logo_url,expense_types,supplier_categories,meal_allowance_amount,
+      auto_attendance_timezone,auto_attendance_run_time,auto_attendance_default_minutes,
+      auto_attendance_note,work_start,work_end,break_start,break_end,material_categories)
+    VALUES(1,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)
+    ON DUPLICATE KEY UPDATE
+      company_name=VALUES(company_name),company_name_zh=VALUES(company_name_zh),
+      address=VALUES(address),company_address=VALUES(company_address),
+      phone=VALUES(phone),phones=VALUES(phones),email=VALUES(email),
+      website=VALUES(website),tax_number=VALUES(tax_number),
+      default_tax_rate=VALUES(default_tax_rate),default_currency=VALUES(default_currency),
+      fiscal_start_month=VALUES(fiscal_start_month),bank_account=VALUES(bank_account),
+      alipay=VALUES(alipay),wechat_pay=VALUES(wechat_pay),
+      other_payment=VALUES(other_payment),invoice_title=VALUES(invoice_title),
+      picking_title=VALUES(picking_title),zelle=VALUES(zelle),
+      invoice_note=VALUES(invoice_note),quote_valid_days=VALUES(quote_valid_days),
+      quote_footer=VALUES(quote_footer),logo_url=VALUES(logo_url),
+      expense_types=VALUES(expense_types),supplier_categories=VALUES(supplier_categories),
+      meal_allowance_amount=VALUES(meal_allowance_amount),
+      auto_attendance_timezone=VALUES(auto_attendance_timezone),
+      auto_attendance_run_time=VALUES(auto_attendance_run_time),
+      auto_attendance_default_minutes=VALUES(auto_attendance_default_minutes),
+      auto_attendance_note=VALUES(auto_attendance_note),
+      material_categories=VALUES(material_categories)`,
+    [s.company_name, s.company_name_zh ?? null, s.address, s.company_address ?? null,
+      s.phone, s.phones ?? null, s.email, s.website, s.tax_number,
+      s.default_tax_rate, s.default_currency, s.fiscal_start_month,
+      s.bank_account, s.alipay, s.wechat_pay, s.other_payment,
+      s.invoice_title ?? null, s.picking_title ?? null, s.zelle ?? null,
+      s.invoice_note ?? null, s.quote_valid_days, s.quote_footer, s.logo_url,
+      s.expense_types ?? null, s.supplier_categories ?? null,
+      s.meal_allowance_amount ?? 15,
+      s.auto_attendance_timezone ?? "America/New_York",
+      s.auto_attendance_run_time ?? "01:00",
+      s.auto_attendance_default_minutes ?? 600,
+      s.auto_attendance_note ?? "",
+      s.work_start ?? null, s.work_end ?? null,
+      s.break_start ?? null, s.break_end ?? null,
+      s.material_categories ?? null]
+  );
+
+  // Helper: batch upsert
+  async function batchUpsert(table: string, rows: Record<string, unknown>[], keyCol: string) {
+    if (rows.length === 0) return;
+    const cols = Object.keys(rows[0]);
+    const placeholders = rows.map(() => `(${cols.map(() => '?').join(',')})`).join(',');
+    const updateSet = cols.filter(c => c !== keyCol).map(c => `${c}=VALUES(${c})`).join(',');
+    const values = rows.flatMap(r => cols.map(c => r[c] ?? null));
+    try {
+      await executeStmt(
+        `INSERT INTO ${table}(${cols.join(',')}) VALUES${placeholders} ON DUPLICATE KEY UPDATE ${updateSet}`,
+        values
+      );
+    } catch (err) {
+      console.error(`[mysqlWrite] batch upsert ${table} failed:`, err);
+    }
+  }
+
+  // Orders
+  await batchUpsert('a3s_orders', snapshot.orders.map(o => ({
+    order_number: o.order_number, order_type: o.order_type || '定制单',
+    client_name: o.client_name || '', client_id: o.client_id || null,
+    phone: o.phone || null, address: o.address || null,
+    preview_image: o.preview_image || null, description: o.description || null,
+    total_price: o.total_price ?? 0, tax_rate: o.tax_rate ?? 0,
+    discount: o.discount ?? 0, total_after_tax: o.total_after_tax ?? 0,
+    amount_paid: o.amount_paid ?? 0, balance: o.balance ?? 0,
+    order_date: o.order_date || null, status: o.status || '下单',
+    operation_type: o.operation_type || null, install_info: o.install_info || null,
+    remarks: o.remarks || null,
+    payment_history: JSON.stringify(o.payment_history || []),
+    material_rows: JSON.stringify(o.material_rows || []),
+  })), 'order_number');
+
+  // Clients
+  await batchUpsert('a3s_clients', snapshot.clients.map(c => ({
+    id: c.id, name: c.name || '', contact: c.contact || null,
+    phone: c.phone || null, email: c.email || null, address: c.address || null,
+    created_at: c.created_at || null, note: c.note || null,
+    is_vip: c.is_vip ? 1 : 0, balance: c.balance ?? 0, wechat: c.wechat || null,
+  })), 'id');
+
+  // Suppliers
+  await batchUpsert('a3s_suppliers', snapshot.suppliers.map(s => ({
+    id: s.id, name: s.name || '', category: s.category || null,
+    contact_person: s.contact_person || null, phone: s.phone || null,
+    email: s.email || null, website: s.website || null, address: s.address || null,
+    last_purchase_date: s.last_purchase_date || null, remark: s.remark || null,
+  })), 'id');
+
+  // Expenses
+  await batchUpsert('a3s_expenses', snapshot.expenses.map(e => ({
+    id: e.id, target: e.target || '', detail: e.detail || '',
+    amount: e.amount ?? 0, expense_type: e.expense_type || '',
+    payment_method: e.payment_method || '现金', expense_date: e.expense_date || '',
+    remark: e.remark || null, office: e.office ? 1 : 0,
+    source_type: e.source_type || null, source_id: e.source_id || null,
+    order_id: e.order_id || null, voided: e.voided ? 1 : 0,
+  })), 'id');
+
+  // Cash entries
+  await batchUpsert('a3s_cash_entries', snapshot.cashEntries.map(c => ({
+    id: c.id, type: c.type || '收入', amount: c.amount ?? 0,
+    date: c.date || '', note: c.note || null,
+    method: c.method || '现金', office: c.office ? 1 : 0,
+    order_number: c.order_number || null,
+    source_type: c.source_type || null, source_id: c.source_id || null,
+    order_id: c.order_id || null, voided: c.voided ? 1 : 0,
+  })), 'id');
+
+  // Materials
+  await batchUpsert('a3s_materials', snapshot.materials.map(m => ({
+    id: m.id, code: m.code || '', name: m.name || '',
+    specification: m.specification || null, size: m.size || null,
+    unit: m.unit || '个', stock_quantity: m.stock_quantity ?? 0,
+    min_stock: m.min_stock ?? 0, factory_price_rmb: m.factory_price_rmb ?? 0,
+    usd_cost: m.usd_cost ?? 0, sale_price_usd: m.sale_price_usd ?? 0,
+    vip_sale_price_usd: m.vip_sale_price_usd ?? null, weight: m.weight ?? null,
+    purchase_price: m.purchase_price ?? 0, supplier: m.supplier || null,
+    supplier_id: m.supplier_id || null, image: m.image || null,
+    last_stock_date: m.last_stock_date || null, remark: m.remark || null,
+    category: m.category || null,
+  })), 'id');
+
+  // Purchases
+  if (snapshot.purchases?.length) {
+    await batchUpsert('a3s_purchases', snapshot.purchases.map(p => ({
+      id: p.id, supplier: p.supplier || '', supplier_id: p.supplier_id || null,
+      item_name: p.item_name || '', quantity: p.quantity ?? 0,
+      unit: p.unit || '个', unit_price: p.unit_price ?? 0,
+      total_amount: p.total_amount ?? 0, purchase_date: p.purchase_date || '',
+      status: p.status || '待收货', expense_id: p.expense_id || null,
+    })), 'id');
+  }
+
+  // Employees
+  await batchUpsert('a3s_employees', snapshot.employees.map(e => ({
+    id: e.id, code: e.code || null, name: e.name || '',
+    position: e.position || null, phone: e.phone || null,
+    hire_date: e.hire_date || null, contract_end: e.contract_end || null,
+    monthly_salary: e.monthly_salary ?? 0, hourly_rate: e.hourly_rate ?? null,
+    meal_allowance_eligible: e.meal_allowance_eligible == null ? null : (e.meal_allowance_eligible ? 1 : 0),
+    ethnicity: e.ethnicity || null, status: e.status || '在职',
+  })), 'id');
+
+  // Attendances
+  if (snapshot.attendances.length) {
+    const attRows = snapshot.attendances.map(a => ({
+      id: a.id, date: a.date || '', employee_id: a.employee_id || null,
+      employee_name: a.employee_name || '', employee_code: a.employee_code || null,
+      leave_minutes: a.leave_minutes ?? 0, overtime_minutes: a.overtime_minutes ?? 0,
+      worked_minutes: a.worked_minutes ?? 0, meal_allowance: a.meal_allowance ? 1 : 0,
+      generated_by: a.generated_by || null, note: a.note || null,
+    }));
+    // Batch write in chunks to avoid query size limits
+    for (let i = 0; i < attRows.length; i += 500) {
+      await batchUpsert('a3s_attendances', attRows.slice(i, i + 500), 'id');
+    }
+  }
+
+  // Appointments
+  if (snapshot.appointments?.length) {
+    await batchUpsert('a3s_appointments', snapshot.appointments.map(a => ({
+      id: a.id, client_name: a.client_name || '', client_id: a.client_id || null,
+      phone: a.phone || null, address: a.address || null,
+      appointment_date: a.appointment_date || '',
+      description: a.description || null, gcal_event_id: a.gcal_event_id || null,
+    })), 'id');
+  }
+
+  // Payrolls
+  if (snapshot.payrolls?.length) {
+    await batchUpsert('a3s_payrolls', snapshot.payrolls.map(p => ({
+      id: p.id, month: p.month || '', employee_id: p.employee_id || null,
+      employee_name: p.employee_name || '', employee_code: p.employee_code || null,
+      employee_ethnicity: p.employee_ethnicity || null,
+      total_hours: p.total_hours ?? null, hourly_rate: p.hourly_rate ?? null,
+      meal_allowance_total: p.meal_allowance_total ?? null,
+      base_salary: p.base_salary ?? 0, bonus: p.bonus ?? 0,
+      deduction: p.deduction ?? 0, net_salary: p.net_salary ?? 0,
+      payment_status: p.payment_status || '未支付', paid_at: p.paid_at || null,
+      expense_id: p.expense_id || null,
+    })), 'id');
+  }
+
+  // Quotes
+  if (snapshot.quotes?.length) {
+    await batchUpsert('a3s_quotes', snapshot.quotes.map(q => ({
+      id: q.id, client_name: q.client_name || '', client_id: q.client_id || null,
+      title: q.title || '', amount: q.amount ?? 0,
+      created_at: q.created_at || '', valid_until: q.valid_until || '',
+      status: q.status || '待确认',
+    })), 'id');
+  }
+
+  // Showcases
+  if (snapshot.showcases?.length) {
+    await batchUpsert('a3s_showcases', snapshot.showcases.map(s => ({
+      id: s.id, name: s.name || '', category: s.category || '',
+      image_count: s.image_count ?? 0, description: s.description || null,
+      created_at: s.created_at || '', status: s.status || '展示中',
+    })), 'id');
+  }
+
+  // Print archives
+  if (snapshot.printArchives?.length) {
+    await batchUpsert('a3s_print_archives', snapshot.printArchives.map(p => ({
+      id: p.id, order_number: p.order_number || '', client_name: p.client_name || '',
+      order_type: p.order_type || '', print_type: p.print_type || 'invoice',
+      title: p.title || '', created_at: p.created_at || '',
+      created_by: p.created_by || null, amount: p.amount ?? null,
+      file_name: p.file_name || '', html: p.html || '',
+      summary: p.summary || null,
+    })), 'id');
+  }
+}
+
+// ─── Row mappers ──────────────────────────────────────────────────────────────
 
 function rowToOrder(r: Record<string, unknown>): BizOrder {
   return {
@@ -91,221 +462,9 @@ function rowToOrder(r: Record<string, unknown>): BizOrder {
   };
 }
 
-function orderToRow(o: BizOrder): Record<string, unknown> {
+function rowToClient(r: Record<string, unknown>): ContactRecord {
   return {
-    order_number: o.order_number,
-    order_type: o.order_type,
-    client_name: o.client_name,
-    client_id: o.client_id ?? null,
-    phone: o.phone ?? null,
-    address: o.address ?? null,
-    preview_image: o.preview_image ?? null,
-    description: o.description ?? null,
-    total_price: o.total_price ?? 0,
-    tax_rate: o.tax_rate ?? 0,
-    discount: o.discount ?? 0,
-    total_after_tax: o.total_after_tax ?? 0,
-    amount_paid: o.amount_paid ?? 0,
-    balance: o.balance ?? 0,
-    order_date: o.order_date ?? null,
-    status: o.status ?? "下单",
-    operation_type: o.operation_type ?? null,
-    install_info: o.install_info ?? null,
-    remarks: o.remarks ?? null,
-    payment_history: JSON.stringify(Array.isArray(o.payment_history) ? o.payment_history : []),
-    material_rows: JSON.stringify(Array.isArray(o.material_rows) ? o.material_rows : []),
-    updated_at: new Date().toISOString(),
-  };
-}
-
-function nullStr(v: unknown): string | null {
-  return v == null || v === "" ? null : String(v);
-}
-
-function normalizeRelationText(value?: string | null) {
-  return value?.trim().toLowerCase() ?? "";
-}
-
-function normalizeRelationPhone(value?: string | null) {
-  return value?.replace(/\D+/g, "") ?? "";
-}
-
-function resolveClientId(
-  clients: ContactRecord[],
-  input: { clientId?: string; clientName?: string; phone?: string },
-) {
-  if (input.clientId && clients.some((item) => item.id === input.clientId)) return input.clientId;
-
-  const normalizedName = normalizeRelationText(input.clientName);
-  const normalizedPhone = normalizeRelationPhone(input.phone);
-  const nameMatches = normalizedName
-    ? clients.filter((item) => normalizeRelationText(item.name) === normalizedName)
-    : [];
-
-  if (normalizedPhone && nameMatches.length > 1) {
-    const exactMatches = nameMatches.filter((item) => normalizeRelationPhone(item.phone) === normalizedPhone);
-    if (exactMatches.length === 1) return exactMatches[0].id;
-  }
-
-  if (nameMatches.length === 1) {
-    const matched = nameMatches[0];
-    const matchedPhone = normalizeRelationPhone(matched.phone);
-    if (!normalizedPhone || !matchedPhone || matchedPhone === normalizedPhone) return matched.id;
-  }
-
-  if (normalizedPhone) {
-    const phoneMatches = clients.filter((item) => normalizeRelationPhone(item.phone) === normalizedPhone);
-    if (phoneMatches.length === 1) return phoneMatches[0].id;
-  }
-
-  return undefined;
-}
-
-function resolveSupplierId(
-  suppliers: SupplierRecord[],
-  input: { supplierId?: string; supplierName?: string },
-) {
-  if (input.supplierId && suppliers.some((item) => item.id === input.supplierId)) return input.supplierId;
-
-  const normalizedName = normalizeRelationText(input.supplierName);
-  if (!normalizedName) return undefined;
-
-  const matches = suppliers.filter((item) => normalizeRelationText(item.name) === normalizedName);
-  return matches.length === 1 ? matches[0].id : undefined;
-}
-
-export function createStoreRevision() {
-  return `${Date.now()}-${Math.random().toString(36).slice(2, 10)}`;
-}
-
-function normalizeSnapshot(snapshot: Partial<BizStoreSnapshot>): BizStoreSnapshot {
-  const settings = snapshot.settings;
-  const clients = Array.isArray(snapshot.clients) ? snapshot.clients : [];
-  const suppliers = Array.isArray(snapshot.suppliers) ? snapshot.suppliers : [];
-  const orders = Array.isArray(snapshot.orders)
-    ? snapshot.orders.map((item) => {
-        // Ensure payment_history and material_rows are arrays (not JSON strings)
-        const payment_history = Array.isArray(item.payment_history)
-          ? item.payment_history
-          : typeof item.payment_history === 'string'
-            ? (() => { try { const p = JSON.parse(item.payment_history); return Array.isArray(p) ? p : []; } catch { return []; } })()
-            : [];
-        const material_rows = Array.isArray(item.material_rows)
-          ? item.material_rows
-          : typeof item.material_rows === 'string'
-            ? (() => { try { const m = JSON.parse(item.material_rows); return Array.isArray(m) ? m : []; } catch { return []; } })()
-            : [];
-        return {
-          ...item,
-          payment_history: payment_history.map((record: any) => ({
-            ...record,
-            method: record?.office ? "现金" : (record?.method && record?.method !== "旧库导入" ? String(record.method) : "现金"),
-          })),
-          material_rows,
-          client_id: resolveClientId(clients, {
-            clientId: item.client_id,
-            clientName: item.client_name,
-            phone: item.phone,
-          }),
-        };
-      })
-    : [];
-  const appointments = Array.isArray(snapshot.appointments)
-    ? snapshot.appointments.map((item) => ({
-        ...item,
-        client_id: resolveClientId(clients, {
-          clientId: item.client_id,
-          clientName: item.client_name,
-          phone: item.phone,
-        }),
-      }))
-    : [];
-  const quotes = Array.isArray(snapshot.quotes)
-    ? snapshot.quotes.map((item) => ({
-        ...item,
-        client_id: resolveClientId(clients, {
-          clientId: item.client_id,
-          clientName: item.client_name,
-        }),
-      }))
-    : [];
-  const materials = Array.isArray(snapshot.materials)
-    ? snapshot.materials.map((item) => ({
-        ...item,
-        supplier_id: resolveSupplierId(suppliers, {
-          supplierId: item.supplier_id,
-          supplierName: item.supplier,
-        }),
-      }))
-    : [];
-  const purchases = Array.isArray(snapshot.purchases)
-    ? snapshot.purchases.map((item) => ({
-        ...item,
-        supplier_id: resolveSupplierId(suppliers, {
-          supplierId: item.supplier_id,
-          supplierName: item.supplier,
-        }),
-      }))
-    : [];
-
-  return {
-    revision: typeof snapshot.revision === "string" && snapshot.revision.trim() ? snapshot.revision : createStoreRevision(),
-    orders,
-    clients,
-    suppliers,
-    expenses: Array.isArray(snapshot.expenses)
-      ? snapshot.expenses.map((item) => ({
-          ...item,
-          payment_method: item.office ? "现金" : (item.payment_method && item.payment_method !== "旧库导入" ? String(item.payment_method) : "现金"),
-        }))
-      : [],
-    cashEntries: Array.isArray(snapshot.cashEntries)
-      ? snapshot.cashEntries.map((item) => ({
-          ...item,
-          method: "现金",
-          office: item.source_type === "office-transfer" ? true : Boolean(item.office),
-        }))
-      : [],
-    materials,
-    purchases,
-    employees: Array.isArray(snapshot.employees) ? snapshot.employees : [],
-    attendances: Array.isArray(snapshot.attendances) ? snapshot.attendances : [],
-    appointments,
-    payrolls: Array.isArray(snapshot.payrolls) ? snapshot.payrolls : [],
-    quotes,
-    showcases: Array.isArray(snapshot.showcases) ? snapshot.showcases : [],
-    printArchives: Array.isArray(snapshot.printArchives) ? snapshot.printArchives : [],
-    settings: settings && typeof settings === "object"
-      ? settings
-      : {
-          company_name: "",
-          address: "",
-          phone: "",
-          email: "",
-          website: "",
-          tax_number: "",
-          default_tax_rate: 0,
-          default_currency: "USD",
-          fiscal_start_month: 1,
-          bank_account: "",
-          alipay: "",
-          wechat_pay: "",
-          other_payment: "",
-          quote_valid_days: 30,
-          quote_footer: "",
-          logo_url: "",
-        },
-  };
-}
-
-async function sqliteRead(): Promise<BizStoreSnapshot> {
-  const { getDb, rowToSettings } = await import("@/lib/db");
-  const db = getDb();
-
-  const orders = (db.prepare("SELECT * FROM orders").all() as Record<string, unknown>[]).map(rowToOrder);
-  const clients = db.prepare("SELECT * FROM clients").all().map((r: any) => ({
-    id: String(r.id),
-    name: String(r.name),
+    id: String(r.id), name: String(r.name),
     contact: nullStr(r.contact) ?? undefined,
     phone: nullStr(r.phone) ?? undefined,
     email: nullStr(r.email) ?? undefined,
@@ -315,11 +474,12 @@ async function sqliteRead(): Promise<BizStoreSnapshot> {
     is_vip: Boolean(r.is_vip),
     balance: Number(r.balance ?? 0),
     wechat: nullStr(r.wechat) ?? undefined,
-  }));
+  };
+}
 
-  const suppliers = db.prepare("SELECT * FROM suppliers").all().map((r: any) => ({
-    id: String(r.id),
-    name: String(r.name),
+function rowToSupplier(r: Record<string, unknown>): SupplierRecord {
+  return {
+    id: String(r.id), name: String(r.name),
     category: nullStr(r.category) ?? undefined,
     contact_person: nullStr(r.contact_person) ?? undefined,
     phone: nullStr(r.phone) ?? undefined,
@@ -328,38 +488,41 @@ async function sqliteRead(): Promise<BizStoreSnapshot> {
     address: nullStr(r.address) ?? undefined,
     last_purchase_date: nullStr(r.last_purchase_date) ?? undefined,
     remark: nullStr(r.remark) ?? undefined,
-  }));
+  };
+}
 
-  const expenses = db.prepare("SELECT * FROM expenses").all().map((r: any) => ({
-    id: String(r.id),
-    target: String(r.target),
-    detail: String(r.detail),
-    amount: Number(r.amount ?? 0),
-    expense_type: String(r.expense_type),
-    payment_method: String(r.payment_method),
-    expense_date: String(r.expense_date),
+function rowToExpense(r: Record<string, unknown>): ExpenseRecord {
+  return {
+    id: String(r.id), target: String(r.target), detail: String(r.detail),
+    amount: Number(r.amount ?? 0), expense_type: String(r.expense_type),
+    payment_method: String(r.payment_method), expense_date: String(r.expense_date),
     remark: nullStr(r.remark) ?? undefined,
     office: Boolean(r.office),
     source_type: nullStr(r.source_type) ?? undefined,
     source_id: nullStr(r.source_id) ?? undefined,
-  }));
+    order_id: nullStr(r.order_id) ?? undefined,
+    voided: Boolean(r.voided),
+  };
+}
 
-  const cashEntries = db.prepare("SELECT * FROM cash_entries").all().map((r: any) => ({
-    id: String(r.id),
-    type: String(r.type),
-    amount: Number(r.amount ?? 0),
-    date: String(r.date),
+function rowToCashEntry(r: Record<string, unknown>): CashEntry {
+  return {
+    id: String(r.id), type: String(r.type),
+    amount: Number(r.amount ?? 0), date: String(r.date),
     note: nullStr(r.note) ?? undefined,
+    method: nullStr(r.method) ?? undefined,
     office: Boolean(r.office),
     order_number: nullStr(r.order_number) ?? undefined,
     source_type: nullStr(r.source_type) ?? undefined,
     source_id: nullStr(r.source_id) ?? undefined,
-  }));
+    order_id: nullStr(r.order_id) ?? undefined,
+    voided: Boolean(r.voided),
+  };
+}
 
-  const materials = db.prepare("SELECT * FROM materials").all().map((r: any) => ({
-    id: String(r.id),
-    code: String(r.code ?? ""),
-    name: String(r.name),
+function rowToMaterial(r: Record<string, unknown>): MaterialRecord {
+  return {
+    id: String(r.id), code: String(r.code ?? ""), name: String(r.name),
     specification: nullStr(r.specification) ?? undefined,
     size: nullStr(r.size) ?? undefined,
     unit: String(r.unit ?? "个"),
@@ -377,28 +540,25 @@ async function sqliteRead(): Promise<BizStoreSnapshot> {
     last_stock_date: nullStr(r.last_stock_date) ?? undefined,
     remark: nullStr(r.remark) ?? undefined,
     category: nullStr(r.category) ?? undefined,
-  }));
+  };
+}
 
-  const purchases = db.prepare("SELECT * FROM purchases").all().map((r: any) => ({
-    id: String(r.id),
-    supplier: String(r.supplier),
+function rowToPurchase(r: Record<string, unknown>): PurchaseRecord {
+  return {
+    id: String(r.id), supplier: String(r.supplier),
     supplier_id: nullStr(r.supplier_id) ?? undefined,
-    item_name: String(r.item_name),
-    quantity: Number(r.quantity ?? 0),
-    unit: String(r.unit ?? "个"),
-    unit_price: Number(r.unit_price ?? 0),
-    total_amount: Number(r.total_amount ?? 0),
-    purchase_date: String(r.purchase_date),
+    item_name: String(r.item_name), quantity: Number(r.quantity ?? 0),
+    unit: String(r.unit ?? "个"), unit_price: Number(r.unit_price ?? 0),
+    total_amount: Number(r.total_amount ?? 0), purchase_date: String(r.purchase_date),
     status: String(r.status),
     expense_id: nullStr(r.expense_id) ?? undefined,
-  }));
+  };
+}
 
-  const employees = db.prepare("SELECT * FROM employees").all().map((r: any) => ({
-    id: String(r.id),
-    code: nullStr(r.code) ?? undefined,
-    name: String(r.name),
-    position: nullStr(r.position) ?? undefined,
-    phone: nullStr(r.phone) ?? undefined,
+function rowToEmployee(r: Record<string, unknown>): EmployeeRecord {
+  return {
+    id: String(r.id), code: nullStr(r.code) ?? undefined, name: String(r.name),
+    position: nullStr(r.position) ?? undefined, phone: nullStr(r.phone) ?? undefined,
     hire_date: nullStr(r.hire_date) ?? undefined,
     contract_end: nullStr(r.contract_end) ?? undefined,
     monthly_salary: Number(r.monthly_salary ?? 0),
@@ -407,11 +567,12 @@ async function sqliteRead(): Promise<BizStoreSnapshot> {
     meal_allowance_eligible: r.meal_allowance_eligible == null ? undefined : Boolean(r.meal_allowance_eligible),
     ethnicity: nullStr(r.ethnicity) ?? undefined,
     status: String(r.status ?? "在职"),
-  }));
+  };
+}
 
-  const attendances = db.prepare("SELECT * FROM attendances").all().map((r: any) => ({
-    id: String(r.id),
-    date: String(r.date),
+function rowToAttendance(r: Record<string, unknown>): AttendanceRecord {
+  return {
+    id: String(r.id), date: String(r.date),
     employee_id: nullStr(r.employee_id) ?? undefined,
     employee_name: String(r.employee_name),
     employee_code: nullStr(r.employee_code) ?? undefined,
@@ -421,22 +582,24 @@ async function sqliteRead(): Promise<BizStoreSnapshot> {
     meal_allowance: Boolean(r.meal_allowance),
     generated_by: nullStr(r.generated_by) ?? undefined,
     note: nullStr(r.note) ?? undefined,
-  }));
+  };
+}
 
-  const appointments = db.prepare("SELECT * FROM appointments").all().map((r: any) => ({
-    id: String(r.id),
-    client_name: String(r.client_name),
+function rowToAppointment(r: Record<string, unknown>): MeasurementAppointmentRecord {
+  return {
+    id: String(r.id), client_name: String(r.client_name),
     client_id: nullStr(r.client_id) ?? undefined,
     phone: nullStr(r.phone) ?? undefined,
     address: nullStr(r.address) ?? undefined,
     appointment_date: String(r.appointment_date),
     description: nullStr(r.description) ?? undefined,
     gcal_event_id: nullStr(r.gcal_event_id) ?? undefined,
-  }));
+  };
+}
 
-  const payrolls = db.prepare("SELECT * FROM payrolls").all().map((r: any) => ({
-    id: String(r.id),
-    month: String(r.month),
+function rowToPayroll(r: Record<string, unknown>): PayrollRecord {
+  return {
+    id: String(r.id), month: String(r.month),
     employee_id: nullStr(r.employee_id) ?? undefined,
     employee_name: String(r.employee_name),
     employee_code: nullStr(r.employee_code) ?? undefined,
@@ -445,532 +608,53 @@ async function sqliteRead(): Promise<BizStoreSnapshot> {
     hourly_rate: r.hourly_rate == null ? undefined : Number(r.hourly_rate),
     meal_allowance_total: r.meal_allowance_total == null ? undefined : Number(r.meal_allowance_total),
     base_salary: Number(r.base_salary ?? 0),
-    bonus: Number(r.bonus ?? 0),
-    deduction: Number(r.deduction ?? 0),
+    bonus: Number(r.bonus ?? 0), deduction: Number(r.deduction ?? 0),
     net_salary: Number(r.net_salary ?? 0),
     payment_status: String(r.payment_status ?? "未支付"),
     paid_at: nullStr(r.paid_at) ?? undefined,
     expense_id: nullStr(r.expense_id) ?? undefined,
-  }));
+  };
+}
 
-  const quotes = db.prepare("SELECT * FROM quotes").all().map((r: any) => ({
-    id: String(r.id),
-    client_name: String(r.client_name),
+function rowToQuote(r: Record<string, unknown>): QuoteRecord {
+  return {
+    id: String(r.id), client_name: String(r.client_name),
     client_id: nullStr(r.client_id) ?? undefined,
-    title: String(r.title),
-    amount: Number(r.amount ?? 0),
-    created_at: String(r.created_at),
-    valid_until: String(r.valid_until),
+    title: String(r.title), amount: Number(r.amount ?? 0),
+    created_at: String(r.created_at), valid_until: String(r.valid_until),
     status: String(r.status ?? "待确认"),
-  }));
+  };
+}
 
-  const showcases = db.prepare("SELECT * FROM showcases").all().map((r: any) => ({
-    id: String(r.id),
-    name: String(r.name),
-    category: String(r.category),
+function rowToShowcase(r: Record<string, unknown>): ShowcaseRecord {
+  return {
+    id: String(r.id), name: String(r.name), category: String(r.category),
     image_count: Number(r.image_count ?? 0),
     description: nullStr(r.description) ?? undefined,
-    created_at: String(r.created_at),
-    status: String(r.status ?? "展示中"),
-  }));
+    created_at: String(r.created_at), status: String(r.status ?? "展示中"),
+  };
+}
 
-  const printArchives = db.prepare("SELECT * FROM print_archives").all().map((r: any) => ({
-    id: String(r.id),
-    order_number: String(r.order_number),
-    client_name: String(r.client_name),
-    order_type: String(r.order_type),
+function rowToPrintArchive(r: Record<string, unknown>): PrintArchiveRecord {
+  return {
+    id: String(r.id), order_number: String(r.order_number),
+    client_name: String(r.client_name), order_type: String(r.order_type),
     print_type: String(r.print_type ?? "invoice"),
-    title: String(r.title),
-    created_at: String(r.created_at),
+    title: String(r.title), created_at: String(r.created_at),
     created_by: nullStr(r.created_by) ?? undefined,
     amount: r.amount == null ? undefined : Number(r.amount),
-    file_name: String(r.file_name),
-    html: String(r.html),
+    file_name: String(r.file_name), html: String(r.html),
     summary: nullStr(r.summary) ?? undefined,
-  }));
-
-  const settingsRow = db.prepare("SELECT * FROM settings WHERE id = 1").get();
-  const metaRow = db.prepare("SELECT revision FROM store_meta WHERE id = 1").get() as { revision?: string } | undefined;
-  const settings: BizSettings = rowToSettings(settingsRow as Record<string, unknown> | undefined) ?? {
-    company_name: "", address: "", phone: "", email: "", website: "",
-    tax_number: "", default_tax_rate: 0, default_currency: "USD",
-    fiscal_start_month: 1, bank_account: "", alipay: "", wechat_pay: "",
-    other_payment: "", quote_valid_days: 30, quote_footer: "", logo_url: "",
   };
-
-  // First time: seed from static JSON files if empty
-  if (orders.length === 0 && clients.length === 0) {
-    const seed = await buildSeedDefault();
-    await sqliteWrite(seed);
-    return sqliteRead(); // recurse once
-  }
-
-  return normalizeSnapshot({
-    revision: metaRow?.revision,
-    orders, clients, suppliers, expenses, cashEntries,
-    materials, purchases, employees, attendances, appointments,
-    payrolls, quotes, showcases, printArchives, settings,
-  });
 }
 
-async function sqliteWrite(snapshot: BizStoreSnapshot): Promise<void> {
-  const { getDb, rowToSettings } = await import("@/lib/db");
-  const db = getDb();
-
-  const txn = db.transaction(() => {
-    // Settings (single row, upsert)
-    const s = snapshot.settings;
-    db.prepare(`
-      INSERT INTO settings (id, company_name, company_name_zh, address, company_address,
-        phone, phones, email, website, tax_number, default_tax_rate, default_currency,
-        fiscal_start_month, bank_account, alipay, wechat_pay, other_payment,
-        invoice_title, picking_title, zelle, invoice_note, quote_valid_days,
-        quote_footer, logo_url, expense_types, supplier_categories, meal_allowance_amount,
-        auto_attendance_timezone, auto_attendance_run_time, auto_attendance_default_minutes,
-        auto_attendance_note, material_categories)
-      VALUES (1,
-        @company_name, @company_name_zh, @address, @company_address,
-        @phone, @phones, @email, @website, @tax_number, @default_tax_rate, @default_currency,
-        @fiscal_start_month, @bank_account, @alipay, @wechat_pay, @other_payment,
-        @invoice_title, @picking_title, @zelle, @invoice_note, @quote_valid_days,
-        @quote_footer, @logo_url, @expense_types, @supplier_categories, @meal_allowance_amount,
-        @auto_attendance_timezone, @auto_attendance_run_time, @auto_attendance_default_minutes,
-        @auto_attendance_note, @material_categories)
-      ON CONFLICT(id) DO UPDATE SET
-        company_name=@company_name, company_name_zh=@company_name_zh,
-        address=@address, company_address=@company_address,
-        phone=@phone, phones=@phones, email=@email, website=@website,
-        tax_number=@tax_number, default_tax_rate=@default_tax_rate,
-        default_currency=@default_currency, fiscal_start_month=@fiscal_start_month,
-        bank_account=@bank_account, alipay=@alipay, wechat_pay=@wechat_pay,
-        other_payment=@other_payment, invoice_title=@invoice_title,
-        picking_title=@picking_title, zelle=@zelle, invoice_note=@invoice_note,
-        quote_valid_days=@quote_valid_days, quote_footer=@quote_footer,
-        logo_url=@logo_url, expense_types=@expense_types,
-        supplier_categories=@supplier_categories,
-        meal_allowance_amount=@meal_allowance_amount,
-        auto_attendance_timezone=@auto_attendance_timezone,
-        auto_attendance_run_time=@auto_attendance_run_time,
-        auto_attendance_default_minutes=@auto_attendance_default_minutes,
-        auto_attendance_note=@auto_attendance_note,
-        material_categories=@material_categories
-    `).run({
-      company_name: s.company_name,
-      company_name_zh: s.company_name_zh ?? null,
-      address: s.address,
-      company_address: s.company_address ?? null,
-      phone: s.phone,
-      phones: s.phones ?? null,
-      email: s.email,
-      website: s.website,
-      tax_number: s.tax_number,
-      default_tax_rate: s.default_tax_rate,
-      default_currency: s.default_currency,
-      fiscal_start_month: s.fiscal_start_month,
-      bank_account: s.bank_account,
-      alipay: s.alipay,
-      wechat_pay: s.wechat_pay,
-      other_payment: s.other_payment,
-      invoice_title: s.invoice_title ?? null,
-      picking_title: s.picking_title ?? null,
-      zelle: s.zelle ?? null,
-      invoice_note: s.invoice_note ?? null,
-      quote_valid_days: s.quote_valid_days,
-      quote_footer: s.quote_footer,
-      logo_url: s.logo_url,
-      expense_types: s.expense_types ?? null,
-      supplier_categories: s.supplier_categories ?? null,
-      meal_allowance_amount: s.meal_allowance_amount ?? 15,
-      auto_attendance_timezone: s.auto_attendance_timezone ?? "America/New_York",
-      auto_attendance_run_time: s.auto_attendance_run_time ?? "01:00",
-      auto_attendance_default_minutes: s.auto_attendance_default_minutes ?? 600,
-      auto_attendance_note: s.auto_attendance_note ?? "",
-      material_categories: s.material_categories ?? null,
-    });
-
-    db.prepare(`
-      INSERT INTO store_meta (id, revision, updated_at)
-      VALUES (1, @revision, @updated_at)
-      ON CONFLICT(id) DO UPDATE SET
-        revision=@revision,
-        updated_at=@updated_at
-    `).run({
-      revision: snapshot.revision,
-      updated_at: new Date().toISOString(),
-    });
-
-    // Orders: delete + insert
-    db.prepare("DELETE FROM orders").run();
-    const insertOrder = db.prepare(`
-      INSERT INTO orders (order_number, order_type, client_name, client_id, phone, address,
-        preview_image, description, total_price, tax_rate, discount, total_after_tax,
-        amount_paid, balance, order_date, status, operation_type, install_info, remarks,
-        payment_history, material_rows, updated_at)
-      VALUES (@order_number, @order_type, @client_name, @client_id, @phone, @address,
-        @preview_image, @description, @total_price, @tax_rate, @discount, @total_after_tax,
-        @amount_paid, @balance, @order_date, @status, @operation_type, @install_info, @remarks,
-        @payment_history, @material_rows, @updated_at)
-    `);
-    for (const o of snapshot.orders) insertOrder.run(orderToRow(o));
-
-    // Clients
-    db.prepare("DELETE FROM clients").run();
-    const insertClient = db.prepare(`
-      INSERT INTO clients (id, name, contact, phone, email, address, created_at, note, is_vip, balance, wechat, updated_at)
-      VALUES (@id, @name, @contact, @phone, @email, @address, @created_at, @note, @is_vip, @balance, @wechat, @updated_at)
-    `);
-    for (const c of snapshot.clients) insertClient.run({
-      id: c.id, name: c.name, contact: c.contact ?? null, phone: c.phone ?? null,
-      email: c.email ?? null, address: c.address ?? null, created_at: c.created_at ?? null,
-      note: c.note ?? null, is_vip: c.is_vip ? 1 : 0, balance: c.balance ?? 0,
-      wechat: c.wechat ?? null, updated_at: new Date().toISOString(),
-    });
-
-    // Suppliers
-    db.prepare("DELETE FROM suppliers").run();
-    const insertSupplier = db.prepare(`
-      INSERT INTO suppliers (id, name, category, contact_person, phone, email, website, address, last_purchase_date, remark, updated_at)
-      VALUES (@id, @name, @category, @contact_person, @phone, @email, @website, @address, @last_purchase_date, @remark, @updated_at)
-    `);
-    for (const s of snapshot.suppliers) insertSupplier.run({
-      id: s.id, name: s.name, category: s.category ?? null, contact_person: s.contact_person ?? null,
-      phone: s.phone ?? null, email: s.email ?? null, website: s.website ?? null,
-      address: s.address ?? null, last_purchase_date: s.last_purchase_date ?? null,
-      remark: s.remark ?? null, updated_at: new Date().toISOString(),
-    });
-
-    // Expenses
-    db.prepare("DELETE FROM expenses").run();
-    const insertExpense = db.prepare(`
-      INSERT INTO expenses (id, target, detail, amount, expense_type, payment_method, expense_date, remark, office, source_type, source_id, updated_at)
-      VALUES (@id, @target, @detail, @amount, @expense_type, @payment_method, @expense_date, @remark, @office, @source_type, @source_id, @updated_at)
-    `);
-    for (const e of snapshot.expenses) insertExpense.run({
-      id: e.id, target: e.target, detail: e.detail, amount: e.amount,
-      expense_type: e.expense_type, payment_method: e.payment_method,
-      expense_date: e.expense_date, remark: e.remark ?? null, office: e.office ? 1 : 0,
-      source_type: e.source_type ?? null, source_id: e.source_id ?? null, voided: e.voided ? 1 : 0,
-      updated_at: new Date().toISOString(),
-    });
-
-    // Cash entries
-    db.prepare("DELETE FROM cash_entries").run();
-    const insertCash = db.prepare(`
-      INSERT INTO cash_entries (id, type, amount, date, note, office, order_number, source_type, source_id, updated_at)
-      VALUES (@id, @type, @amount, @date, @note, @office, @order_number, @source_type, @source_id, @updated_at)
-    `);
-    for (const c of snapshot.cashEntries) insertCash.run({
-      id: c.id,
-      type: c.type,
-      amount: c.amount,
-      date: c.date,
-      note: c.note ?? null,
-      office: c.office ? 1 : 0,
-      order_number: c.order_number ?? null,
-      source_type: c.source_type ?? null,
-      source_id: c.source_id ?? null, voided: c.voided ? 1 : 0,
-      updated_at: new Date().toISOString(),
-    });
-
-    // Materials
-    db.prepare("DELETE FROM materials").run();
-    const insertMaterial = db.prepare(`
-      INSERT INTO materials (id, code, name, specification, size, unit, stock_quantity, min_stock,
-        factory_price_rmb, usd_cost, sale_price_usd, vip_sale_price_usd, weight, purchase_price,
-        supplier, supplier_id, image, last_stock_date, remark, category, updated_at)
-      VALUES (@id, @code, @name, @specification, @size, @unit, @stock_quantity, @min_stock,
-        @factory_price_rmb, @usd_cost, @sale_price_usd, @vip_sale_price_usd, @weight, @purchase_price,
-        @supplier, @supplier_id, @image, @last_stock_date, @remark, @category, @updated_at)
-    `);
-    for (const m of snapshot.materials) insertMaterial.run({
-      id: m.id, code: m.code ?? "", name: m.name, specification: m.specification ?? null,
-      size: m.size ?? null, unit: m.unit, stock_quantity: m.stock_quantity ?? 0,
-      min_stock: m.min_stock ?? 0, factory_price_rmb: m.factory_price_rmb ?? 0,
-      usd_cost: m.usd_cost ?? 0, sale_price_usd: m.sale_price_usd ?? 0,
-      vip_sale_price_usd: m.vip_sale_price_usd ?? null, weight: m.weight ?? null,
-      purchase_price: m.purchase_price ?? 0, supplier: m.supplier ?? null,
-      supplier_id: m.supplier_id ?? null,
-      image: m.image ?? null, last_stock_date: m.last_stock_date ?? null,
-      remark: m.remark ?? null, category: m.category ?? null, updated_at: new Date().toISOString(),
-    });
-
-    // Purchases
-    if (snapshot.purchases) {
-      db.prepare("DELETE FROM purchases").run();
-      const insertPurchase = db.prepare(`
-        INSERT INTO purchases (id, supplier, supplier_id, item_name, quantity, unit, unit_price, total_amount, purchase_date, status, expense_id, updated_at)
-        VALUES (@id, @supplier, @supplier_id, @item_name, @quantity, @unit, @unit_price, @total_amount, @purchase_date, @status, @expense_id, @updated_at)
-      `);
-      for (const p of snapshot.purchases) insertPurchase.run({
-        id: p.id, supplier: p.supplier, supplier_id: p.supplier_id ?? null, item_name: p.item_name, quantity: p.quantity,
-        unit: p.unit, unit_price: p.unit_price, total_amount: p.total_amount,
-        purchase_date: p.purchase_date, status: p.status, expense_id: p.expense_id ?? null,
-        updated_at: new Date().toISOString(),
-      });
-    }
-
-    // Employees
-    db.prepare("DELETE FROM employees").run();
-    const insertEmployee = db.prepare(`
-      INSERT INTO employees (id, code, name, position, phone, hire_date, contract_end,
-        monthly_salary, hourly_rate, workdays, meal_allowance_eligible, ethnicity, status, updated_at)
-      VALUES (@id, @code, @name, @position, @phone, @hire_date, @contract_end,
-        @monthly_salary, @hourly_rate, @workdays, @meal_allowance_eligible, @ethnicity, @status, @updated_at)
-    `);
-    for (const e of snapshot.employees) insertEmployee.run({
-      id: e.id, code: e.code ?? null, name: e.name, position: e.position ?? null,
-      phone: e.phone ?? null, hire_date: e.hire_date ?? null, contract_end: e.contract_end ?? null,
-      monthly_salary: e.monthly_salary ?? 0, hourly_rate: e.hourly_rate ?? null,
-      workdays: JSON.stringify(e.workdays ?? []),
-      meal_allowance_eligible: e.meal_allowance_eligible == null ? null : (e.meal_allowance_eligible ? 1 : 0),
-      ethnicity: e.ethnicity ?? null, status: e.status ?? "在职",
-      updated_at: new Date().toISOString(),
-    });
-
-    // Attendances
-    db.prepare("DELETE FROM attendances").run();
-    const insertAttendance = db.prepare(`
-      INSERT INTO attendances (id, date, employee_id, employee_name, employee_code,
-        leave_minutes, overtime_minutes, worked_minutes, meal_allowance, generated_by, note, updated_at)
-      VALUES (@id, @date, @employee_id, @employee_name, @employee_code,
-        @leave_minutes, @overtime_minutes, @worked_minutes, @meal_allowance, @generated_by, @note, @updated_at)
-    `);
-    for (const a of snapshot.attendances) insertAttendance.run({
-      id: a.id, date: a.date, employee_id: a.employee_id ?? null,
-      employee_name: a.employee_name, employee_code: a.employee_code ?? null,
-      leave_minutes: a.leave_minutes ?? 0, overtime_minutes: a.overtime_minutes ?? 0,
-      worked_minutes: a.worked_minutes ?? 0, meal_allowance: a.meal_allowance ? 1 : 0,
-      generated_by: a.generated_by ?? null, note: a.note ?? null,
-      updated_at: new Date().toISOString(),
-    });
-
-    // Appointments
-    if (snapshot.appointments) {
-      db.prepare("DELETE FROM appointments").run();
-      const insertAppointment = db.prepare(`
-        INSERT INTO appointments (id, client_name, client_id, phone, address, appointment_date, description, gcal_event_id, updated_at)
-        VALUES (@id, @client_name, @client_id, @phone, @address, @appointment_date, @description, @gcal_event_id, @updated_at)
-      `);
-      for (const a of snapshot.appointments) insertAppointment.run({
-      id: a.id, client_name: a.client_name, client_id: a.client_id ?? null,
-      phone: a.phone ?? null, address: a.address ?? null,
-      appointment_date: a.appointment_date, description: a.description ?? null,
-      gcal_event_id: a.gcal_event_id ?? null, updated_at: new Date().toISOString(),
-    });
-    }
-
-    // Payrolls
-    db.prepare("DELETE FROM payrolls").run();
-    const insertPayroll = db.prepare(`
-      INSERT INTO payrolls (id, month, employee_id, employee_name, employee_code, employee_ethnicity,
-        total_hours, hourly_rate, meal_allowance_total, base_salary, bonus, deduction, net_salary,
-        payment_status, paid_at, expense_id, updated_at)
-      VALUES (@id, @month, @employee_id, @employee_name, @employee_code, @employee_ethnicity,
-        @total_hours, @hourly_rate, @meal_allowance_total, @base_salary, @bonus, @deduction, @net_salary,
-        @payment_status, @paid_at, @expense_id, @updated_at)
-    `);
-    for (const p of snapshot.payrolls) insertPayroll.run({
-      id: p.id, month: p.month, employee_id: p.employee_id ?? null,
-      employee_name: p.employee_name, employee_code: p.employee_code ?? null,
-      employee_ethnicity: p.employee_ethnicity ?? null,
-      total_hours: p.total_hours ?? null, hourly_rate: p.hourly_rate ?? null,
-      meal_allowance_total: p.meal_allowance_total ?? null,
-      base_salary: p.base_salary ?? 0, bonus: p.bonus ?? 0, deduction: p.deduction ?? 0,
-      net_salary: p.net_salary ?? 0, payment_status: p.payment_status ?? "未支付",
-      paid_at: p.paid_at ?? null, expense_id: p.expense_id ?? null,
-      updated_at: new Date().toISOString(),
-    });
-
-    // Quotes
-    if (snapshot.quotes) {
-      db.prepare("DELETE FROM quotes").run();
-      const insertQuote = db.prepare(`
-        INSERT INTO quotes (id, client_name, client_id, title, amount, created_at, valid_until, status, updated_at)
-        VALUES (@id, @client_name, @client_id, @title, @amount, @created_at, @valid_until, @status, @updated_at)
-      `);
-      for (const q of snapshot.quotes) insertQuote.run({
-      id: q.id, client_name: q.client_name, client_id: q.client_id ?? null, title: q.title, amount: q.amount,
-      created_at: q.created_at, valid_until: q.valid_until, status: q.status,
-      updated_at: new Date().toISOString(),
-    });
-    }
-
-    // Showcases
-    if (snapshot.showcases) {
-      db.prepare("DELETE FROM showcases").run();
-      const insertShowcase = db.prepare(`
-        INSERT INTO showcases (id, name, category, image_count, description, created_at, status, updated_at)
-        VALUES (@id, @name, @category, @image_count, @description, @created_at, @status, @updated_at)
-      `);
-      for (const s of snapshot.showcases) insertShowcase.run({
-      id: s.id, name: s.name, category: s.category, image_count: s.image_count ?? 0,
-      description: s.description ?? null, created_at: s.created_at, status: s.status,
-      updated_at: new Date().toISOString(),
-    });
-    }
-
-    // Print archives
-    db.prepare("DELETE FROM print_archives").run();
-    const insertPrint = db.prepare(`
-      INSERT INTO print_archives (id, order_number, client_name, order_type, print_type,
-        title, created_at, created_by, amount, file_name, html, summary, updated_at)
-      VALUES (@id, @order_number, @client_name, @order_type, @print_type,
-        @title, @created_at, @created_by, @amount, @file_name, @html, @summary, @updated_at)
-    `);
-    for (const p of snapshot.printArchives) insertPrint.run({
-      id: p.id, order_number: p.order_number, client_name: p.client_name,
-      order_type: p.order_type, print_type: p.print_type,
-      title: p.title, created_at: p.created_at, created_by: p.created_by ?? null,
-      amount: p.amount ?? null, file_name: p.file_name, html: p.html,
-      summary: p.summary ?? null, updated_at: new Date().toISOString(),
-    });
-  });
-
-  txn();
-
-  // Fire-and-forget cloud backup
-  syncToRedis(snapshot).catch(() => {});
-}
-
-// ─── Redis implementation (Vercel / raw REDIS_URL) ───────────────────────────
-
-const KV_KEY = "biz-store";
-let redisUrlClientPromise: Promise<{
-  get: (key: string) => Promise<string | null>;
-  set: (key: string, value: string) => Promise<unknown>;
-}> | null = null;
-
-async function kvRead(): Promise<BizStoreSnapshot> {
-  const { kv } = await import("@vercel/kv");
-  const stored = await kv.get<Partial<BizStoreSnapshot>>(KV_KEY);
-  if (stored) return normalizeSnapshot(stored);
-
-  const seed = await buildSeedDefault();
-  await kv.set(KV_KEY, seed).catch(() => {});
-  return seed;
-}
-
-async function kvWrite(snapshot: BizStoreSnapshot): Promise<void> {
-  const { kv } = await import("@vercel/kv");
-  await kv.set(KV_KEY, snapshot).catch((err: unknown) =>
-    console.error("[biz-store] redis write failed", err)
-  );
-}
-
-async function getRedisUrlClient() {
-  if (!process.env.REDIS_URL) {
-    throw new Error("[biz-store] Missing REDIS_URL");
-  }
-
-  if (!redisUrlClientPromise) {
-    redisUrlClientPromise = (async () => {
-      const { createClient } = await import("redis");
-      const client = createClient({ url: process.env.REDIS_URL });
-      client.on("error", (err) => {
-        console.error("[biz-store] raw redis client error", err);
-      });
-      if (!client.isOpen) await client.connect();
-      return client;
-    })().catch((err) => {
-      redisUrlClientPromise = null;
-      throw err;
-    });
-  }
-
-  return redisUrlClientPromise;
-}
-
-async function redisUrlRead(): Promise<BizStoreSnapshot> {
-  const client = await getRedisUrlClient();
-  const raw = await client.get(KV_KEY);
-  if (raw) {
-    return normalizeSnapshot(JSON.parse(raw) as Partial<BizStoreSnapshot>);
-  }
-
-  const seed = await buildSeedDefault();
-  await client.set(KV_KEY, JSON.stringify(seed));
-  return seed;
-}
-
-async function redisUrlWrite(snapshot: BizStoreSnapshot): Promise<void> {
-  const client = await getRedisUrlClient();
-  await client.set(KV_KEY, JSON.stringify(snapshot));
-}
-
-async function redisRead(): Promise<BizStoreSnapshot> {
-  if (process.env.KV_REST_API_URL && process.env.KV_REST_API_TOKEN) {
-    return kvRead();
-  }
-  if (process.env.REDIS_URL) {
-    return redisUrlRead();
-  }
-  throw new Error("[biz-store] Missing Redis environment variables");
-}
-
-async function redisWrite(snapshot: BizStoreSnapshot): Promise<void> {
-  if (process.env.KV_REST_API_URL && process.env.KV_REST_API_TOKEN) {
-    await kvWrite(snapshot);
-  } else if (process.env.REDIS_URL) {
-    await redisUrlWrite(snapshot);
-  } else {
-    throw new Error("[biz-store] Missing Redis environment variables");
-  }
-
-  // Local backup: sync to SQLite when running locally with Redis
-  if (!process.env.VERCEL) {
-    sqliteWrite(snapshot).catch(() => {});
-  }
-}
-
-// ─── Seed data (first-time initialisation) ────────────────────────────────────
-
-async function syncToRedis(snapshot: BizStoreSnapshot) {
-  if (typeof window !== "undefined") return;
-  try {
-    const { kv } = await import("@vercel/kv");
-    await kv.set("biz-store", snapshot);
-  } catch {
-    // best-effort cloud sync; local is primary
-  }
-}
-
-async function buildSeedDefault(): Promise<BizStoreSnapshot> {
-  const { bizOrders, bizClients, bizSuppliers, bizExpenses, bizCashEntries,
-    bizMaterials, bizPurchases, bizEmployees, bizAttendances, bizAppointments,
-    bizPayrolls, bizQuotes, bizShowcases, bizPrintArchives, bizSettings } =
-    await import("@/lib/biz-data");
-
-  return normalizeSnapshot({
-    revision: createStoreRevision(),
-    orders: bizOrders,
-    clients: bizClients,
-    suppliers: bizSuppliers,
-    expenses: bizExpenses,
-    cashEntries: bizCashEntries,
-    materials: bizMaterials,
-    purchases: bizPurchases,
-    employees: bizEmployees,
-    attendances: bizAttendances,
-    appointments: bizAppointments,
-    payrolls: bizPayrolls,
-    quotes: bizQuotes,
-    showcases: bizShowcases,
-    printArchives: bizPrintArchives,
-    settings: bizSettings,
-  });
-}
-
-// ─── Public API ────────────────────────────────────────────────────────────────
+// ─── Public API ───────────────────────────────────────────────────────────────
 
 export async function readBizStore(): Promise<BizStoreSnapshot> {
-  const backend = await getStore();
-  if (backend === "redis") return redisRead();
-  return sqliteRead();
+  return mysqlRead();
 }
 
 export async function writeBizStore(snapshot: BizStoreSnapshot): Promise<void> {
   const normalized = normalizeSnapshot(snapshot);
-  const backend = await getStore();
-  if (backend === "redis") return redisWrite(normalized);
-  return sqliteWrite(normalized);
+  await mysqlWrite(normalized);
 }

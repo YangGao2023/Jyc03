@@ -322,7 +322,7 @@ async function mysqlWrite(snapshot: BizStoreSnapshot): Promise<void> {
   await batchUpsert('a3s_cash_entries', snapshot.cashEntries.map(c => ({
     id: c.id, type: c.type || '收入', amount: c.amount ?? 0,
     date: c.date || '', note: c.note || null,
-    method: c.method || '现金', category: c.category || null, office: c.office ? 1 : 0,
+    method: c.method || '现金', category: c.category || null, target_name: c.target_name || null, office: c.office ? 1 : 0,
     order_number: c.order_number || null,
     source_type: c.source_type || null, source_id: c.source_id || null,
     order_id: c.order_id || null, voided: c.voided ? 1 : 0,
@@ -513,6 +513,7 @@ function rowToCashEntry(r: Record<string, unknown>): CashEntry {
     note: nullStr(r.note) ?? undefined,
     method: nullStr(r.method) ?? undefined,
     category: nullStr(r.category) ?? undefined,
+    target_name: nullStr(r.target_name) ?? undefined,
     office: Boolean(r.office),
     order_number: nullStr(r.order_number) ?? undefined,
     source_type: nullStr(r.source_type) ?? undefined,

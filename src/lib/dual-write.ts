@@ -203,12 +203,13 @@ async function syncCashFlowFromOld(lastMs: number): Promise<number> {
 
     if (isIncome) {
       await executeStmt(
-        `INSERT INTO a3s_cash_entries(id, type, amount, date, method, note, office, category, old_id)
-         VALUES(?,?,?,?,?,?,?,?,?)
+        `INSERT INTO a3s_cash_entries(id, type, amount, date, method, note, office, category, target_name, old_id)
+         VALUES(?,?,?,?,?,?,?,?,?,?)
          ON DUPLICATE KEY UPDATE
            type=VALUES(type), amount=VALUES(amount), date=VALUES(date),
-           method=VALUES(method), note=VALUES(note), office=VALUES(office), category=VALUES(category)`,
-        [`inc-${p1}`, "收入", amount, fromYyyymmdd(String(t.C6 || "")), codeToMethod(Number(t.C4)), String(t.C7 || t.C3 || ""), isOffice, isOffice ? typeName : null, p1],
+           method=VALUES(method), note=VALUES(note), office=VALUES(office),
+           category=VALUES(category), target_name=VALUES(target_name)`,
+        [`inc-${p1}`, "收入", amount, fromYyyymmdd(String(t.C6 || "")), codeToMethod(Number(t.C4)), String(t.C7 || t.C3 || ""), isOffice, typeName, String(t.C2 || ""), p1],
       );
     } else {
       // 办公室支出用T1000类型名作为expense_type，非办公室保留原描述

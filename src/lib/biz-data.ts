@@ -100,6 +100,7 @@ export type CashEntry = {
   note?: string;
   method?: string;
   category?: string;
+  target_name?: string;
   office?: boolean;
   order_number?: string;
   source_type?: string;
@@ -450,6 +451,7 @@ export const bizCashEntries = normalizeList<CashEntry>(rawAssetsRecord.cash_entr
   note: toString(item.note) || undefined,
   method: toString(item.method) || undefined,
   category: toString(item.category) || undefined,
+  target_name: toString(item.target_name) || undefined,
   office: Boolean(item.office),
   order_number: toString(item.order_number) || undefined,
   source_type: toString(item.source_type) || undefined,

@@ -3514,8 +3514,7 @@ function FinanceSection({ orders, setOrders, expenses, setExpenses, cashEntries,
   const [ledgerYear, setLedgerYear] = useState(today.slice(0, 4));
   const [ledgerMonth, setLedgerMonth] = useState(today.slice(0, 7));
   const METHOD_OPTIONS = ["现金", "支票", "刷卡", "Zelle"] as const;
-  const ALL_METHOD_OPTIONS = [...METHOD_OPTIONS, "旧库导入"] as const;
-  const [activeMethods, setActiveMethods] = useState<string[]>([...ALL_METHOD_OPTIONS]);
+  const [activeMethods, setActiveMethods] = useState<string[]>([...METHOD_OPTIONS]);
   const [dateMode, setDateMode] = useState<"range" | "single">("range");
   const expenseTypeOptions = useMemo(() => getExpenseTypeOptions(settings), [settings]);
   const officeTargets = useMemo(() => Array.from(new Set([...suppliers.map((item) => item.name), ...employees.map((item) => item.name), ...clients.map((item) => item.name)])), [suppliers, employees, clients]);
@@ -3956,14 +3955,14 @@ function FinanceSection({ orders, setOrders, expenses, setExpenses, cashEntries,
             </div>
           ) : sub !== "audit" && sub !== "cash" && sub !== "receivables" ? (
             <div className="flex flex-wrap items-center gap-2">
-              {ALL_METHOD_OPTIONS.map(m => (
+              {METHOD_OPTIONS.map(m => (
                 <label key={m} className="flex cursor-pointer items-center gap-1">
                   <input type="checkbox" checked={activeMethods.includes(m)} onChange={() => setActiveMethods(prev => prev.includes(m) ? prev.filter(x => x !== m) : [...prev, m])} className="h-3 w-3 accent-slate-700" />
                   <span className="text-[11px] text-slate-600">{m}</span>
                 </label>
               ))}
               <label className="flex cursor-pointer items-center gap-1">
-                <input type="checkbox" checked={activeMethods.length === ALL_METHOD_OPTIONS.length} onChange={() => setActiveMethods(prev => prev.length === ALL_METHOD_OPTIONS.length ? [] : [...METHOD_OPTIONS])} className="h-3 w-3 accent-slate-700" />
+                <input type="checkbox" checked={activeMethods.length === METHOD_OPTIONS.length} onChange={() => setActiveMethods(prev => prev.length === METHOD_OPTIONS.length ? [] : [...METHOD_OPTIONS])} className="h-3 w-3 accent-slate-700" />
                 <span className="text-[11px] font-medium text-slate-700">全选</span>
               </label>
             </div>

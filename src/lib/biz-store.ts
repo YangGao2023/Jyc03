@@ -199,7 +199,7 @@ function normalizeSnapshot(snapshot: Partial<BizStoreSnapshot>): BizStoreSnapsho
           ...item,
           payment_history: payment_history.map((record: any) => ({
             ...record,
-            method: record?.office ? "现金" : String(record?.method ?? "现金"),
+            method: record?.office ? "现金" : (record?.method && record?.method !== "旧库导入" ? String(record.method) : "现金"),
           })),
           material_rows,
           client_id: resolveClientId(clients, {
@@ -256,7 +256,7 @@ function normalizeSnapshot(snapshot: Partial<BizStoreSnapshot>): BizStoreSnapsho
     expenses: Array.isArray(snapshot.expenses)
       ? snapshot.expenses.map((item) => ({
           ...item,
-          payment_method: item.office ? "现金" : String(item.payment_method ?? "现金"),
+          payment_method: item.office ? "现金" : (item.payment_method && item.payment_method !== "旧库导入" ? String(item.payment_method) : "现金"),
         }))
       : [],
     cashEntries: Array.isArray(snapshot.cashEntries)

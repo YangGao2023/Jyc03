@@ -3514,6 +3514,9 @@ function FinanceSection({ orders, setOrders, expenses, setExpenses, cashEntries,
   const [ledgerView, setLedgerView] = useState<"monthly" | "yearly">("monthly");
   const [ledgerYear, setLedgerYear] = useState(today.slice(0, 4));
   const [ledgerMonth, setLedgerMonth] = useState(today.slice(0, 7));
+  const [cashView, setCashView] = useState<"monthly" | "yearly">("yearly");
+  const [cashYear, setCashYear] = useState(today.slice(0, 4));
+  const [cashMonth, setCashMonth] = useState(today.slice(0, 7));
   const METHOD_OPTIONS = ["现金", "支票", "刷卡", "转账"] as const;
   const [activeMethods, setActiveMethods] = useState<string[]>([...METHOD_OPTIONS]);
   const [dateMode, setDateMode] = useState<"range" | "single">("range");
@@ -3633,7 +3636,7 @@ function FinanceSection({ orders, setOrders, expenses, setExpenses, cashEntries,
   const actualTotalExpense = expenses.reduce((s, item) => s + item.amount, 0);
   const totalBalance = orders.reduce((s, o) => s + (o.balance ?? 0), 0);
   const payrollAmount = filteredPayrolls.reduce((s, item) => s + item.net_salary, 0);
-  const cashBalance = filteredCashEntries.reduce((s, item) => s + (["收入", "转入"].includes(item.type) ? item.amount : -item.amount), 0);
+
   const receivableOrders = orders.filter((o) => (o.balance ?? 0) > 0 && o.status !== "已关闭");
   const filteredReceivableOrders = receivableOrders.filter((o) => isDateInRange(o.order_date, financeDateStart, financeDateEnd));
   const incomePageSize = 10;
@@ -3695,6 +3698,31 @@ function FinanceSection({ orders, setOrders, expenses, setExpenses, cashEntries,
       return { month: day, income, expense, net, balance: cumulative, profit: income - expense };
     });
   })();
+  const cashRows = (() => {
+    let cumulative = 0;
+    const allOfficeDays = Array.from(new Set(
+      officeCashEntries.filter((item) => item.date).map((item) => item.date.slice(0, 10))
+    )).filter(Boolean).sort().reverse();
+    if (cashView === "yearly") {
+      const months = Array.from(new Set(allOfficeDays.filter((d) => d.startsWith(cashYear)).map((d) => d.slice(0, 7)))).sort().reverse();
+      return months.map((month) => {
+        const income = officeCashEntries.filter((item) => item.date.startsWith(month) && (item.type === "收入" || item.type === "转入")).reduce((sum, item) => sum + item.amount, 0);
+        const expense = officeCashEntries.filter((item) => item.date.startsWith(month) && item.type !== "收入" && item.type !== "转入").reduce((sum, item) => sum + item.amount, 0);
+        const net = income - expense;
+        cumulative += net;
+        return { month, income, expense, net, balance: cumulative };
+      });
+    }
+    const days = allOfficeDays.filter((d) => d.startsWith(cashMonth));
+    return days.map((day) => {
+      const income = officeCashEntries.filter((item) => item.date.startsWith(day) && (item.type === "收入" || item.type === "转入")).reduce((sum, item) => sum + item.amount, 0);
+      const expense = officeCashEntries.filter((item) => item.date.startsWith(day) && item.type !== "收入" && item.type !== "转入").reduce((sum, item) => sum + item.amount, 0);
+      const net = income - expense;
+      cumulative += net;
+      return { month: day, income, expense, net, balance: cumulative };
+    });
+  })();
+  const cashBalance = cashRows.length > 0 ? cashRows[0].balance : 0;
   const financeConfigs: Record<FinanceSub, TabularSchemaConfig> = {
     income: {
       title: "订单收入",
@@ -3972,7 +4000,7 @@ function FinanceSection({ orders, setOrders, expenses, setExpenses, cashEntries,
 
   return (
     <div>
-      <SectionHeader eyebrow="Finance Management" title="收支管理" actions={<>{sub === "audit" ? <ActionBtn onClick={runFinanceAudit}>↻ 重新扫描</ActionBtn> : null}{sub === "audit" ? <ActionBtn tone="success" onClick={applyFinanceRepair}>🔧 应用自动修复</ActionBtn> : null}{sub === "expense" ? <ActionBtn tone="primary" onClick={() => setShowExpenseModal(true)}>+ 录入支出</ActionBtn> : null}{sub === "cash" ? <ActionBtn tone="primary" onClick={() => setShowOfficeTransferModal(true)}>+ 办公室转入/转出</ActionBtn> : null}</>} />
+      <SectionHeader eyebrow="Finance Management" title={sub === "cash" ? "办公室管理" : "收支管理"} actions={<>{sub === "audit" ? <ActionBtn onClick={runFinanceAudit}>↻ 重新扫描</ActionBtn> : null}{sub === "audit" ? <ActionBtn tone="success" onClick={applyFinanceRepair}>🔧 应用自动修复</ActionBtn> : null}{sub === "expense" ? <ActionBtn tone="primary" onClick={() => setShowExpenseModal(true)}>+ 录入支出</ActionBtn> : null}{sub === "cash" ? <ActionBtn tone="primary" onClick={() => setShowOfficeTransferModal(true)}>+ 办公室转入/转出</ActionBtn> : null}</>} />
       <div className="mb-4 rounded-xl border border-slate-200 bg-white p-2">
         <div className="flex flex-wrap items-center justify-between gap-2">
           <div className="flex flex-wrap items-center gap-1">
@@ -4004,7 +4032,7 @@ function FinanceSection({ orders, setOrders, expenses, setExpenses, cashEntries,
           <div className="flex flex-wrap items-center gap-2">
             {sub === "income" ? <div className="rounded bg-emerald-50 px-3 py-1.5"><span className="text-xs text-emerald-600">收入 <strong>{formatMoney(totalIncome)}</strong> <span className="text-slate-400">/ 总计 {formatMoney(actualTotalIncome)}</span></span></div> : null}
             {sub === "expense" ? <div className="rounded bg-rose-50 px-3 py-1.5"><span className="text-xs text-rose-600">支出 <strong>{formatMoney(totalExpense)}</strong> <span className="text-slate-400">/ 总计 {formatMoney(actualTotalExpense)}</span></span></div> : null}
-            {sub === "cash" ? <div className="rounded bg-slate-50 px-3 py-1.5"><span className="text-xs text-slate-600">办公室 <strong>{formatMoney(cashBalance)}</strong></span></div> : null}
+            {sub === "cash" ? <div className="rounded bg-slate-50 px-3 py-1.5"><span className="text-xs text-slate-600">实际余额 <strong>{formatMoney(cashBalance)}</strong></span></div> : null}
             {sub === "ledger" ? <div className="rounded bg-slate-50 px-3 py-1.5"><span className="text-xs text-slate-600">余额 <strong>{formatMoney(ledgerBalance)}</strong></span></div> : null}
             {sub === "receivables" ? <div className="rounded bg-amber-50 px-3 py-1.5"><span className="text-xs text-amber-600">应收 <strong>{formatMoney(filteredReceivableOrders.reduce((sum, item) => sum + (item.balance ?? 0), 0))}</strong></span></div> : null}
             {sub === "audit" ? <div className="rounded bg-rose-50 px-3 py-1.5"><span className="text-xs text-rose-600">问题 <strong>{activeAudit.autoFixableCount}</strong></span></div> : null}
@@ -4023,7 +4051,18 @@ function FinanceSection({ orders, setOrders, expenses, setExpenses, cashEntries,
                 </select>
               )}
             </div>
-          ) : sub !== "audit" && sub !== "cash" && sub !== "receivables" ? (
+          ) : sub === "cash" ? (
+            <div className="flex flex-wrap items-center gap-2">
+              <select value={cashYear} onChange={(e) => setCashYear(e.target.value)} className="h-8 rounded-lg border border-slate-300 bg-white px-2 text-xs text-slate-700">
+                {Array.from({ length: 5 }, (_, i) => String(new Date().getFullYear() - i)).map((y) => <option key={y}>{y}</option>)}
+              </select>
+              {cashView === "monthly" && (
+                <select value={cashMonth} onChange={(e) => setCashMonth(e.target.value)} className="h-8 rounded-lg border border-slate-300 bg-white px-2 text-xs text-slate-700">
+                  {["01","02","03","04","05","06","07","08","09","10","11","12"].map((m) => <option key={m} value={`${cashYear}-${m}`}>{m}月</option>)}
+                </select>
+              )}
+            </div>
+          ) : sub !== "audit" && sub !== "receivables" ? (
             <div className="flex flex-wrap items-center gap-2">
               {METHOD_OPTIONS.map(m => (
                 <label key={m} className="flex cursor-pointer items-center gap-1">
@@ -4052,6 +4091,16 @@ function FinanceSection({ orders, setOrders, expenses, setExpenses, cashEntries,
           ]}
           value={ledgerView}
           onChange={setLedgerView}
+        />
+      )}
+      {sub === "cash" && (
+        <SegmentedControl
+          options={[
+            { key: "yearly", label: "年度" },
+            { key: "monthly", label: "月度" },
+          ]}
+          value={cashView}
+          onChange={setCashView}
         />
       )}
       {sub === "audit" && (
@@ -4180,7 +4229,7 @@ function FinanceSection({ orders, setOrders, expenses, setExpenses, cashEntries,
   );
 }) : <tr><td colSpan={7} className="py-10 text-center text-xs text-slate-400">这个日期范围内没有收入记录</td></tr>}</tbody></table></div><div className="flex flex-wrap items-center justify-between gap-3 rounded-xl border border-slate-200 bg-white px-4 py-3 text-xs text-slate-600"><span>第 {paymentPage} / {incomePageCount} 页,共 {allIncomeRows.length} 条收入</span><div className="flex items-center gap-2"><button type="button" onClick={() => setPaymentPage((p) => Math.max(1, p - 1))} disabled={paymentPage <= 1} className="rounded-lg border border-slate-200 px-3 py-1.5 disabled:cursor-not-allowed disabled:opacity-40">上一页</button><button type="button" onClick={() => setPaymentPage((p) => Math.min(incomePageCount, p + 1))} disabled={paymentPage >= incomePageCount} className="rounded-lg border border-slate-200 px-3 py-1.5 disabled:cursor-not-allowed disabled:opacity-40">下一页</button></div></div></>)}
       {sub === "expense" && (<><div className="overflow-x-auto rounded-xl border border-slate-200 bg-white"><table className="w-full text-left text-xs"><thead><tr className="border-b border-slate-200 bg-slate-50"><th className="px-4 py-2 font-semibold text-slate-600">对象</th><th className="px-4 py-2 font-semibold text-slate-600">明细</th><th className="px-4 py-2 font-semibold text-slate-600">金额</th><th className="px-4 py-2 font-semibold text-slate-600">类型</th><th className="px-4 py-2 font-semibold text-slate-600">方式</th><th className="px-4 py-2 font-semibold text-slate-600">办公室</th><th className="px-4 py-2 font-semibold text-slate-600">日期</th><th className="px-4 py-2 font-semibold text-slate-600">操作</th></tr></thead><tbody>{filteredExpenses.length ? pagedExpenses.map((item) => <tr key={item.id} className="border-b border-slate-100 last:border-b-0"><td className="px-4 py-2 text-slate-700">{item.target}</td><td className="px-4 py-2 text-slate-500">{item.detail}</td><td className="px-4 py-2 font-semibold text-rose-600">{formatMoney(item.amount)}</td><td className="px-4 py-2 text-slate-600">{item.expense_type}</td><td className="px-4 py-2 text-slate-600">{item.payment_method}</td><td className="px-4 py-2 text-slate-600">{item.office ? "是" : "否"}</td><td className="px-4 py-2 text-slate-500">{item.expense_date}</td><td className="px-4 py-2"><div className="flex items-center gap-2">{editingExpenseId === item.id ? <span className="text-xs text-slate-400">编辑中</span> : <><button onClick={() => openEditExpense(item)} className="rounded border border-slate-200 px-2 py-0.5 text-xs text-slate-600 hover:border-slate-300 hover:bg-slate-50 transition-colors">编辑</button>{confirmingExpenseId === item.id ? <><button onClick={() => deleteExpense(item.id)} className="rounded border border-red-400 bg-red-500 px-2 py-0.5 text-xs font-semibold text-slate-700 hover:bg-red-600 transition-colors">确认</button><button onClick={() => setConfirmingExpenseId(null)} className="rounded border border-slate-200 px-2 py-0.5 text-xs text-slate-500 hover:border-slate-300 transition-colors">取消</button></> : <button onClick={() => setConfirmingExpenseId(item.id)} className="rounded border border-red-100 px-2 py-0.5 text-xs text-red-500 hover:border-red-300 hover:bg-red-50 transition-colors">删除</button>}</>}</div></td></tr>) : <tr><td colSpan={8} className="py-10 text-center text-xs text-slate-400">这个日期范围内没有支出记录</td></tr>}</tbody></table></div><div className="flex flex-wrap items-center justify-between gap-3 rounded-xl border border-slate-200 bg-white px-4 py-3 text-xs text-slate-600"><span>第 {expensesPage} / {expensesPageCount} 页,共 {filteredExpenses.length} 条支出</span><div className="flex items-center gap-2"><button type="button" onClick={() => setExpensesPage((p) => Math.max(1, p - 1))} disabled={expensesPage <= 1} className="rounded-lg border border-slate-200 px-3 py-1.5 disabled:cursor-not-allowed disabled:opacity-40">上一页</button><button type="button" onClick={() => setExpensesPage((p) => Math.min(expensesPageCount, p + 1))} disabled={expensesPage >= expensesPageCount} className="rounded-lg border border-slate-200 px-3 py-1.5 disabled:cursor-not-allowed disabled:opacity-40">下一页</button></div></div></>)}
-      {sub === "cash" && (<><div className="overflow-x-auto rounded-xl border border-slate-200 bg-white"><table className="w-full text-left text-xs"><thead><tr className="border-b border-slate-200 bg-slate-50"><th className="px-4 py-2 font-semibold text-slate-600">类型</th><th className="px-4 py-2 font-semibold text-slate-600">金额</th><th className="px-4 py-2 font-semibold text-slate-600">日期</th><th className="px-4 py-2 font-semibold text-slate-600">明细</th></tr></thead><tbody>{filteredCashEntries.length ? pagedCashEntries.map((item) => { const categoryTag = item.category ? `(${item.category})` : ''; const fullType = `${item.type}${categoryTag}`; const isPositive = item.type === "收入" || item.type === "转入"; return (<tr key={item.id} className="border-b border-slate-100 last:border-b-0"><td className="px-4 py-2"><span className={`rounded-full px-2 py-0.5 text-[11px] font-semibold ${isPositive ? "bg-green-50 text-green-700" : "bg-rose-50 text-rose-700"}`}>{fullType}</span></td><td className={`px-4 py-2 font-semibold ${isPositive ? "text-green-600" : "text-rose-600"}`}>{formatMoney(item.amount)}</td><td className="px-4 py-2 text-slate-500">{item.date}</td><td className="px-4 py-2 text-slate-500">{item.note || item.category || "-"}</td></tr>); }) : <tr><td colSpan={4} className="py-10 text-center text-xs text-slate-400">这个日期范围内没有现金流水</td></tr>}</tbody></table></div><div className="flex flex-wrap items-center justify-between gap-3 rounded-xl border border-slate-200 bg-white px-4 py-3 text-xs text-slate-600"><span>第 {cashPage} / {cashPageCount} 页,共 {filteredCashEntries.length} 条现金</span><div className="flex items-center gap-2"><button type="button" onClick={() => setCashPage((p) => Math.max(1, p - 1))} disabled={cashPage <= 1} className="rounded-lg border border-slate-200 px-3 py-1.5 disabled:cursor-not-allowed disabled:opacity-40">上一页</button><button type="button" onClick={() => setCashPage((p) => Math.min(cashPageCount, p + 1))} disabled={cashPage >= cashPageCount} className="rounded-lg border border-slate-200 px-3 py-1.5 disabled:cursor-not-allowed disabled:opacity-40">下一页</button></div></div></>)}
+      {sub === "cash" && (<><div className="overflow-x-auto rounded-xl border border-slate-200 bg-white"><table className="w-full text-left text-xs"><thead><tr className="border-b border-slate-200 bg-slate-50"><th className="px-4 py-2 font-semibold text-slate-600">{cashView === "yearly" ? "月份" : "日期"}</th><th className="px-4 py-2 font-semibold text-slate-600">收入</th><th className="px-4 py-2 font-semibold text-slate-600">支出</th><th className="px-4 py-2 font-semibold text-slate-600">净额</th><th className="px-4 py-2 font-semibold text-slate-600">实际余额</th></tr></thead><tbody>{cashRows.map((item) => <tr key={item.month} className="border-b border-slate-100 last:border-b-0"><td className="px-4 py-2 font-medium text-slate-700">{item.month}</td><td className="px-4 py-2 text-green-600">{formatMoney(item.income)}</td><td className="px-4 py-2 text-rose-600">{formatMoney(item.expense)}</td><td className="px-4 py-2 text-slate-700">{formatMoney(item.net)}</td><td className="px-4 py-2 text-emerald-600">{formatMoney(item.balance)}</td></tr>)}</tbody></table></div><div className="mt-3 overflow-x-auto rounded-xl border border-slate-200 bg-white"><table className="w-full text-left text-xs"><thead><tr className="border-b border-slate-200 bg-slate-50"><th className="px-4 py-2 font-semibold text-slate-600">类型</th><th className="px-4 py-2 font-semibold text-slate-600">金额</th><th className="px-4 py-2 font-semibold text-slate-600">日期</th><th className="px-4 py-2 font-semibold text-slate-600">明细</th></tr></thead><tbody>{filteredCashEntries.length ? pagedCashEntries.slice(0, 50).map((item) => { const categoryTag = item.category ? `(${item.category})` : ''; const fullType = `${item.type}${categoryTag}`; const isPositive = item.type === "收入" || item.type === "转入"; return (<tr key={item.id} className="border-b border-slate-100 last:border-b-0"><td className="px-4 py-2"><span className={`rounded-full px-2 py-0.5 text-[11px] font-semibold ${isPositive ? "bg-green-50 text-green-700" : "bg-rose-50 text-rose-700"}`}>{fullType}</span></td><td className={`px-4 py-2 font-semibold ${isPositive ? "text-green-600" : "text-rose-600"}`}>{formatMoney(item.amount)}</td><td className="px-4 py-2 text-slate-500">{item.date}</td><td className="px-4 py-2 text-slate-500">{item.note || item.category || "-"}</td></tr>); }) : <tr><td colSpan={4} className="py-10 text-center text-xs text-slate-400">这个日期范围内没有明细</td></tr>}</tbody></table></div></>)}
 
       {sub === "ledger" && <div className="overflow-x-auto rounded-xl border border-slate-200 bg-white"><table className="w-full text-left text-xs"><thead><tr className="border-b border-slate-200 bg-slate-50"><th className="px-4 py-2 font-semibold text-slate-600">{ledgerView === "yearly" ? "月份" : "日期"}</th><th className="px-4 py-2 font-semibold text-slate-600">收入</th><th className="px-4 py-2 font-semibold text-slate-600">支出</th><th className="px-4 py-2 font-semibold text-slate-600">净额</th><th className="px-4 py-2 font-semibold text-slate-600">余额</th><th className="px-4 py-2 font-semibold text-slate-600">净利润</th></tr></thead><tbody>{ledgerRows.map((item) => <tr key={item.month} className="border-b border-slate-100 last:border-b-0"><td className="px-4 py-2 font-medium text-slate-700">{item.month}</td><td className="px-4 py-2 text-green-600">{formatMoney(item.income)}</td><td className="px-4 py-2 text-rose-600">{formatMoney(item.expense)}</td><td className="px-4 py-2 text-slate-700">{formatMoney(item.net)}</td><td className="px-4 py-2 text-emerald-600">{formatMoney(item.balance)}</td><td className={`px-4 py-2 font-semibold ${item.profit >= 0 ? "text-emerald-600" : "text-rose-600"}`}>{formatMoney(item.profit)}</td></tr>)}</tbody></table></div>}
       {sub === "receivables" && (

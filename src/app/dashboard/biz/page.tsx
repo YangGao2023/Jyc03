@@ -6212,21 +6212,10 @@ export default function DashboardBizPage() {
           )}
 
           {section === "appointments" && (
-            <ClientsSection
-              clients={clients}
-              setClients={setClients}
-              suppliers={suppliers}
-              setSuppliers={setSuppliers}
-              orders={showVoided ? orders : orders.filter((o) => o.status !== "已作废")}
-              setOrders={setOrders}
+            <AppointmentsSection
               appointments={appointments}
               setAppointments={setAppointments}
-              setCashEntries={setCashEntries}
-              setExpenses={setExpenses}
-              materials={materials}
-              setMaterials={setMaterials}
-              settings={settings}
-              onAutoSave={autoSave}
+              clients={clients}
             />
           )}
 
@@ -6262,5 +6251,174 @@ export default function DashboardBizPage() {
       </div>
 
     </PageSection>
+  );
+}
+
+function AppointmentsSection({ appointments, setAppointments, clients }: { appointments: MeasurementAppointmentRecord[]; setAppointments: (v: MeasurementAppointmentRecord[]) => void; clients: ContactRecord[] }) {
+  const [search, setSearch] = useState("");
+  const [page, setPage] = useState(1);
+  const pageSize = 15;
+  const [showModal, setShowModal] = useState(false);
+  const [editing, setEditing] = useState<MeasurementAppointmentRecord | null>(null);
+  const [confirmDelete, setConfirmDelete] = useState<string | null>(null);
+  const [draft, setDraft] = useState({ client_id: "", appointment_date: "", appointment_time: "", phone: "", address: "", description: "" });
+  const [copiedId, setCopiedId] = useState<string | null>(null);
+
+  const filtered = search
+    ? appointments.filter((a) => a.client_name.toLowerCase().includes(search.toLowerCase()) || (a.phone ?? "").includes(search))
+    : appointments;
+
+  const sorted = [...filtered].sort((a, b) => String(b.appointment_date).localeCompare(String(a.appointment_date)));
+  const pageCount = Math.max(1, Math.ceil(sorted.length / pageSize));
+  const paged = sorted.slice((page - 1) * pageSize, page * pageSize);
+
+  function openNew() {
+    setEditing(null);
+    setDraft({ client_id: "", appointment_date: new Date().toISOString().slice(0, 10), appointment_time: "", phone: "", address: "", description: "" });
+    setShowModal(true);
+  }
+
+  function openEdit(item: MeasurementAppointmentRecord) {
+    setEditing(item);
+    setDraft({ client_id: item.client_id ?? "", appointment_date: item.appointment_date, appointment_time: item.appointment_time ?? "", phone: item.phone ?? "", address: item.address ?? "", description: item.description ?? "" });
+    setShowModal(true);
+  }
+
+  function handleClientChange(clientId: string) {
+    const client = clients.find((c) => c.id === clientId);
+    setDraft((d) => ({ ...d, client_id: clientId, phone: client?.phone ?? "", address: client?.address ?? "" }));
+  }
+
+  function handleSave() {
+    if (!draft.appointment_date) return;
+    const client = clients.find((c) => c.id === draft.client_id);
+    const name = client?.name ?? "";
+    if (!name) return;
+    if (editing) {
+      setAppointments(appointments.map((a) => a.id === editing.id ? { ...a, appointment_date: draft.appointment_date, appointment_time: draft.appointment_time || undefined, phone: draft.phone || undefined, address: draft.address || undefined, description: draft.description || undefined } : a));
+    } else {
+      const newId = nextSequentialId(appointments.map((a) => a.id), "APT");
+      setAppointments([{ id: newId, client_name: name, client_id: draft.client_id, phone: draft.phone || undefined, appointment_date: draft.appointment_date, appointment_time: draft.appointment_time || undefined, address: draft.address || undefined, description: draft.description || undefined }, ...appointments]);
+    }
+    setShowModal(false);
+    setEditing(null);
+  }
+
+  function handleCopy(item: MeasurementAppointmentRecord) {
+    const text = `量尺寸预约\n客户：${item.client_name}\n日期：${item.appointment_date}${item.appointment_time ? ` ${item.appointment_time}` : ""}\n电话：${item.phone ?? "-"}\n地址：${item.address ?? "-"}\n备注：${item.description ?? "-"}`;
+    navigator.clipboard.writeText(text).then(() => {
+      setCopiedId(item.id);
+      setTimeout(() => setCopiedId(null), 2000);
+    }).catch(() => {});
+  }
+
+  return (
+    <>
+      <SectionHeader eyebrow="Measurements" title="量尺寸" actions={
+        <div className="flex items-center gap-3">
+          <div className="relative w-60">
+            <span className="absolute left-3 top-1/2 -translate-y-1/2 text-xs text-slate-700">⌕</span>
+            <input value={search} onChange={(e) => { setSearch(e.target.value); setPage(1); }} placeholder="搜索客户姓名 / 电话" className="h-9 w-full rounded-lg border border-slate-300 bg-white pl-8 pr-3 text-xs text-slate-700" />
+          </div>
+          <ActionBtn onClick={openNew} tone="primary">+ 新建预约</ActionBtn>
+        </div>
+      } />
+      <div className="overflow-x-auto rounded-xl border border-gray-200 bg-gray-50">
+        <table className="w-full text-left text-xs">
+          <thead>
+            <tr className="border-b border-gray-200 bg-gray-50">
+              <th className="px-3 py-2 font-semibold text-slate-600">日期</th>
+              <th className="px-3 py-2 font-semibold text-slate-600">时间</th>
+              <th className="px-3 py-2 font-semibold text-slate-600">客户</th>
+              <th className="px-3 py-2 font-semibold text-slate-600">电话</th>
+              <th className="px-3 py-2 font-semibold text-slate-600">地址</th>
+              <th className="px-3 py-2 font-semibold text-slate-600">描述</th>
+              <th className="px-3 py-2 font-semibold text-slate-600">操作</th>
+            </tr>
+          </thead>
+          <tbody>
+            {paged.map((item) => (
+              <tr key={item.id} className="border-b border-gray-200 last:border-b-0">
+                <td className="px-3 py-2 text-slate-700">{item.appointment_date}</td>
+                <td className="px-3 py-2 text-slate-600">{item.appointment_time ?? "-"}</td>
+                <td className="px-3 py-2 font-medium text-slate-700">{item.client_name}</td>
+                <td className="px-3 py-2 text-slate-600">{item.phone ?? "-"}</td>
+                <td className="px-3 py-2 text-slate-600 max-w-[160px] truncate">{item.address ?? "-"}</td>
+                <td className="px-3 py-2 text-slate-600 max-w-[120px] truncate">{item.description ?? "-"}</td>
+                <td className="px-3 py-2">
+                  <div className="flex flex-wrap items-center gap-1">
+                    <button onClick={() => handleCopy(item)} className="rounded-md border border-gray-200 bg-gray-50 px-2 py-1 text-[11px] text-slate-600 hover:border-slate-300 transition-colors">{copiedId === item.id ? "已复制 ✓" : "复制"}</button>
+                    <button onClick={() => openEdit(item)} className="rounded-md border border-gray-200 bg-gray-50 px-2 py-1 text-[11px] font-semibold text-slate-600 hover:border-slate-400 transition-colors">编辑</button>
+                    {confirmDelete === item.id ? (
+                      <>
+                        <button onClick={() => { setAppointments(appointments.filter((a) => a.id !== item.id)); setConfirmDelete(null); }} className="rounded-md border border-red-400 bg-red-50 px-2 py-1 text-[11px] font-semibold text-red-700 hover:bg-red-100">确认</button>
+                        <button onClick={() => setConfirmDelete(null)} className="rounded-md border border-slate-200 px-2 py-1 text-[11px] text-slate-700 hover:border-slate-300">取消</button>
+                      </>
+                    ) : (
+                      <button onClick={() => setConfirmDelete(item.id)} className="rounded-md border border-gray-200 bg-gray-50 px-2 py-1 text-[11px] text-slate-700 hover:border-rose-300 hover:text-rose-600 transition-colors">删除</button>
+                    )}
+                  </div>
+                </td>
+              </tr>
+            ))}
+          </tbody>
+        </table>
+        {!paged.length ? <div className="py-10 text-center text-xs text-slate-700">{search ? "没有匹配的预约" : "还没有任何量尺寸预约"}</div> : null}
+      </div>
+      {pageCount > 1 && (
+        <div className="flex items-center justify-between text-xs text-slate-700">
+          <span>第 {page} / {pageCount} 页,共 {sorted.length} 条</span>
+          <div className="flex gap-1">
+            <ActionBtn onClick={() => setPage((p) => Math.max(1, p - 1))} disabled={page <= 1}>上一页</ActionBtn>
+            <ActionBtn onClick={() => setPage((p) => Math.min(pageCount, p + 1))} disabled={page >= pageCount}>下一页</ActionBtn>
+          </div>
+        </div>
+      )}
+      {showModal && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-slate-950/45 px-4">
+          <div className="w-full max-w-md rounded-2xl border border-gray-200 bg-gray-50 p-5 shadow-2xl">
+            <div className="mb-4 flex items-start justify-between gap-3">
+              <h3 className="text-base font-semibold text-slate-700">{editing ? "编辑预约" : "新建预约"}</h3>
+              <button onClick={() => setShowModal(false)} className="rounded-lg border border-slate-200 px-2.5 py-1 text-xs text-slate-700 hover:border-slate-300 hover:text-slate-700 transition-colors">关闭</button>
+            </div>
+            <div className="space-y-3">
+              <div>
+                <label className="mb-1 block text-[11px] font-semibold text-slate-700">客户</label>
+                <select value={draft.client_id} onChange={(e) => handleClientChange(e.target.value)} className="h-9 w-full rounded-lg border border-slate-300 bg-white px-3 text-xs text-slate-700">
+                  <option value="">选择客户</option>
+                  {clients.map((c) => <option key={c.id} value={c.id}>{c.name} {c.phone ? `· ${c.phone}` : ""}</option>)}
+                </select>
+              </div>
+              <div className="grid grid-cols-2 gap-3">
+                <div>
+                  <label className="mb-1 block text-[11px] font-semibold text-slate-700">日期</label>
+                  <input type="date" value={draft.appointment_date} onChange={(e) => setDraft((d) => ({ ...d, appointment_date: e.target.value }))} className="h-9 w-full rounded-lg border border-slate-300 bg-white px-3 text-xs text-slate-700" />
+                </div>
+                <div>
+                  <label className="mb-1 block text-[11px] font-semibold text-slate-700">时间</label>
+                  <input type="time" value={draft.appointment_time} onChange={(e) => setDraft((d) => ({ ...d, appointment_time: e.target.value }))} className="h-9 w-full rounded-lg border border-slate-300 bg-white px-3 text-xs text-slate-700" />
+                </div>
+              </div>
+              <div>
+                <label className="mb-1 block text-[11px] font-semibold text-slate-700">电话</label>
+                <input type="text" value={draft.phone} onChange={(e) => setDraft((d) => ({ ...d, phone: e.target.value }))} className="h-9 w-full rounded-lg border border-slate-300 bg-white px-3 text-xs text-slate-700" placeholder="自动从客户资料填入" />
+              </div>
+              <div>
+                <label className="mb-1 block text-[11px] font-semibold text-slate-700">地址</label>
+                <input type="text" value={draft.address} onChange={(e) => setDraft((d) => ({ ...d, address: e.target.value }))} className="h-9 w-full rounded-lg border border-slate-300 bg-white px-3 text-xs text-slate-700" placeholder="自动从客户资料填入" />
+              </div>
+              <div>
+                <label className="mb-1 block text-[11px] font-semibold text-slate-700">描述</label>
+                <input type="text" value={draft.description} onChange={(e) => setDraft((d) => ({ ...d, description: e.target.value }))} className="h-9 w-full rounded-lg border border-slate-300 bg-white px-3 text-xs text-slate-700" placeholder="备注说明" />
+              </div>
+            </div>
+            <div className="mt-5 flex justify-end gap-2">
+              <ActionBtn onClick={() => setShowModal(false)}>取消</ActionBtn>
+              <ActionBtn tone="primary" onClick={handleSave}>确认</ActionBtn>
+            </div>
+          </div>
+        </div>
+      )}
+    </>
   );
 }

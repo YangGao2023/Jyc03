@@ -5011,12 +5011,12 @@ function MaterialsSection({ materials, setMaterials, suppliers, orders, setExpen
 
       {inventoryHint ? <div className="mb-4 rounded-xl border border-sky-100 bg-sky-50 px-4 py-3 text-xs text-sky-700">{inventoryHint}</div> : null}
 
-      {/* Filter Bar */}
-      <div className="mb-4 flex flex-wrap items-center gap-3">
-        <SmallInput value={nameFilter} onChange={(v) => setNameFilter(v)} placeholder="搜索物料名称..." />
-        <SmallSelect value={categoryFilter} onChange={(v) => setCategoryFilter(v)} options={["", ...materialCategoryOptions].filter(Boolean)} labels={{ "": "全部类别" }} />
-        <SmallSelect value={supplierFilter} onChange={(v) => setSupplierFilter(v)} options={["", ...distinctSuppliers]} labels={{ "": "全部供应商" }} />
-        <SmallSelect value={monthFilter} onChange={(v) => setMonthFilter(v)} options={["", ...distinctMonths]} labels={{ "": "全部月份" }} />
+      {/* Filter Bar — single row */}
+      <div className="mb-4 flex flex-nowrap items-center gap-2">
+        <div className="min-w-[80px] flex-1"><SmallInput value={nameFilter} onChange={(v) => setNameFilter(v)} placeholder="搜索物料名称..." /></div>
+        <div className="w-[130px]"><SmallSelect value={categoryFilter} onChange={(v) => setCategoryFilter(v)} options={["", ...materialCategoryOptions].filter(Boolean)} labels={{ "": "全部类别" }} /></div>
+        <div className="w-[150px]"><SmallSelect value={supplierFilter} onChange={(v) => setSupplierFilter(v)} options={["", ...distinctSuppliers]} labels={{ "": "全部供应商" }} /></div>
+        <div className="w-[130px]"><SmallSelect value={monthFilter} onChange={(v) => setMonthFilter(v)} options={["", ...distinctMonths]} labels={{ "": "全部月份" }} /></div>
       </div>
 
       {showMaterialModal && (

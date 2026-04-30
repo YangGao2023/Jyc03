@@ -55,11 +55,24 @@ function orderTypeFromCode(code: number): string { return code === 2 ? "批发�
 function statusFromZ1(z1: number): string {
   switch (z1) { case 1: return "下单"; case 2: return "未付清"; case 6: return "结清"; case 9: return "已关闭"; default: return "下单"; }
 }
+function empStatusFromCode(code: number): string {
+  return code === 6 ? "在职" : "离职";
+}
+function empStatusToCode(s: string): number {
+  return s === "在职" ? 6 : 0;
+}
 function orderTypeToCode(ot?: string): number { return (ot === "批发单" || ot === "批发订单") ? 2 : 1; }
 function statusToZ1(s: string): number {
   switch (s) { case "下单": return 1; case "未付清": return 2; case "结清": return 6; case "已关闭": return 9; default: return 99; }
 }
 function newNegId(): number { return -(Date.now() % 1000000000) - Math.floor(Math.random() * 9000); }
+
+async function getOldEmployeeMap(): Promise<Map<number, string>> {
+  const rows = await queryRows("SELECT old_id, id FROM a3s_employees WHERE old_id IS NOT NULL AND old_id > 0");
+  const map = new Map<number, string>();
+  for (const r of rows) map.set(Number(r.old_id), String(r.id));
+  return map;
+}
 
 // ═══════════════════════════════════════════════════════════════════════
 // 反向同步（旧T → 网站）
@@ -82,7 +95,7 @@ async function updateLastSyncTs(): Promise<void> {
 
 async function hasNewerData(lastMs: number): Promise<boolean> {
   const lastMsStr = String(Math.floor(lastMs));
-  const tables = ["T1111","T1113","T1200","T1002","T1001","T1003"];
+  const tables = ["T1111","T1113","T1200","T1002","T1001","T1003","T1000","T1300","T1114"];
   const results = await Promise.all(tables.map(t =>
     queryRows(`SELECT MAX(T2) as mx FROM ${t} WHERE T2 > ?`, [lastMsStr]).then(rows => {
       return rows.length > 0 && rows[0].mx != null && Number(rows[0].mx) > lastMs;
@@ -109,7 +122,7 @@ async function syncOrdersFromOld(lastMs: number): Promise<number> {
     const paymentHistory = payments.map((p: any) => ({
       date: fromYyyymmdd(String(p.C4 || "")),
       amount: fromCents(Number(p.C2)),
-      method: "现金", // 旧T1113没有支付方式字段，默认现金
+      method: "现金",
       type: Number(p.C1) === 0 ? "refund" : "payment",
       note: String(p.C5 || ""),
     }));
@@ -270,6 +283,89 @@ async function syncAppointmentsFromOld(lastMs: number): Promise<number> {
   return count;
 }
 
+/**
+ * 从旧 T1003 同步员工
+ * T1003: P1, C1(code), C2(name), C3(pos_code), C4(hire_date YYYYMMDD),
+ *        C5(contract_end), C6(status_code 6=在职), C7(phone),
+ *        C8(emergency), C9(address), C12(ethnicity), C13(monthly_salary),
+ *        C14(education), T1/T2(timestamps), Z1(active_flag)
+ */
+async function syncEmployeesFromOld(lastMs: number): Promise<number> {
+  let count = 0;
+  const rows = await queryRows(
+    `SELECT * FROM T1003 WHERE T2 > ? ORDER BY T1 ASC`, [String(Math.floor(lastMs))],
+  );
+  for (const t of rows) {
+    const p1 = Number(t.P1);
+    const isActive = Number(t.Z1) === 1;
+    const empStatus = isActive ? empStatusFromCode(Number(t.C6)) : "离职";
+    await executeStmt(
+      `INSERT INTO a3s_employees(id, code, name, position, phone, hire_date,
+        contract_end, monthly_salary, ethnicity, status, old_id)
+       VALUES(?,?,?,?,?,?,?,?,?,?,?)
+       ON DUPLICATE KEY UPDATE
+         code=VALUES(code), name=VALUES(name), phone=VALUES(phone),
+         hire_date=VALUES(hire_date), contract_end=VALUES(contract_end),
+         monthly_salary=VALUES(monthly_salary), ethnicity=VALUES(ethnicity),
+         status=VALUES(status)`,
+      [
+        `old_emp_${p1}`,
+        String(t.C1 || ""), String(t.C2 || ""), String(t.C3 || ""),
+        String(t.C7 || ""), fromYyyymmdd(String(t.C4 || "")),
+        String(t.C5 || ""), Number(t.C13) || 0, String(t.C12 || ""),
+        empStatus, p1,
+      ],
+    );
+    count++;
+  }
+  return count;
+}
+
+/**
+ * 从旧 T1300 同步考勤
+ * T1300: P1, P2(employee_T1003_P1), C1(type 0=work/1=leave), C2(date YYYYMMDD),
+ *        C3(time_in HHMMSS), C4(time_out HHMMSS), C5(worked_minutes),
+ *        C6(note), C7(meal_allowance 0/1), T1/T2, Z1
+ */
+async function syncAttendancesFromOld(lastMs: number): Promise<number> {
+  let count = 0;
+  const empMap = await getOldEmployeeMap();
+  const rows = await queryRows(
+    `SELECT * FROM T1300 WHERE T2 > ? ORDER BY T1 ASC`, [String(Math.floor(lastMs))],
+  );
+  for (const t of rows) {
+    const oldEmpId = Number(t.P2);
+    const empId = empMap.get(oldEmpId) || null;
+    const p1 = Number(t.P1);
+    const worked = Number(t.C5);
+    const meal = Number(t.C7) === 1;
+
+    // C1=0 regular work. C1=1 other (leave/overtime). Keep leave_minutes=0 since
+    // T1300 stores actual worked minutes, not leave tracking.
+    await executeStmt(
+      `INSERT INTO a3s_attendances(id, date, employee_id, employee_name,
+        employee_code, worked_minutes, meal_allowance, note, old_id)
+       VALUES(?,?,?,?,?,?,?,?,?)
+       ON DUPLICATE KEY UPDATE
+         worked_minutes=VALUES(worked_minutes),
+         meal_allowance=VALUES(meal_allowance), note=VALUES(note)`,
+      [
+        `old_att_${p1}`,
+        fromYyyymmdd(String(t.C2 || "")),
+        empId,
+        String(empId ? "" : ""),
+        String(empId ? "" : ""),
+        worked,
+        meal ? 1 : 0,
+        String(t.C6 || ""),
+        p1,
+      ],
+    );
+    count++;
+  }
+  return count;
+}
+
 // ─── 反向同步统一入口 ──────────────────────────────────────────────────
 
 let _lastCheck = 0;
@@ -293,6 +389,8 @@ export async function syncFromOldTablesIfNeeded(): Promise<void> {
         syncClientsFromOld(lastTs),
         syncMaterialsFromOld(lastTs),
         syncAppointmentsFromOld(lastTs),
+        syncEmployeesFromOld(lastTs),
+        syncAttendancesFromOld(lastTs),
       ]);
 
       const total = results.reduce((sum, r) => sum + (r.status === "fulfilled" ? r.value : 0), 0);
@@ -462,10 +560,85 @@ export async function syncNewClientsToOld(): Promise<void> {
   }
 }
 
+/**
+ * 网站新增员工 → T1003
+ * Map: id→P1, code→C1, name→C2, position→C3(1=普通), phone→C7,
+ *      hire_date→C4(YYYYMMDD), contract_end→C5, monthly_salary→C13,
+ *      ethnicity→C12, status→C6/Z1
+ */
+export async function syncNewEmployeesToOld(): Promise<void> {
+  const ids = await getNewIds("a3s_employees", "id");
+  if (ids.length === 0) return;
+
+  const ph = ids.map(() => "?").join(",");
+  const rows = await queryRows(`SELECT * FROM a3s_employees WHERE id IN (${ph})`, ids);
+
+  for (const row of rows) {
+    const nowSec = Math.floor(Date.now() / 1000);
+    const p1 = newNegId();
+    const isActive = String(row.status || "") === "在职";
+    await executeStmt(
+      `INSERT INTO T1003(P1,C1,C2,C3,C4,C5,C6,C7,C8,C9,C10,C11,C12,C13,C14,C15,C16,T1,T2,Z1)
+       VALUES(?,?,?,?,?,?,?,?,?,?,'','',?,?,?,'','',?,?,?)`,
+      [
+        p1,
+        String(row.code || ""), String(row.name || ""),
+        Number(row.position) || 1, toYyyymmdd(String(row.hire_date)),
+        String(row.contract_end || ""), empStatusToCode(String(row.status || "")),
+        String(row.phone || ""), "", "",
+        String(row.ethnicity || "0"), Number(row.monthly_salary) || 0,
+        "", nowSec, nowSec, isActive ? 1 : 0,
+      ],
+    );
+    await executeStmt("UPDATE a3s_employees SET old_id = ? WHERE id = ?", [p1, String(row.id)]);
+  }
+}
+
+/**
+ * 网站新增考勤 → T1300
+ * Map: id→P1, employee.old_id→P2, date→C2(YYYYMMDD),
+ *      worked_minutes→C5, meal_allowance→C7, note→C6
+ */
+export async function syncNewAttendancesToOld(): Promise<void> {
+  const ids = await getNewIds("a3s_attendances", "id");
+  if (ids.length === 0) return;
+
+  const ph = ids.map(() => "?").join(",");
+  const rows = await queryRows(`SELECT * FROM a3s_attendances WHERE id IN (${ph})`, ids);
+
+  for (const row of rows) {
+    const nowSec = Math.floor(Date.now() / 1000);
+    const p1 = newNegId();
+
+    // Look up T1003.P1 via employee old_id
+    let empOldId = 0;
+    const empId = String(row.employee_id || "");
+    if (empId) {
+      const emp = await queryRows("SELECT old_id FROM a3s_employees WHERE id = ?", [empId]);
+      if (emp.length > 0) empOldId = Number(emp[0].old_id) || 0;
+    }
+
+    await executeStmt(
+      `INSERT INTO T1300(P1,P2,P3,C1,C2,C3,C4,C5,C6,C7,T1,T2,Z1)
+       VALUES(?,?,?,?,?,?,?,?,?,?,?,?,?)`,
+      [
+        p1, empOldId, 0, 0,
+        toYyyymmdd(String(row.date)), "000000", "000000",
+        Number(row.worked_minutes) || 0,
+        String(row.note || ""),
+        Number(row.meal_allowance) || 0,
+        nowSec, nowSec, 1,
+      ],
+    );
+    await executeStmt("UPDATE a3s_attendances SET old_id = ? WHERE id = ?", [p1, String(row.id)]);
+  }
+}
+
 export async function syncAllNewToOldTables(): Promise<void> {
   const results = await Promise.allSettled([
     syncNewOrdersToOld(), syncNewCashEntriesToOld(),
     syncNewExpensesToOld(), syncNewClientsToOld(),
+    syncNewEmployeesToOld(), syncNewAttendancesToOld(),
   ]);
   const errors = results.filter((r) => r.status === "rejected");
   if (errors.length > 0) {

@@ -253,8 +253,9 @@ async function syncCashFlowFromOld(lastMs: number): Promise<number> {
            detail=VALUES(detail), expense_type=VALUES(expense_type), remark=VALUES(remark), office=VALUES(office)`,
         [expenseId, amount, fromYyyymmdd(String(t.C6 || "")), codeToMethod(Number(t.C4)), String(t.C2 || ""), String(t.C3 || t.C2 || ""), expType, String(t.C7 || ""), isOffice, p1],
       );
-      // 办公室支出也写入a3s_cash_entries，以便办公室tab统一展示
-      if (isOffice) {
+      // 非工资支出同时写入 a3s_cash_entries
+      if (Number(t.C1) !== 3) {
+        const ceId = isOffice ? `office-exp-${p1}` : `exp-${p1}`;
         await executeStmt(
           `INSERT INTO a3s_cash_entries(id, type, amount, date, method, note, office, category, source_type, source_id, old_id)
            VALUES(?,?,?,?,?,?,?,?,?,?,?)
@@ -262,9 +263,21 @@ async function syncCashFlowFromOld(lastMs: number): Promise<number> {
              type=VALUES(type), amount=VALUES(amount), date=VALUES(date),
              method=VALUES(method), note=VALUES(note), office=VALUES(office),
              category=VALUES(category), source_type=VALUES(source_type)`,
-          [`office-exp-${p1}`, "支出", amount, fromYyyymmdd(String(t.C6 || "")),
-           codeToMethod(Number(t.C4)), String(t.C7 || t.C3 || ""), 1,
+          [ceId, "支出", amount, fromYyyymmdd(String(t.C6 || "")),
+           codeToMethod(Number(t.C4)), String(t.C7 || t.C3 || ""), isOffice,
            typeName || String(t.C3 || t.C2 || ""), "expense", expenseId, p1],
+        );
+      } else {
+        // 工资支出写入 a3s_cash_entries
+        await executeStmt(
+          `INSERT INTO a3s_cash_entries(id, type, amount, date, method, note, office, source_type, source_id, old_id)
+           VALUES(?,?,?,?,?,?,?,?,?,?)
+           ON DUPLICATE KEY UPDATE
+             type=VALUES(type), amount=VALUES(amount), date=VALUES(date),
+             method=VALUES(method), note=VALUES(note), office=VALUES(office)`,
+          [`sal-${p1}`, "支出", amount, fromYyyymmdd(String(t.C6 || "")),
+           codeToMethod(Number(t.C4)), String(t.C7 || t.C3 || ""), isOffice,
+           "t1200-salary", p1, p1],
         );
       }
     }

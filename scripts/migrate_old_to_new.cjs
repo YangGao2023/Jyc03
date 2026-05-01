@@ -180,6 +180,18 @@ async function main() {
          r.C3||'其他', method,
          r.C6?fmtDate(r.C6):'', r.C7||'', r.P1]
       );
+      // 非工资支出同时写入 a3s_cash_entries（工资由第9节单独处理）
+      if (Number(r.C1) !== 3) {
+        const isOffice = r.P3 === '110' ? 1 : 0;
+        const ceId = isOffice ? `office-exp-${r.P1}` : `exp-${r.P1}`;
+        await conn.execute(
+          `INSERT IGNORE INTO a3s_cash_entries(id,type,amount,date,method,note,office,category,source_type,source_id,old_id)
+           VALUES(?,?,?,?,?,?,?,?,?,?,?)`,
+          [ceId, '支出', (r.C5||0)/100,
+           r.C6?fmtDate(r.C6):'', method, r.C7||r.C3||'', isOffice,
+           r.C3||'其他', 'expense', `exp-${r.P1}`, r.P1]
+        );
+      }
     }
     console.log(`✅ 支出: ${expRows.length}`);
   }

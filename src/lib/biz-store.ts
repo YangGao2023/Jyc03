@@ -120,7 +120,7 @@ function normalizeSnapshot(snapshot: Partial<BizStoreSnapshot>): BizStoreSnapsho
           ...item,
           payment_history: payment_history.map((record: any) => ({
             ...record,
-            method: record?.office ? "现金" : (record?.method && record?.method !== "旧库导入" ? String(record.method) : "现金"),
+            method: record?.method && record?.method !== "旧库导入" ? String(record.method) : "现金",
           })),
           client_id: resolveClientId(clients, {
             clientId: item.client_id, clientName: item.client_name, phone: item.phone,
@@ -139,7 +139,7 @@ function normalizeSnapshot(snapshot: Partial<BizStoreSnapshot>): BizStoreSnapsho
     revision: typeof snapshot.revision === "string" && snapshot.revision.trim() ? snapshot.revision : createStoreRevision(),
     orders, clients, suppliers,
     expenses: Array.isArray(snapshot.expenses)
-      ? snapshot.expenses.map((item) => ({ ...item, payment_method: item.office ? "现金" : (item.payment_method && item.payment_method !== "旧库导入" ? String(item.payment_method) : "现金") })) : [],
+      ? snapshot.expenses.map((item) => ({ ...item, payment_method: item.payment_method && item.payment_method !== "旧库导入" ? String(item.payment_method) : "现金" })) : [],
     cashEntries: Array.isArray(snapshot.cashEntries)
       ? snapshot.cashEntries.map((item) => ({ ...item, method: item.method || "现金", office: item.source_type === "office-transfer" ? true : Boolean(item.office) })) : [],
     materials: Array.isArray(snapshot.materials) ? snapshot.materials.map((item) => ({ ...item, supplier_id: resolveSupplierId(suppliers, { supplierId: item.supplier_id, supplierName: item.supplier }) })) : [],
@@ -248,7 +248,7 @@ async function mysqlWrite(snapshot: BizStoreSnapshot): Promise<void> {
       s.invoice_title ?? null, s.picking_title ?? null, s.zelle ?? null,
       s.invoice_note ?? null, s.quote_valid_days, s.quote_footer, s.logo_url,
       s.expense_types ?? null, s.supplier_categories ?? null,
-      s.meal_allowance_amount ?? 15,
+      s.meal_allowance_amount ?? 8,
       s.auto_attendance_timezone ?? "America/New_York",
       s.auto_attendance_run_time ?? "01:00",
       s.auto_attendance_default_minutes ?? 600,

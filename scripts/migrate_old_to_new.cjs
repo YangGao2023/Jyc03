@@ -114,7 +114,7 @@ async function main() {
         });
       }
 
-      const totalAfterTax = totalPrice;
+      const totalAfterTax = (r.C15 || 0) / 100;
       const balance = Math.max(0, totalAfterTax - amountPaid);
       const status = amountPaid >= totalPrice ? '结清' : (amountPaid > 0 ? '未付清' : (STATUS_MAP[r.Z1] || '下单'));
 
@@ -130,12 +130,12 @@ async function main() {
 
       await conn.execute(
         `INSERT IGNORE INTO a3s_orders
-         (order_number,order_type,client_name,client_id,phone,description,
+         (order_number,order_type,client_name,client_id,phone,address,description,
           total_price,total_after_tax,amount_paid,balance,
           order_date,status,install_info,remarks,
           payment_history,material_rows,old_id,old_status)
-         VALUES(?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)`,
-        [orderNum, orderType, clientName, String(r.P2||''), r.C18||'',
+         VALUES(?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)`,
+        [orderNum, orderType, clientName, String(r.P2||''), r.C18||'', r.C16||'',
          r.C5||'', totalPrice, totalAfterTax, amountPaid, balance,
          r.C8 ? fmtDate(r.C8) : null, status, r.C3||'', r.C10||'',
          JSON.stringify(paymentHistory), JSON.stringify(materialRows),

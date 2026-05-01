@@ -119,19 +119,39 @@ async function syncOrdersFromOld(lastMs: number): Promise<number> {
     if (!orderNumber) continue;
 
     const payments = await queryRows("SELECT * FROM T1113 WHERE P2 = ? ORDER BY T1 ASC", [p1]);
-    const paymentHistory = payments.map((p: any) => ({
-      date: fromYyyymmdd(String(p.C4 || "")),
-      amount: fromCents(Number(p.C2)),
-      method: "现金",
-      type: Number(p.C1) === 0 ? "refund" : "payment",
-      note: String(p.C5 || ""),
-    }));
+
+    // Also get T1200 payments for this order to read real payment methods
+    const t1200Payments = await queryRows(
+      "SELECT C4, C5, C6, C2 FROM T1200 WHERE P2 = ? AND Z2 = 1", [String(p1)],
+    );
+    const t1200MethodMap = new Map<string, string>();
+    for (const tp of t1200Payments) {
+      const amtKey = fromCents(Number(tp.C5)).toFixed(2);
+      const dateKey = fromYyyymmdd(String(tp.C6 || ""));
+      const method = codeToMethod(Number(tp.C4));
+      t1200MethodMap.set(`${amtKey}|${dateKey}`, method);
+    }
+
+    const paymentHistory = payments.map((p: any) => {
+      const date = fromYyyymmdd(String(p.C4 || ""));
+      const amount = fromCents(Number(p.C2));
+      const amtKey = amount.toFixed(2);
+      const method = t1200MethodMap.get(`${amtKey}|${date}`) || "现金";
+      return {
+        date,
+        amount,
+        method,
+        type: Number(p.C1) === 0 ? "refund" : "payment",
+        note: String(p.C5 || ""),
+      };
+    });
 
     const totalPaid = payments
       .filter((p: any) => Number(p.C1) === 1)
       .reduce((sum: number, p: any) => sum + fromCents(Number(p.C2)), 0);
     const totalPrice = fromCents(Number(t.C7));
-    const balance = Math.round((totalPrice - totalPaid) * 100) / 100;
+    const totalAfterTax = fromCents(Number(t.C15));
+    const balance = Math.round((totalAfterTax - totalPaid) * 100) / 100;
 
     await executeStmt(
       `INSERT INTO a3s_orders(
@@ -152,12 +172,12 @@ async function syncOrdersFromOld(lastMs: number): Promise<number> {
         orderTypeFromCode(Number(t.C2)),
         String(t.C17 || ""),
         String(t.C18 || ""),
-        String(t.C19 || ""),
+        String(t.C16 || ""),
         String(t.C4 || ""),
         String(t.C5 || ""),
         String(t.C3 || ""),
         totalPrice,
-        totalPrice,
+        totalAfterTax,
         totalPaid,
         balance,
         fromYyyymmdd(String(t.C8 || "")),
@@ -181,15 +201,18 @@ async function syncCashFlowFromOld(lastMs: number): Promise<number> {
     `SELECT * FROM T1200 WHERE T2 > ? ORDER BY T1 ASC`, [String(Math.floor(lastMs))],
   );
 
-  // 预加载 T1000 类型字典
-  const [incTypeRows, expTypeRows] = await Promise.all([
+  // 预加载 T1000 类型字典 + T1111 订单号字典
+  const [incTypeRows, expTypeRows, orderNumRows] = await Promise.all([
     queryRows("SELECT P1, C4 FROM T1000 WHERE C1=2"),
     queryRows("SELECT P1, C4 FROM T1000 WHERE C1=3"),
+    queryRows("SELECT P1, C1 FROM T1111"),
   ]);
   const incTypeMap: Record<string, string> = {};
   const expTypeMap: Record<string, string> = {};
+  const orderNumMap: Record<string, string> = {};
   for (const r of incTypeRows) incTypeMap[String(r.P1)] = String(r.C4 || "");
   for (const r of expTypeRows) expTypeMap[String(r.P1)] = String(r.C4 || "");
+  for (const r of orderNumRows) orderNumMap[String(r.P1)] = String(r.C1 || "");
 
   for (const t of rows) {
     const p1 = String(t.P1);
@@ -202,18 +225,20 @@ async function syncCashFlowFromOld(lastMs: number): Promise<number> {
       : (expTypeMap[p5] || "");
 
     if (isIncome) {
+      const orderNum = orderNumMap[String(t.P2)] || "";
       await executeStmt(
-        `INSERT INTO a3s_cash_entries(id, type, amount, date, method, note, office, category, target_name, old_id)
-         VALUES(?,?,?,?,?,?,?,?,?,?)
+        `INSERT INTO a3s_cash_entries(id, type, amount, date, method, note, office, category, target_name, order_number, source_type, source_id, old_id)
+         VALUES(?,?,?,?,?,?,?,?,?,?,?,?,?)
          ON DUPLICATE KEY UPDATE
            type=VALUES(type), amount=VALUES(amount), date=VALUES(date),
            method=VALUES(method), note=VALUES(note), office=VALUES(office),
-           category=VALUES(category), target_name=VALUES(target_name)`,
-        [`inc-${p1}`, "收入", amount, fromYyyymmdd(String(t.C6 || "")), codeToMethod(Number(t.C4)), String(t.C7 || t.C3 || ""), isOffice, typeName, String(t.C2 || ""), p1],
+           category=VALUES(category), target_name=VALUES(target_name),
+           order_number=VALUES(order_number), source_type=VALUES(source_type)`,
+        [`inc-${p1}`, "收入", amount, fromYyyymmdd(String(t.C6 || "")), codeToMethod(Number(t.C4)), String(t.C7 || t.C3 || ""), isOffice, typeName, String(t.C2 || ""), orderNum, "t1200", p1, p1],
       );
     } else {
-      // 办公室支出用T1000类型名作为expense_type，非办公室保留原描述
-      const expType = isOffice && typeName ? typeName : String(t.C3 || t.C2 || "");
+      // 所有支出优先用T1000类型名(P5→T1000.C4)作为expense_type，无匹配时回退到C3
+      const expType = typeName || String(t.C3 || t.C2 || "");
       const expenseId = `exp-${p1}`;
       await executeStmt(
         `INSERT INTO a3s_expenses(id, amount, expense_date, payment_method, target, detail, expense_type, remark, office, old_id)
@@ -403,19 +428,28 @@ async function syncAttendancesFromOld(lastMs: number): Promise<number> {
     const oldEmpId = Number(t.P2);
     const empId = empMap.get(oldEmpId) || null;
     const p1 = Number(t.P1);
-    const worked = Number(t.C5);
+    const c1 = Number(t.C1);
+    const c5 = Number(t.C5);
     const meal = Number(t.C7) === 1;
     const empName = String(t.emp_name || "");
     const empCode = String(t.emp_code || "");
+    // C1=0: work day → C5=worked_minutes
+    // C1=1: leave day → C5=leave_minutes
+    // C1=2: overtime → C5=overtime_minutes
+    const worked = c1 === 1 || c1 === 2 ? 0 : c5;
+    const leave = c1 === 1 ? c5 : 0;
+    const overtime = c1 === 2 ? c5 : 0;
 
     await executeStmt(
       `INSERT INTO a3s_attendances(id, date, employee_id, employee_name,
-        employee_code, worked_minutes, meal_allowance, note, old_id)
-       VALUES(?,?,?,?,?,?,?,?,?)
+        employee_code, worked_minutes, leave_minutes, overtime_minutes, meal_allowance, note, old_id)
+       VALUES(?,?,?,?,?,?,?,?,?,?,?)
        ON DUPLICATE KEY UPDATE
          employee_name=VALUES(employee_name),
          employee_code=VALUES(employee_code),
          worked_minutes=VALUES(worked_minutes),
+         leave_minutes=VALUES(leave_minutes),
+         overtime_minutes=VALUES(overtime_minutes),
          meal_allowance=VALUES(meal_allowance), note=VALUES(note)`,
       [
         `old_att_${p1}`,
@@ -424,6 +458,8 @@ async function syncAttendancesFromOld(lastMs: number): Promise<number> {
         empName,
         empCode,
         worked,
+        leave,
+        overtime,
         meal ? 1 : 0,
         String(t.C6 || ""),
         p1,
@@ -566,7 +602,7 @@ export async function syncNewCashEntriesToOld(): Promise<void> {
       `INSERT INTO T1200(P1,P2,P3,P4,P5,P6,C1,C2,C3,C4,C5,C6,C7,T1,T2,Z1,Z2)
        VALUES(?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)`,
       [
-        p1, orderP1, 1, 0, 0, 0,
+        p1, orderP1, Number(row.office) ? 110 : 1, 0, 0, 0,
         entryType === "支出" ? 9 : 2,
         entryType === "支出" ? "" : (String(row.note || "") || "销售收入"),
         String(row.note || "") || (entryType === "收入" ? "销售收入" : "支出"),
@@ -583,17 +619,26 @@ export async function syncNewExpensesToOld(): Promise<void> {
   const ids = await getNewIds("a3s_expenses", "id");
   if (ids.length === 0) return;
 
+  // 预加载支出类型编码表（旧系统 T1000.C1=3）
+  const typeRows = await queryRows("SELECT P1, C4 FROM T1000 WHERE C1=3");
+  const expenseTypeMap = new Map<string, number>();
+  for (const t of typeRows) {
+    expenseTypeMap.set(String(t.C4).trim(), Number(t.P1));
+  }
+
   const ph = ids.map(() => "?").join(",");
   const rows = await queryRows(`SELECT * FROM a3s_expenses WHERE id IN (${ph})`, ids);
 
   for (const row of rows) {
     const nowSec = Math.floor(Date.now() / 1000);
     const p1 = newNegId();
+    const expTypeName = String(row.expense_type || "").trim();
+    const expTypeCode = expenseTypeMap.get(expTypeName) || 0;
     await executeStmt(
       `INSERT INTO T1200(P1,P2,P3,P4,P5,P6,C1,C2,C3,C4,C5,C6,C7,T1,T2,Z1,Z2)
        VALUES(?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)`,
       [
-        p1, 0, 1, 0, 0, 0, 9,
+        p1, 0, 1, 0, expTypeCode, 0, 9,
         String(row.target || ""), String(row.detail || row.target || ""),
         methodToCode(String(row.payment_method)), toCents(Number(row.amount)),
         toYyyymmdd(String(row.expense_date)), String(row.remark || ""),

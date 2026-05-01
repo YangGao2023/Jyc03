@@ -167,13 +167,15 @@ async function mysqlRead(): Promise<BizStoreSnapshot> {
   ] = await Promise.all([
     queryRows("SELECT * FROM a3s_orders"),
     queryRows("SELECT * FROM a3s_clients"),
-    queryRows("SELECT * FROM a3s_suppliers"),
+    // Suppliers are stored as roles in a3s_clients
+    queryRows("SELECT id, name, '' as category, contact as contact_person, phone, '' as email, '' as website, address, '' as last_purchase_date, note as remark, master_id, roles, updated_at FROM a3s_clients WHERE roles LIKE '%供应商%'"),
     queryRows("SELECT * FROM a3s_expenses"),
     queryRows("SELECT * FROM a3s_cash_entries"),
     queryRows("SELECT * FROM a3s_materials"),
     queryRows("SELECT * FROM a3s_purchases"),
     queryRows("SELECT * FROM a3s_employees"),
-    queryRows("SELECT * FROM a3s_attendances"),
+    // Consolidated per employee+date (T1300 stored one-event-per-row)
+    queryRows("SELECT CONCAT('ATT-', REPLACE(date, '-', ''), '-', COALESCE(NULLIF(employee_code,\"\"), employee_id)) as id, date, employee_id, employee_name, employee_code, SUM(worked_minutes) as worked_minutes, SUM(leave_minutes) as leave_minutes, SUM(overtime_minutes) as overtime_minutes, MAX(meal_allowance) as meal_allowance, MAX(generated_by) as generated_by, GROUP_CONCAT(DISTINCT note SEPARATOR '; ') as note FROM a3s_attendances GROUP BY date, employee_id, employee_name, employee_code"),
     queryRows("SELECT * FROM a3s_appointments"),
     queryRows("SELECT * FROM a3s_payrolls"),
     queryRows("SELECT * FROM a3s_quotes"),
@@ -287,7 +289,7 @@ async function mysqlWrite(snapshot: BizStoreSnapshot): Promise<void> {
     amount_paid: o.amount_paid ?? 0, balance: o.balance ?? 0,
     order_date: o.order_date || null, status: o.status || '下单',
     operation_type: o.operation_type || null, install_info: o.install_info || null,
-    remarks: o.remarks || null,
+    installers: o.installers || null, remarks: o.remarks || null,
     payment_history: JSON.stringify(o.payment_history || []),
     material_rows: JSON.stringify(o.material_rows || []),
   })), 'order_number');
@@ -359,6 +361,7 @@ async function mysqlWrite(snapshot: BizStoreSnapshot): Promise<void> {
     position: e.position || null, phone: e.phone || null,
     hire_date: e.hire_date || null, contract_end: e.contract_end || null,
     monthly_salary: e.monthly_salary ?? 0, hourly_rate: e.hourly_rate ?? null,
+    workdays: e.workdays?.length ? JSON.stringify(e.workdays) : null,
     meal_allowance_eligible: e.meal_allowance_eligible == null ? null : (e.meal_allowance_eligible ? 1 : 0),
     ethnicity: e.ethnicity || null, status: e.status || '在职',
   })), 'id');
@@ -457,6 +460,7 @@ function rowToOrder(r: Record<string, unknown>): BizOrder {
     status: String(r.status ?? "下单"),
     operation_type: val(r.operation_type, undefined),
     install_info: val(r.install_info, undefined),
+    installers: val(r.installers, undefined),
     remarks: val(r.remarks, undefined),
     payment_history: parseJson(r.payment_history, []),
     material_rows: parseJson(r.material_rows, []),
@@ -664,8 +668,15 @@ export async function readBizStore(): Promise<BizStoreSnapshot> {
   }
 
   // 先从旧T表同步新数据（30秒冷却，有更新才跑）
-  const { syncFromOldTablesIfNeeded } = await import('@/lib/dual-write');
+  const { syncFromOldTablesIfNeeded, fixOfficeFlags, ensureAppointmentFields, ensureOrderInstallInfo } = await import('@/lib/dual-write');
   await syncFromOldTablesIfNeeded();
+  // 无条件修复办公室标记（即使无新数据也可能被自动保存覆盖）
+  await fixOfficeFlags();
+  // 补漏：预约电话/地址 + 订单安装内容
+  await Promise.allSettled([
+    ensureAppointmentFields(),
+    ensureOrderInstallInfo(),
+  ]);
 
   const snapshot = await mysqlRead();
   _cached = { ts: now, snapshot };
@@ -675,5 +686,12 @@ export async function readBizStore(): Promise<BizStoreSnapshot> {
 export async function writeBizStore(snapshot: BizStoreSnapshot): Promise<void> {
   const normalized = normalizeSnapshot(snapshot);
   await mysqlWrite(normalized);
+  // 写后立即修复办公室标记（防止自动保存覆盖）
+  const { fixOfficeFlags, ensureAppointmentFields, ensureOrderInstallInfo } = await import('@/lib/dual-write');
+  await fixOfficeFlags();
+  await Promise.allSettled([
+    ensureAppointmentFields(),
+    ensureOrderInstallInfo(),
+  ]);
   _cached = null; // 写后清缓存，下次读一定是新的
 }

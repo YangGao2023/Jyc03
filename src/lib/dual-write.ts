@@ -156,13 +156,16 @@ async function syncOrdersFromOld(lastMs: number): Promise<number> {
     await executeStmt(
       `INSERT INTO a3s_orders(
         order_number, order_type, client_name, phone, address,
-        preview_image, description, install_info, total_price,
+        preview_image, description, install_info, installers, total_price,
         total_after_tax, amount_paid, balance, order_date,
         status, remarks, payment_history, material_rows, old_id
-      ) VALUES(?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,'[]',?)
+      ) VALUES(?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,'[]',?)
       ON DUPLICATE KEY UPDATE
         order_type=VALUES(order_type), client_name=VALUES(client_name),
-        phone=VALUES(phone), total_price=VALUES(total_price),
+        phone=VALUES(phone), address=VALUES(address),
+        preview_image=VALUES(preview_image), description=VALUES(description),
+        install_info=VALUES(install_info), installers=VALUES(installers),
+        total_price=VALUES(total_price),
         total_after_tax=VALUES(total_after_tax), amount_paid=VALUES(amount_paid),
         balance=VALUES(balance), order_date=VALUES(order_date),
         status=VALUES(status), remarks=VALUES(remarks),
@@ -175,14 +178,15 @@ async function syncOrdersFromOld(lastMs: number): Promise<number> {
         String(t.C16 || ""),
         String(t.C4 || ""),
         String(t.C5 || ""),
-        String(t.C3 || ""),
+        String(t.C10 || ""),
+        String(t.C11 || ""),
         totalPrice,
         totalAfterTax,
         totalPaid,
         balance,
         fromYyyymmdd(String(t.C8 || "")),
         statusFromZ1(Number(t.Z1)),
-        String(t.C10 || ""),
+        String(t.C3 || ""),
         JSON.stringify(paymentHistory),
         p1,
       ],
@@ -501,6 +505,9 @@ export async function syncFromOldTablesIfNeeded(): Promise<void> {
       const total = results.reduce((sum, r) => sum + (r.status === "fulfilled" ? r.value : 0), 0);
       console.log(`[reverse-sync] Synced ${total} records`);
 
+      // Always fix office flags for T1200 P3='110' entries, regardless of new data
+      await fixOfficeFlags();
+
       const errors = results.filter(r => r.status === "rejected");
       if (errors.length > 0) {
         console.error("[reverse-sync] Errors:", errors.map((e: any) => e.reason?.message || e.reason));
@@ -516,6 +523,104 @@ export async function syncFromOldTablesIfNeeded(): Promise<void> {
   })();
 
   return _pendingCheck;
+}
+
+/**
+ * 修复办公室标记 — 旧系统 T1200 P3='110' 收支 → 新系统 cash_entries/expenses 设 office=1
+ * 无论有无新数据，每次读前都执行
+ */
+export async function fixOfficeFlags(): Promise<void> {
+  try {
+    // cash_entries: T1200 P3='110' income (Z2=1)
+    await executeStmt(
+      `UPDATE a3s_cash_entries c
+       INNER JOIN T1200 t ON c.source_type='t1200' AND c.old_id = t.P1 AND t.P3='110' AND t.Z2=1
+       SET c.office = 1
+       WHERE c.office = 0`
+    );
+    // expenses: T1200 P3='110' expense (Z2=0)
+    await executeStmt(
+      `UPDATE a3s_expenses e
+       INNER JOIN T1200 t ON e.source_type='t1200' AND e.old_id = t.P1 AND t.P3='110' AND t.Z2=0
+       SET e.office = 1
+       WHERE e.office = 0`
+    );
+    // Also ensure office-transfer entries always have office=1
+    await executeStmt(
+      `UPDATE a3s_cash_entries SET office = 1 WHERE source_type = 'office-transfer' AND office = 0`
+    );
+  } catch (err) {
+    console.error('[fixOfficeFlags] Error:', err);
+  }
+}
+
+/**
+ * 补漏：预约电话/地址 — 从旧表 T1114+T1002 回填 a3s_appointments 缺失的电话和地址
+ */
+export async function ensureAppointmentFields(): Promise<void> {
+  try {
+    await executeStmt(
+      `UPDATE a3s_appointments a
+       INNER JOIN T1114 t ON a.old_id = t.P1
+       INNER JOIN T1002 c ON t.P4 = c.P1
+       SET a.phone = c.C6, a.address = c.C4
+       WHERE (a.phone IS NULL OR a.phone = '') AND (a.address IS NULL OR a.address = '')
+        AND c.C6 IS NOT NULL AND c.C6 != ''`
+    );
+    // 其次：只缺 phone
+    await executeStmt(
+      `UPDATE a3s_appointments a
+       INNER JOIN T1114 t ON a.old_id = t.P1
+       INNER JOIN T1002 c ON t.P4 = c.P1
+       SET a.phone = c.C6
+       WHERE (a.phone IS NULL OR a.phone = '') AND c.C6 IS NOT NULL AND c.C6 != ''`
+    );
+    // 最后：只缺 address
+    await executeStmt(
+      `UPDATE a3s_appointments a
+       INNER JOIN T1114 t ON a.old_id = t.P1
+       INNER JOIN T1002 c ON t.P4 = c.P1
+       SET a.address = c.C4
+       WHERE (a.address IS NULL OR a.address = '') AND c.C4 IS NOT NULL AND c.C4 != ''`
+    );
+  } catch (err) {
+    console.error('[ensureAppointmentFields] Error:', err);
+  }
+}
+
+/**
+ * 补漏：订单安装内容 — 从旧表 T1111 回填 a3s_orders 缺失的 install_info
+ * T1111: C10=安装内容, C11=安装人员, C16=地址, C18=电话
+ */
+export async function ensureOrderInstallInfo(): Promise<void> {
+  try {
+    // 补 install_info: 旧系统实际存于 C10（不是 C3）
+    await executeStmt(
+      `UPDATE a3s_orders o
+       INNER JOIN T1111 t ON o.old_id = t.P1
+       SET o.install_info = t.C10, o.address = t.C16
+       WHERE (o.install_info IS NULL OR o.install_info = '')
+        AND t.C10 IS NOT NULL AND t.C10 != ''`
+    );
+    // 补 installers（安装人员）: C11
+    await executeStmt(
+      `UPDATE a3s_orders o
+       INNER JOIN T1111 t ON o.old_id = t.P1
+       SET o.installers = t.C11
+       WHERE (o.installers IS NULL OR o.installers = '')
+        AND t.C11 IS NOT NULL AND t.C11 != ''`
+    );
+    // 补 phone: C18
+    await executeStmt(
+      `UPDATE a3s_orders o
+       INNER JOIN T1111 t ON o.old_id = t.P1
+       SET o.phone = t.C18
+       WHERE (o.phone IS NULL OR o.phone = '')
+        AND t.C18 IS NOT NULL AND t.C18 != ''`
+    );
+  } catch (err) {
+    console.error('[ensureOrderInstallInfo] Error:', err);
+  }
 }
 
 // ═══════════════════════════════════════════════════════════════════════

@@ -334,7 +334,7 @@ function getPrintTemplateSettings(settings?: BizSettings) {
 
   return {
     invoiceTitle: settings?.invoice_title?.trim() || "Invoice",
-    pickingTitle: settings?.picking_title?.trim() || "\u9886\u6599\u5355 / Worker Pickup Sheet",
+    pickingTitle: settings?.picking_title?.trim() || "领料单 / Worker Pickup Sheet",
     companyName: settings?.company_name?.trim() || "JYC STEEL GROUP INC",
     companyNameZh: settings?.company_name_zh?.trim() || "",
     companyAddress: settings?.company_address?.trim() || settings?.address?.trim() || "34-41 College Point Blvd, Flushing, NY,11354",
@@ -725,7 +725,7 @@ function OverviewSection({
   const domains = getOverviewDomains(orderSummary, { expenses: expenses.filter((e) => !e.voided), payrolls, clients, suppliers, materials, employees });
   return (
     <div>
-      <SectionHeader eyebrow="Business Overview" title="业务总览" />
+      <SectionHeader eyebrow="业务总览" title="业务总览" />
 
       <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-3">
         {domains.map((d) => (
@@ -2900,7 +2900,7 @@ function OrdersSection({
       />
 
       <SectionHeader
-        eyebrow="Order Management"
+        eyebrow="订单管理"
         title="订单管理"
         actions={
           <>
@@ -3562,7 +3562,7 @@ function FinanceSection({ orders, setOrders, expenses, setExpenses, cashEntries,
     setDraft((prev) => ({ ...prev, payment_method: OFFICE_PAYMENT_METHOD }));
   }, [expenseFromOffice, draft.payment_method]);
   const [showOfficeTransferModal, setShowOfficeTransferModal] = useState(false);
-  const [officeTransferDraft, setOfficeTransferDraft] = useState({ type: "转入", amount: "", date: today, note: "" });
+  const [officeTransferDraft, setOfficeTransferDraft] = useState({ type: "转入", amount: "", date: today, category: "", target_name: "", note: "" });
   const [showMiscIncomeModal, setShowMiscIncomeModal] = useState(false);
   const [miscIncomeDraft, setMiscIncomeDraft] = useState({ amount: "", date: today, method: "微信", category: "", note: "", target_name: "", office: false });
   const [transferInlineDraft, setTransferInlineDraft] = useState({ type: "转入", amount: "", date: today, note: "" });
@@ -3575,9 +3575,19 @@ function FinanceSection({ orders, setOrders, expenses, setExpenses, cashEntries,
   const [receivablesPage, setReceivablesPage] = useState(1);
   const paymentRows = orders.flatMap((order) => (order.payment_history ?? []).map((record, index) => ({ order, record, key: `${order.order_number}-${index}` })));
 
+  // Build set of order payment signatures so T1200 cash entries that are
+  // already recorded as order income aren't duplicated as misc income.
+  const orderPaymentKeys = new Set<string>();
+  orders.forEach((o) => {
+    (o.payment_history ?? []).forEach((r) => {
+      orderPaymentKeys.add(`${r.amount}|${r.date}`);
+    });
+  });
+
   const incomeCategories = (settings?.income_categories || '').split(',').map(s => s.trim()).filter(Boolean);
   const miscIncomeRows = cashEntries
-    .filter(item => item.type === '收入' && !item.order_number)
+    .filter(item => item.type === '收入' && !item.order_number &&
+      !(item.source_type === 't1200' && orderPaymentKeys.has(`${item.amount}|${item.date}`)))
     .sort((a, b) => b.date.localeCompare(a.date))
     .map(item => ({
       key: `misc-${item.id}`,
@@ -3754,11 +3764,12 @@ return days.map((day) => {
     }).reverse();
     return rows.filter((item) => isDateInRange(item.date, financeDateStart, financeDateEnd));
   })();
+  const officeExpenseTotal = expenses.filter((item) => item.office).reduce((s, item) => s + item.amount, 0);
   const cashBalance = allOfficeSorted.reduce((sum, item) => {
     const inc = (item.type === "收入" || item.type === "转入") ? item.amount : 0;
     const exp = (item.type !== "收入" && item.type !== "转入") ? item.amount : 0;
     return sum + inc - exp;
-  }, 0);
+  }, 0) - officeExpenseTotal;
   const financeConfigs: Record<FinanceSub, TabularSchemaConfig> = {
     income: {
       title: "订单收入",
@@ -4001,8 +4012,10 @@ return days.map((day) => {
   function addOfficeTransfer() {
     const amount = Number(officeTransferDraft.amount) || 0;
     if (amount <= 0) return;
-    setCashEntries((prev) => [{ id: nextYearScopedId(prev.map((item) => item.id), "CASH", new Date().getFullYear()), type: officeTransferDraft.type, amount, date: officeTransferDraft.date, method: OFFICE_PAYMENT_METHOD, note: officeTransferDraft.note || undefined, office: true, source_type: "office-transfer", source_id: `${officeTransferDraft.type}:${officeTransferDraft.date}:${amount}` }, ...prev]);
-    setOfficeTransferDraft({ type: "转入", amount: "", date: today, note: "" });
+    const category = officeTransferDraft.category || '';
+    const target_name = officeTransferDraft.target_name || undefined;
+    setCashEntries((prev) => [{ id: nextYearScopedId(prev.map((item) => item.id), "CASH", new Date().getFullYear()), type: officeTransferDraft.type, amount, date: officeTransferDraft.date, category, target_name, method: OFFICE_PAYMENT_METHOD, note: officeTransferDraft.note || undefined, office: true, source_type: "office-transfer", source_id: `${officeTransferDraft.type}:${officeTransferDraft.date}:${amount}` }, ...prev]);
+    setOfficeTransferDraft({ type: "转入", amount: "", date: today, category: "", target_name: "", note: "" });
     setShowOfficeTransferModal(false);
     onAutoSave?.();
   }
@@ -4039,7 +4052,7 @@ return days.map((day) => {
 
   return (
     <div>
-      <SectionHeader eyebrow="Finance Management" title={sub === "cash" ? "办公室管理" : "收支管理"} actions={<>{sub === "audit" ? <ActionBtn onClick={runFinanceAudit}>↻ 重新扫描</ActionBtn> : null}{sub === "audit" ? <ActionBtn tone="success" onClick={applyFinanceRepair}>🔧 应用自动修复</ActionBtn> : null}{sub === "expense" ? <ActionBtn tone="primary" onClick={() => setShowExpenseModal(true)}>+ 录入支出</ActionBtn> : null}{sub === "cash" ? <ActionBtn tone="primary" onClick={() => setShowOfficeTransferModal(true)}>+ 办公室转入/转出</ActionBtn> : null}</>} />
+      <SectionHeader eyebrow="收支管理" title={sub === "cash" ? "办公室管理" : "收支管理"} actions={<>{sub === "audit" ? <ActionBtn onClick={runFinanceAudit}>↻ 重新扫描</ActionBtn> : null}{sub === "audit" ? <ActionBtn tone="success" onClick={applyFinanceRepair}>🔧 应用自动修复</ActionBtn> : null}{sub === "expense" ? <ActionBtn tone="primary" onClick={() => setShowExpenseModal(true)}>+ 录入支出</ActionBtn> : null}{sub === "cash" ? <ActionBtn tone="primary" onClick={() => setShowOfficeTransferModal(true)}>+ 办公室转入/转出</ActionBtn> : null}</>} />
       <div className="mb-4 rounded-xl border border-slate-200 bg-white p-2">
         <div className="flex flex-wrap items-center justify-between gap-2">
           <div className="flex flex-wrap items-center gap-1">
@@ -4189,6 +4202,8 @@ return days.map((day) => {
               <SmallSelect value={officeTransferDraft.type} onChange={(v) => setOfficeTransferDraft((d) => ({ ...d, type: v }))} options={["转入", "转出"]} />
               <SmallInput value={officeTransferDraft.amount} onChange={(v) => setOfficeTransferDraft((d) => ({ ...d, amount: v }))} type="number" placeholder="金额" />
               <SmallInput value={officeTransferDraft.date} onChange={(v) => setOfficeTransferDraft((d) => ({ ...d, date: v }))} type="date" />
+              <SmallSelect value={officeTransferDraft.category} onChange={(v) => setOfficeTransferDraft((d) => ({ ...d, category: v }))} options={incomeCategories.length > 0 ? incomeCategories : ['杂项收入']} />
+              <SmallInput value={officeTransferDraft.target_name} onChange={(v) => setOfficeTransferDraft((d) => ({ ...d, target_name: v }))} placeholder="对方(可选)" />
               <SmallInput value={officeTransferDraft.note} onChange={(v) => setOfficeTransferDraft((d) => ({ ...d, note: v }))} placeholder="备注(可选)" />
             </div>
             <div className="mt-5 flex justify-end gap-2">
@@ -4258,7 +4273,7 @@ return days.map((day) => {
           </div>
         </div>
       )}
-      {sub === "income" && (<><div className="flex items-center justify-end gap-2 mb-2"><button onClick={() => setShowMiscIncomeModal(true)} className="rounded-lg border border-emerald-300 bg-emerald-50 px-3 py-1.5 text-xs font-medium text-emerald-700 hover:bg-emerald-100 transition-colors">+ 新杂项收入</button></div><div className="overflow-x-auto rounded-xl border border-slate-200 bg-white"><table className="w-full text-left text-xs"><thead><tr className="border-b border-slate-200 bg-slate-50"><th className="px-4 py-2 font-semibold text-slate-600">订单号/来源</th><th className="px-4 py-2 font-semibold text-slate-600">类型</th><th className="px-4 py-2 font-semibold text-slate-600">客户/对方</th><th className="px-4 py-2 font-semibold text-slate-600">金额</th><th className="px-4 py-2 font-semibold text-slate-600">支付方式</th><th className="px-4 py-2 font-semibold text-slate-600">日期</th><th className="px-4 py-2 font-semibold text-slate-600">明细</th></tr></thead><tbody>{allIncomeRows.length ? pagedIncomeRows.map((item) => {
+      {sub === "income" && (<><div className="flex items-center justify-end gap-2 mb-2"><button onClick={() => setShowMiscIncomeModal(true)} className="rounded-lg border border-emerald-300 bg-emerald-50 px-3 py-1.5 text-xs font-medium text-emerald-700 hover:bg-emerald-100 transition-colors">+ 新杂项收入</button></div><div className="overflow-x-auto rounded-xl border border-slate-200 bg-white"><table className="w-full text-left text-xs"><thead><tr className="border-b border-slate-200 bg-slate-50"><th className="px-4 py-2 font-semibold text-slate-600">订单号/来源</th><th className="px-4 py-2 font-semibold text-slate-600">类别</th><th className="px-4 py-2 font-semibold text-slate-600">对象</th><th className="px-4 py-2 font-semibold text-slate-600">金额</th><th className="px-4 py-2 font-semibold text-slate-600">支付方式</th><th className="px-4 py-2 font-semibold text-slate-600">日期</th><th className="px-4 py-2 font-semibold text-slate-600">明细</th></tr></thead><tbody>{allIncomeRows.length ? pagedIncomeRows.map((item) => {
   const isRefund = item.type === 'order' && item.category.endsWith('退款');
   const isMisc = item.type === 'misc';
   return (
@@ -4274,7 +4289,7 @@ return days.map((day) => {
   );
 }) : <tr><td colSpan={7} className="py-10 text-center text-xs text-slate-400">这个日期范围内没有收入记录</td></tr>}</tbody></table></div><div className="flex flex-wrap items-center justify-between gap-3 rounded-xl border border-slate-200 bg-white px-4 py-3 text-xs text-slate-600"><span>第 {paymentPage} / {incomePageCount} 页,共 {allIncomeRows.length} 条收入</span><div className="flex items-center gap-2"><button type="button" onClick={() => setPaymentPage((p) => Math.max(1, p - 1))} disabled={paymentPage <= 1} className="rounded-lg border border-slate-200 px-3 py-1.5 disabled:cursor-not-allowed disabled:opacity-40">上一页</button><button type="button" onClick={() => setPaymentPage((p) => Math.min(incomePageCount, p + 1))} disabled={paymentPage >= incomePageCount} className="rounded-lg border border-slate-200 px-3 py-1.5 disabled:cursor-not-allowed disabled:opacity-40">下一页</button></div></div></>)}
       {sub === "expense" && (<><div className="overflow-x-auto rounded-xl border border-slate-200 bg-white"><table className="w-full text-left text-xs"><thead><tr className="border-b border-slate-200 bg-slate-50"><th className="px-4 py-2 font-semibold text-slate-600">对象</th><th className="px-4 py-2 font-semibold text-slate-600">明细</th><th className="px-4 py-2 font-semibold text-slate-600">金额</th><th className="px-4 py-2 font-semibold text-slate-600">类型</th><th className="px-4 py-2 font-semibold text-slate-600">方式</th><th className="px-4 py-2 font-semibold text-slate-600">办公室</th><th className="px-4 py-2 font-semibold text-slate-600">日期</th><th className="px-4 py-2 font-semibold text-slate-600">操作</th></tr></thead><tbody>{filteredExpenseRows.length ? pagedExpenses.map((item) => <tr key={item.id} className="border-b border-slate-100 last:border-b-0"><td className="px-4 py-2 text-slate-700">{item.target}</td><td className="px-4 py-2 text-slate-500">{item.detail}</td><td className="px-4 py-2 font-semibold text-rose-600">{formatMoney(item.amount)}</td><td className="px-4 py-2 text-slate-600">{item.display_type}</td><td className="px-4 py-2 text-slate-600">{item.payment_method}</td><td className="px-4 py-2 text-slate-600">{item.office ? "是" : "否"}</td><td className="px-4 py-2 text-slate-500">{item.expense_date}</td><td className="px-4 py-2"><div className="flex items-center gap-2">{editingExpenseId === item.id ? <span className="text-xs text-slate-400">编辑中</span> : <><button onClick={() => openEditExpense(item)} className="rounded border border-slate-200 px-2 py-0.5 text-xs text-slate-600 hover:border-slate-300 hover:bg-slate-50 transition-colors">编辑</button>{confirmingExpenseId === item.id ? <><button onClick={() => deleteExpense(item.id)} className="rounded border border-red-400 bg-red-500 px-2 py-0.5 text-xs font-semibold text-slate-700 hover:bg-red-600 transition-colors">确认</button><button onClick={() => setConfirmingExpenseId(null)} className="rounded border border-slate-200 px-2 py-0.5 text-xs text-slate-500 hover:border-slate-300 transition-colors">取消</button></> : <button onClick={() => setConfirmingExpenseId(item.id)} className="rounded border border-red-100 px-2 py-0.5 text-xs text-red-500 hover:border-red-300 hover:bg-red-50 transition-colors">删除</button>}</>}</div></td></tr>) : <tr><td colSpan={8} className="py-10 text-center text-xs text-slate-400">这个日期范围内没有支出记录</td></tr>}</tbody></table></div><div className="flex flex-wrap items-center justify-between gap-3 rounded-xl border border-slate-200 bg-white px-4 py-3 text-xs text-slate-600"><span>第 {expensesPage} / {expensesPageCount} 页,共 {filteredExpenseRows.length} 条支出</span><div className="flex items-center gap-2"><button type="button" onClick={() => setExpensesPage((p) => Math.max(1, p - 1))} disabled={expensesPage <= 1} className="rounded-lg border border-slate-200 px-3 py-1.5 disabled:cursor-not-allowed disabled:opacity-40">上一页</button><button type="button" onClick={() => setExpensesPage((p) => Math.min(expensesPageCount, p + 1))} disabled={expensesPage >= expensesPageCount} className="rounded-lg border border-slate-200 px-3 py-1.5 disabled:cursor-not-allowed disabled:opacity-40">下一页</button></div></div></>)}
-      {sub === "cash" && (<><div className="mb-3 flex items-center justify-end gap-4 rounded-xl border border-slate-200 bg-white px-5 py-3"><span className="text-xs text-slate-500">当前余额</span><span className={`text-xl font-bold ${cashBalance >= 0 ? "text-emerald-600" : "text-rose-600"}`}>{formatMoney(cashBalance)}</span></div><div className="overflow-x-auto rounded-xl border border-slate-200 bg-white"><table className="w-full text-left text-xs"><thead><tr className="border-b border-slate-200 bg-slate-50"><th className="px-4 py-2 font-semibold text-slate-600">日期</th><th className="px-4 py-2 font-semibold text-slate-600">类型</th><th className="px-4 py-2 font-semibold text-slate-600">类别</th><th className="px-4 py-2 font-semibold text-slate-600">对方</th><th className="px-4 py-2 font-semibold text-slate-600">金额</th><th className="px-4 py-2 font-semibold text-slate-600">明细</th><th className="px-4 py-2 font-semibold text-slate-600">余额</th></tr></thead><tbody>{cashRows.length ? cashRows.slice(0, 100).map((item) => { const isPositive = item.type === "收入" || item.type === "转入"; const typeCategory = item.type === "转入" || item.type === "转出" ? "-" : (item.category || "-"); return (<tr key={item.id} className="border-b border-slate-100 last:border-b-0"><td className="px-4 py-2 text-slate-500">{item.date}</td><td className="px-4 py-2"><span className={`rounded-full px-2 py-0.5 text-[11px] font-semibold ${isPositive ? "bg-green-50 text-green-700" : "bg-rose-50 text-rose-700"}`}>{item.type}</span></td><td className="px-4 py-2 text-slate-600">{typeCategory}</td><td className="px-4 py-2 text-slate-700">{item.target_name || "-"}</td><td className={`px-4 py-2 font-semibold ${isPositive ? "text-green-600" : "text-rose-600"}`}>{formatMoney(item.amount)}</td><td className="px-4 py-2 text-slate-500 max-w-[200px] truncate" title={item.note}>{item.note || "-"}</td><td className="px-4 py-2 font-medium text-emerald-600">{formatMoney(item.balance)}</td></tr>); }) : <tr><td colSpan={7} className="py-10 text-center text-xs text-slate-400">没有办公室记录</td></tr>}</tbody></table></div></>)}
+      {sub === "cash" && (<><div className="mb-3 flex items-center justify-end gap-4 rounded-xl border border-slate-200 bg-white px-5 py-3"><span className="text-xs text-slate-500">当前余额</span><span className={`text-xl font-bold ${cashBalance >= 0 ? "text-emerald-600" : "text-rose-600"}`}>{formatMoney(cashBalance)}</span></div><div className="overflow-x-auto rounded-xl border border-slate-200 bg-white"><table className="w-full text-left text-xs"><thead><tr className="border-b border-slate-200 bg-slate-50"><th className="px-4 py-2 font-semibold text-slate-600">日期</th><th className="px-4 py-2 font-semibold text-slate-600">类型</th><th className="px-4 py-2 font-semibold text-slate-600">类别</th><th className="px-4 py-2 font-semibold text-slate-600">对方</th><th className="px-4 py-2 font-semibold text-slate-600">金额</th><th className="px-4 py-2 font-semibold text-slate-600">明细</th><th className="px-4 py-2 font-semibold text-slate-600">余额</th></tr></thead><tbody>{cashRows.length ? cashRows.slice(0, 100).map((item) => { const isPositive = item.type === "收入" || item.type === "转入"; const typeCategory = item.category || (item.type === "转入" || item.type === "转出" ? "-" : "-"); return (<tr key={item.id} className="border-b border-slate-100 last:border-b-0"><td className="px-4 py-2 text-slate-500">{item.date}</td><td className="px-4 py-2"><span className={`rounded-full px-2 py-0.5 text-[11px] font-semibold ${isPositive ? "bg-green-50 text-green-700" : "bg-rose-50 text-rose-700"}`}>{item.type}</span></td><td className="px-4 py-2 text-slate-600">{typeCategory}</td><td className="px-4 py-2 text-slate-700">{item.target_name || "-"}</td><td className={`px-4 py-2 font-semibold ${isPositive ? "text-green-600" : "text-rose-600"}`}>{formatMoney(item.amount)}</td><td className="px-4 py-2 text-slate-500 max-w-[200px] truncate" title={item.note}>{item.note || "-"}</td><td className="px-4 py-2 font-medium text-emerald-600">{formatMoney(item.balance)}</td></tr>); }) : <tr><td colSpan={7} className="py-10 text-center text-xs text-slate-400">没有办公室记录</td></tr>}</tbody></table></div></>)}
 
       {sub === "ledger" && <div className="overflow-x-auto rounded-xl border border-slate-200 bg-white"><table className="w-full text-left text-xs"><thead><tr className="border-b border-slate-200 bg-slate-50"><th className="px-4 py-2 font-semibold text-slate-600">{ledgerView === "yearly" ? "月份" : "日期"}</th><th className="px-4 py-2 font-semibold text-slate-600">收入</th><th className="px-4 py-2 font-semibold text-slate-600">支出</th><th className="px-4 py-2 font-semibold text-slate-600">净额</th><th className="px-4 py-2 font-semibold text-slate-600">余额</th><th className="px-4 py-2 font-semibold text-slate-600">净利润</th></tr></thead><tbody>{ledgerRows.map((item) => <tr key={item.month} className="border-b border-slate-100 last:border-b-0"><td className="px-4 py-2 font-medium text-slate-700">{item.month}</td><td className="px-4 py-2 text-green-600">{formatMoney(item.income)}</td><td className="px-4 py-2 text-rose-600">{formatMoney(item.expense)}</td><td className="px-4 py-2 text-slate-700">{formatMoney(item.net)}</td><td className="px-4 py-2 text-emerald-600">{formatMoney(item.balance)}</td><td className={`px-4 py-2 font-semibold ${item.profit >= 0 ? "text-emerald-600" : "text-rose-600"}`}>{formatMoney(item.profit)}</td></tr>)}</tbody></table></div>}
       {sub === "receivables" && (
@@ -5931,7 +5946,7 @@ function MaterialsSection({ materials, setMaterials, suppliers, orders, setExpen
 }
 
 type StaffSub = "profiles" | "attendance" | "payroll" | "rules";
-type AttendanceFilter = "today" | "thisWeek" | "lastWeek";
+type AttendanceFilter = "today" | "thisWeek" | "lastWeek" | "all";
 type PayrollWeekFilter = "lastWeek" | "thisWeek";
 
 const WORKDAY_OPTIONS = [
@@ -5944,7 +5959,7 @@ const WORKDAY_OPTIONS = [
   { key: "Sun", label: "周日" },
 ] as const;
 
-const EMPLOYEE_GROUP_OPTIONS = ["华人", "墨西哥人"] as const;
+const EMPLOYEE_GROUP_OPTIONS = ["华人", "墨西哥"] as const;
 
 function parseIsoDate(value: string) {
   return new Date(`${value}T00:00:00`);
@@ -5973,7 +5988,8 @@ function getAttendanceRange(filter: AttendanceFilter) {
   const thisWeekStart = startOfWeekIso(today);
   if (filter === "today") return { start: today, end: today, label: "今天" };
   if (filter === "thisWeek") return { start: thisWeekStart, end: today, label: "本周" };
-  return { start: addDaysIso(thisWeekStart, -7), end: addDaysIso(thisWeekStart, -1), label: "上周" };
+  if (filter === "lastWeek") return { start: addDaysIso(thisWeekStart, -7), end: addDaysIso(thisWeekStart, -1), label: "上周" };
+  return { start: "2025-01-01", end: today, label: "全部" };
 }
 
 function getPayrollWeekRange(filter: PayrollWeekFilter) {
@@ -6012,36 +6028,8 @@ function nextEmployeeCode(employees: EmployeeRecord[]) {
 
 function ensureAttendanceRows(employees: EmployeeRecord[], attendances: AttendanceRecord[], range: { start: string; end: string }, settings: BizSettings) {
   const employeeMap = new Map(employees.map((item) => [item.id, item]));
-  const existingMap = new Map(attendances.map((item) => [`${item.date}__${item.employee_id || item.employee_name}`, item]));
-  const next = [...attendances];
-  const defaultMinutes = Math.max(0, Math.round(settings.auto_attendance_default_minutes || 600));
 
-  getRangeDates(range.start, range.end).forEach((date) => {
-    employees.filter((item) => item.status === "在职").forEach((employee) => {
-      const workdays = employee.workdays?.length ? employee.workdays : ["Mon", "Tue", "Wed", "Thu", "Fri"];
-      if (!workdays.includes(getWeekdayKey(date))) return;
-      const key = `${date}__${employee.id}`;
-      if (existingMap.has(key)) return;
-      const leaveMinutes = 0;
-      const record: AttendanceRecord = {
-        id: `ATT-${date.replaceAll("-", "")}-${employee.code || employee.id}`,
-        date,
-        employee_id: employee.id,
-        employee_name: employee.name,
-        employee_code: employee.code,
-        leave_minutes: leaveMinutes,
-        overtime_minutes: 0,
-        worked_minutes: defaultMinutes,
-        meal_allowance: defaultMinutes > 300 && leaveMinutes < 300 && Boolean(employee.meal_allowance_eligible),
-        generated_by: `auto-rule:${settings.auto_attendance_timezone || "America/New_York"}:${settings.auto_attendance_run_time || "01:00"}`,
-        note: settings.auto_attendance_note || undefined,
-      };
-      existingMap.set(key, record);
-      next.push(record);
-    });
-  });
-
-  return next.map((item) => {
+  return attendances.map((item) => {
     if (item.note === "__deleted__") return item;
     const employee = employeeMap.get(item.employee_id || "") || employees.find((row) => row.name === item.employee_name);
     const leaveMinutes = Math.max(0, Math.round(item.leave_minutes || 0));
@@ -6101,10 +6089,6 @@ function EmployeesSection({ employees, setEmployees, attendances, setAttendances
   }, [employees]);
   const seededAttendances = useMemo(() => ensureAttendanceRows(normalizedEmployees, attendances, attendanceRange, settings), [normalizedEmployees, attendances, attendanceRange, settings]);
   const mealAllowanceAmount = settings.meal_allowance_amount ?? 15;
-
-  useEffect(() => {
-    if (seededAttendances.length !== attendances.length) setAttendances(seededAttendances);
-  }, [seededAttendances, attendances.length, setAttendances]);
 
   const profileRows = useMemo(() => {
     const keyword = profileSearch.trim().toLowerCase();
@@ -6451,7 +6435,7 @@ function EmployeesSection({ employees, setEmployees, attendances, setAttendances
 
       {sub === "attendance" ? (
         <div className="space-y-4">
-          <div className="flex flex-wrap items-center gap-3"><SegmentedControl options={[{ key: "today", label: "今天" }, { key: "thisWeek", label: "本周" }, { key: "lastWeek", label: "上周" }]} value={attendanceFilter} onChange={setAttendanceFilter} /><div className="relative min-w-[140px]"><span className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-700 text-xs">⌕</span><input value={attendanceSearch} onChange={(e) => setAttendanceSearch(e.target.value)} placeholder="搜索员工" className="h-8 w-full rounded-lg border border-slate-300 bg-white pl-8 pr-3 text-xs text-slate-700" /></div><div className="flex items-center gap-2"><span className="text-xs text-slate-700">分组</span><select value={attendanceEthnicityFilter} onChange={(e) => setAttendanceEthnicityFilter(e.target.value)} className="h-8 rounded-lg border border-slate-300 bg-white px-2 text-xs text-slate-700"><option>全部</option>{EMPLOYEE_GROUP_OPTIONS.map((option) => <option key={option}>{option}</option>)}</select></div><span className="text-xs text-slate-700">{attendanceRange.start} ~ {attendanceRange.end}</span></div>
+          <div className="flex flex-wrap items-center gap-3"><SegmentedControl options={[{ key: "today", label: "今天" }, { key: "thisWeek", label: "本周" }, { key: "lastWeek", label: "上周" }, { key: "all", label: "全部" }]} value={attendanceFilter} onChange={setAttendanceFilter} /><div className="relative min-w-[140px]"><span className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-700 text-xs">⌕</span><input value={attendanceSearch} onChange={(e) => setAttendanceSearch(e.target.value)} placeholder="搜索员工" className="h-8 w-full rounded-lg border border-slate-300 bg-white pl-8 pr-3 text-xs text-slate-700" /></div><div className="flex items-center gap-2"><span className="text-xs text-slate-700">分组</span><select value={attendanceEthnicityFilter} onChange={(e) => setAttendanceEthnicityFilter(e.target.value)} className="h-8 rounded-lg border border-slate-300 bg-white px-2 text-xs text-slate-700"><option>全部</option>{EMPLOYEE_GROUP_OPTIONS.map((option) => <option key={option}>{option}</option>)}</select></div><span className="text-xs text-slate-700">{attendanceRange.start} ~ {attendanceRange.end}</span></div>
           <PanelCard title="考勤规则说明" note="当天工作时长 = 10小时 + 加班时长 - 请假时长。工时小于等于 5 小时时强制取消饭补。"><div className="text-xs text-slate-700">缺失考勤会按员工工作日和自动规则补齐,支持逐行人工修正。当前饭补金额 {formatMoney(mealAllowanceAmount)} / 次。</div></PanelCard>
           <div className="overflow-x-auto rounded-xl border border-gray-200 bg-gray-50"><table className="w-full text-left text-xs"><thead><tr className="border-b border-gray-200 bg-gray-50"><th className="px-3 py-2 font-semibold text-slate-600">日期</th><th className="px-3 py-2 font-semibold text-slate-600">工号</th><th className="px-3 py-2 font-semibold text-slate-600">人名</th><th className="px-3 py-2 font-semibold text-slate-600">工作时长</th><th className="px-3 py-2 font-semibold text-slate-600">请假时长</th><th className="px-3 py-2 font-semibold text-slate-600">加班时长</th><th className="px-3 py-2 font-semibold text-slate-600">饭补</th><th className="px-3 py-2 font-semibold text-slate-600">操作</th></tr></thead><tbody>{pagedAttendanceRows.map((item) => { const employee = normalizedEmployees.find((row) => row.id === item.employee_id || row.name === item.employee_name); const editing = editingAttendanceId === item.id; return <tr key={item.id} className="border-b border-gray-200 last:border-b-0"><td className="px-3 py-2 text-slate-600">{item.date}</td><td className="px-3 py-2 text-slate-700">{item.employee_code || employee?.code || "-"}</td><td className="px-3 py-2 font-medium text-slate-700">{item.employee_name}</td><td className="px-3 py-2 text-slate-700">{formatMinutes(item.worked_minutes)}</td>{editing ? <><td className="px-3 py-2"><SmallInput value={String(item.leave_minutes)} onChange={(v) => setAttendanceField(item.id, "leave_minutes", Number(v) || 0)} type="number" /></td><td className="px-3 py-2"><SmallInput value={String(item.overtime_minutes)} onChange={(v) => setAttendanceField(item.id, "overtime_minutes", Number(v) || 0)} type="number" /></td><td className="px-3 py-2"><label className="flex items-center gap-2 text-slate-600"><input type="checkbox" checked={item.meal_allowance} disabled={item.worked_minutes <= 300 || !employee?.meal_allowance_eligible} onChange={(e) => setAttendanceField(item.id, "meal_allowance", e.target.checked)} /> 饭补</label></td><td className="px-3 py-2"><div className="flex gap-2"><ActionBtn tone="success" onClick={() => setEditingAttendanceId(null)}>完成</ActionBtn><ActionBtn onClick={() => setEditingAttendanceId(null)}>取消</ActionBtn></div></td></> : <><td className="px-3 py-2 text-slate-600">{formatMinutes(item.leave_minutes)}</td><td className="px-3 py-2 text-slate-600">{formatMinutes(item.overtime_minutes)}</td><td className="px-3 py-2 text-slate-600">{item.meal_allowance ? `是 · 当前饭补金额 ${formatMoney(mealAllowanceAmount)} / 次` : "否"}</td><td className="px-3 py-2"><div className="flex gap-2">{confirmingAttendanceId === item.id ? <><button onClick={() => deleteAttendance(item.id)} className="rounded border border-red-400 bg-red-500 px-2 py-1 text-[11px] font-semibold text-slate-700 hover:bg-red-600 transition-colors">确认</button><button onClick={() => setConfirmingAttendanceId(null)} className="rounded border border-slate-200 px-2 py-1 text-[11px] text-slate-700 hover:border-slate-300 transition-colors">取消</button></> : <><ActionBtn onClick={() => setEditingAttendanceId(item.id)}>编辑</ActionBtn><button onClick={() => setConfirmingAttendanceId(item.id)} className="rounded border border-rose-100 px-2 py-1 text-[11px] text-rose-500 hover:border-rose-300 hover:bg-rose-50 transition-colors">删除</button></>}</div></td></>}</tr>; })}</tbody></table></div>
           <div className="flex flex-wrap items-center justify-between gap-3 rounded-xl border border-gray-200 bg-gray-50 px-4 py-3 text-xs text-slate-600"><span>第 {attendancePage} / {attendancePageCount} 页,共 {attendanceRows.length} 条考勤</span><div className="flex items-center gap-2"><button type="button" onClick={() => setAttendancePage((page) => Math.max(1, page - 1))} disabled={attendancePage <= 1} className="rounded-lg border border-slate-200 px-3 py-1.5 disabled:cursor-not-allowed disabled:opacity-40">上一页</button><button type="button" onClick={() => setAttendancePage((page) => Math.min(attendancePageCount, page + 1))} disabled={attendancePage >= attendancePageCount} className="rounded-lg border border-slate-200 px-3 py-1.5 disabled:cursor-not-allowed disabled:opacity-40">下一页</button></div></div>
@@ -6780,6 +6764,7 @@ type Section =
   | "finance"
   | "clients"
   | "appointments"
+  | "install"
   | "materials"
   | "employees"
   | "settings";
@@ -6801,6 +6786,7 @@ const NAV_GROUPS: Array<{
     items: [
       { key: "clients", label: "客户档案", icon: "⊙" },
       { key: "appointments", label: "量尺寸", icon: "⏰" },
+      { key: "install", label: "安装信息", icon: "🔧" },
       { key: "materials", label: "物料管理", icon: "◫" },
       { key: "employees", label: "员工管理", icon: "♟" },
     ],
@@ -7005,7 +6991,7 @@ export default function DashboardBizPage() {
       ) : (
         <>
       <DashboardPageHeader
-        eyebrow="Owner Backend · Business"
+        eyebrow="主人后台 · 业务"
         title="业务管理"
         description="订单、财务、客户、物料、员工与设置的统一操作界面。"
       />
@@ -7112,6 +7098,14 @@ export default function DashboardBizPage() {
               appointments={appointments}
               setAppointments={setAppointments}
               clients={clients}
+            />
+          )}
+          {section === "install" && (
+            <InstallSection
+              orders={orders.filter((o) => o.status !== "已作废")}
+              setOrders={setOrders}
+              clients={clients}
+              onAutoSave={autoSave}
             />
           )}
 
@@ -7409,6 +7403,184 @@ function AppointmentsSection({ appointments, setAppointments, clients }: { appoi
               <ActionBtn onClick={() => setShowModal(false)}>取消</ActionBtn>
               <ActionBtn tone="primary" onClick={handleSave}>确认</ActionBtn>
             </div>
+          </div>
+        </div>
+      )}
+    </>
+  );
+}
+
+function InstallSection({ orders, setOrders, clients, onAutoSave }: { orders: BizOrder[]; setOrders: React.Dispatch<React.SetStateAction<BizOrder[]>>; clients: ContactRecord[]; onAutoSave?: () => void }) {
+  const [search, setSearch] = useState("");
+  const [page, setPage] = useState(1);
+  const pageSize = 15;
+  const [editingId, setEditingId] = useState<string | null>(null);
+  const [editText, setEditText] = useState("");
+  const [copiedId, setCopiedId] = useState<string | null>(null);
+  const [dateFilter, setDateFilter] = useState<"all" | "today" | "tomorrow" | "date">("all");
+  const [specificDate, setSpecificDate] = useState(new Date().toISOString().slice(0, 10));
+
+  const todayStr = new Date().toISOString().slice(0, 10);
+  const tomorrowStr = new Date(Date.now() + 86400000).toISOString().slice(0, 10);
+
+  const withInstall = useMemo(() => orders.filter((o) => o.order_type === "定制单" || (o.install_info && o.install_info.trim())), [orders]);
+
+  const filteredByDate = dateFilter === "all"
+    ? withInstall
+    : dateFilter === "today"
+      ? withInstall.filter((o) => o.order_date === todayStr)
+      : dateFilter === "tomorrow"
+        ? withInstall.filter((o) => o.order_date === tomorrowStr)
+        : withInstall.filter((o) => o.order_date === specificDate);
+
+  const filtered = search
+    ? filteredByDate.filter((o) =>
+        (o.order_number || "").includes(search) ||
+        (o.client_name || "").toLowerCase().includes(search.toLowerCase()) ||
+        (o.phone || "").includes(search) ||
+        (o.installers || "").toLowerCase().includes(search.toLowerCase()) ||
+        (o.install_info || "").toLowerCase().includes(search.toLowerCase())
+      )
+    : filteredByDate;
+
+  const sorted = [...filtered].sort((a, b) => String(b.order_date || "").localeCompare(String(a.order_date || "")));
+  const totalPages = Math.max(1, Math.ceil(sorted.length / pageSize));
+  const paginated = sorted.slice((page - 1) * pageSize, page * pageSize);
+
+  function formatInstallItem(order: BizOrder) {
+    const parts = [
+      `安装日期：${order.order_date || ""}`,
+      `安装内容：${order.install_info || ""}`,
+    ];
+    if (order.installers) parts.push(`安装人员：${order.installers}`);
+    parts.push(
+      `单号：${order.order_number}`,
+      `客户：${order.client_name || ""}`,
+      `联系电话：${order.phone || ""}`,
+      `地址：${order.address || ""}`,
+      `总价：\$${Number(order.total_after_tax || 0).toFixed(2)}`,
+      `余款：\$${Math.max(0, Number(order.balance || 0)).toFixed(2)}`,
+    );
+    return parts.join("\n");
+  }
+
+  function copyToClipboard(text: string, onSuccess: () => void) {
+    if (navigator.clipboard?.writeText) {
+      navigator.clipboard.writeText(text).then(onSuccess).catch(() => {
+        fallbackCopy(text);
+        onSuccess();
+      });
+    } else {
+      fallbackCopy(text);
+      onSuccess();
+    }
+  }
+
+  function fallbackCopy(text: string) {
+    const ta = document.createElement('textarea');
+    ta.value = text;
+    ta.style.position = 'fixed';
+    ta.style.opacity = '0';
+    document.body.appendChild(ta);
+    ta.select();
+    try { document.execCommand('copy'); } catch {}
+    document.body.removeChild(ta);
+  }
+
+  function handleCopy(order: BizOrder) {
+    copyToClipboard(formatInstallItem(order), () => {
+      setCopiedId(order.order_number);
+      setTimeout(() => setCopiedId(null), 2000);
+    });
+  }
+
+  function handleCopyAll() {
+    const separator = "\n----------------------------\n";
+    const text = sorted.map(formatInstallItem).join(separator);
+    copyToClipboard(text, () => {});
+  }
+
+  function handleSaveInstall(orderNum: string, newText: string) {
+    setOrders((prev) => prev.map((o) => o.order_number === orderNum ? { ...o, install_info: newText } : o));
+    setEditingId(null);
+    setTimeout(() => onAutoSave?.(), 0);
+  }
+
+  return (
+    <>
+      <SectionHeader eyebrow="安装信息" title="安装信息" actions={
+        <div className="flex flex-wrap items-center gap-2">
+          <div className="flex items-center gap-1 rounded-lg border border-slate-200 bg-white p-0.5">
+            <button onClick={() => { setDateFilter("all"); setPage(1); }} className={`rounded-md px-2 py-1 text-[11px] font-medium transition-colors ${dateFilter === "all" ? "bg-slate-700 text-white" : "text-slate-600 hover:bg-slate-100"}`}>全部</button>
+            <button onClick={() => { setDateFilter("today"); setPage(1); }} className={`rounded-md px-2 py-1 text-[11px] font-medium transition-colors ${dateFilter === "today" ? "bg-slate-700 text-white" : "text-slate-600 hover:bg-slate-100"}`}>今天</button>
+            <button onClick={() => { setDateFilter("tomorrow"); setPage(1); }} className={`rounded-md px-2 py-1 text-[11px] font-medium transition-colors ${dateFilter === "tomorrow" ? "bg-slate-700 text-white" : "text-slate-600 hover:bg-slate-100"}`}>明天</button>
+            <button onClick={() => setDateFilter("date")} className={`rounded-md px-2 py-1 text-[11px] font-medium transition-colors ${dateFilter === "date" ? "bg-slate-700 text-white" : "text-slate-600 hover:bg-slate-100"}`}>选择日期</button>
+            {dateFilter === "date" && (
+              <input type="date" value={specificDate} onChange={(e) => { setSpecificDate(e.target.value); setPage(1); }} className="ml-1 h-7 rounded-md border border-slate-300 px-1 text-[11px] text-slate-700" />
+            )}
+          </div>
+          <div className="relative w-52">
+            <span className="absolute left-3 top-1/2 -translate-y-1/2 text-xs text-slate-700">⌕</span>
+            <input value={search} onChange={(e) => { setSearch(e.target.value); setPage(1); }} placeholder="搜索订单号 / 客户 / 安装内容" className="h-9 w-full rounded-lg border border-slate-300 bg-white pl-8 pr-3 text-xs text-slate-700" />
+          </div>
+          <ActionBtn onClick={handleCopyAll}>{sorted.length > 0 ? `一键复制全部 (${sorted.length})` : "一键复制全部"}</ActionBtn>
+        </div>
+      } />
+      <div className="overflow-x-auto rounded-xl border border-gray-200 bg-gray-50">
+        <table className="w-full text-left text-xs">
+          <thead>
+            <tr className="border-b border-gray-200 bg-gray-50">
+              <th className="px-3 py-2 font-semibold text-slate-600">单号</th>
+              <th className="px-3 py-2 font-semibold text-slate-600">日期</th>
+              <th className="px-3 py-2 font-semibold text-slate-600">客户</th>
+              <th className="px-3 py-2 font-semibold text-slate-600">电话</th>
+              <th className="px-3 py-2 font-semibold text-slate-600">地址</th>
+              <th className="px-3 py-2 font-semibold text-slate-600">安装人员</th>
+              <th className="px-3 py-2 font-semibold text-slate-600">安装内容</th>
+              <th className="px-3 py-2 font-semibold text-slate-600">操作</th>
+            </tr>
+          </thead>
+          <tbody>
+            {paginated.map((order) => (
+              <tr key={order.order_number} className="border-b border-gray-200 last:border-b-0">
+                <td className="px-3 py-2 font-semibold text-slate-700">{order.order_number}</td>
+                <td className="px-3 py-2 text-slate-600">{order.order_date || "-"}</td>
+                <td className="px-3 py-2 font-medium text-slate-700">{order.client_name || "-"}</td>
+                <td className="px-3 py-2 text-slate-600">{order.phone || "-"}</td>
+                <td className="px-3 py-2 text-slate-600 max-w-[140px] truncate" title={order.address || ""}>{order.address || "-"}</td>
+                <td className="px-3 py-2 text-slate-600">{order.installers || "-"}</td>
+                <td className="px-3 py-2 text-slate-600 max-w-[200px]">
+                  {editingId === order.order_number ? (
+                    <textarea value={editText} onChange={(e) => setEditText(e.target.value)} rows={2} className="w-full rounded border border-blue-300 bg-white p-1 text-[11px] text-slate-700" />
+                  ) : (
+                    <span className="line-clamp-2 text-[11px]" title={order.install_info || ""}>{order.install_info || <span className="text-slate-400">-</span>}</span>
+                  )}
+                </td>
+                <td className="px-3 py-2">
+                  <div className="flex flex-wrap items-center gap-1">
+                    <button onClick={() => handleCopy(order)} className="rounded-md border border-gray-200 bg-gray-50 px-2 py-1 text-[11px] text-slate-600 hover:border-slate-300 transition-colors">{copiedId === order.order_number ? "已复制 ✓" : "复制"}</button>
+                    {editingId === order.order_number ? (
+                      <>
+                        <button onClick={() => handleSaveInstall(order.order_number, editText)} className="rounded-md border border-green-400 bg-green-50 px-2 py-1 text-[11px] font-semibold text-green-700 hover:bg-green-100">保存</button>
+                        <button onClick={() => setEditingId(null)} className="rounded-md border border-slate-200 px-2 py-1 text-[11px] text-slate-700 hover:border-slate-300">取消</button>
+                      </>
+                    ) : (
+                      <button onClick={() => { setEditingId(order.order_number); setEditText(order.install_info || ""); }} className="rounded-md border border-gray-200 bg-gray-50 px-2 py-1 text-[11px] font-semibold text-slate-600 hover:border-slate-400 transition-colors">编辑</button>
+                    )}
+                  </div>
+                </td>
+              </tr>
+            ))}
+          </tbody>
+        </table>
+        {!paginated.length ? <div className="py-10 text-center text-xs text-slate-700">{search || dateFilter !== "all" ? "没有匹配的安装信息" : "暂无定制订单"}</div> : null}
+      </div>
+      {totalPages > 1 && (
+        <div className="flex items-center justify-between text-xs text-slate-700">
+          <span>第 {page} / {totalPages} 页,共 {sorted.length} 条</span>
+          <div className="flex gap-1">
+            <ActionBtn onClick={() => setPage((p) => Math.max(1, p - 1))} disabled={page <= 1}>上一页</ActionBtn>
+            <ActionBtn onClick={() => setPage((p) => Math.min(totalPages, p + 1))} disabled={page >= totalPages}>下一页</ActionBtn>
           </div>
         </div>
       )}

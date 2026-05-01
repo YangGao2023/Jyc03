@@ -12,6 +12,8 @@ async function main() {
     host: '43.166.250.145', port: 3306,
     user: 'dbo001', password: 'BDQN123456',
     database: 'db_zhty202410',
+    supportBigNumbers: true,
+    bigNumberStrings: true,
   });
 
   const start = Date.now();
@@ -132,12 +134,12 @@ async function main() {
         `INSERT IGNORE INTO a3s_orders
          (order_number,order_type,client_name,client_id,phone,address,description,
           total_price,total_after_tax,amount_paid,balance,
-          order_date,status,install_info,remarks,
+          order_date,status,install_info,installers,remarks,
           payment_history,material_rows,old_id,old_status)
-         VALUES(?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)`,
+         VALUES(?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)`,
         [orderNum, orderType, clientName, String(r.P2||''), r.C18||'', r.C16||'',
          r.C5||'', totalPrice, totalAfterTax, amountPaid, balance,
-         r.C8 ? fmtDate(r.C8) : null, status, r.C3||'', r.C10||'',
+         r.C8 ? fmtDate(r.C8) : null, status, r.C10||'', r.C11||'', r.C3||'',
          JSON.stringify(paymentHistory), JSON.stringify(materialRows),
          r.P1, r.Z1]
       );
@@ -205,12 +207,21 @@ async function main() {
 
   // ── 5. 员工 T1003 ──
   {
+    const WORKDAY_MAP = {
+      5: ["Mon","Tue","Wed","Thu","Fri"],
+      6: ["Mon","Tue","Wed","Thu","Fri","Sat"],
+      7: ["Mon","Tue","Wed","Thu","Fri","Sat","Sun"],
+    };
     const [rows] = await conn.execute("SELECT * FROM T1003 WHERE Z1=1");
     for (const r of rows) {
+      const workdays = WORKDAY_MAP[Number(r.C6)] || ["Mon","Tue","Wed","Thu","Fri"];
+      const name = r.C2||'';
+      const ethnicity = name.startsWith('A') ? '墨西哥' : '华人';
       await conn.execute(
-        `INSERT IGNORE INTO a3s_employees(id,code,name,phone,status,old_id)
-         VALUES(?,?,?,?,?,?)`,
-        [String(r.P1), r.C1||'', r.C2||'', r.C7||'', '在职', r.P1]
+        `INSERT IGNORE INTO a3s_employees(id,code,name,phone,status,old_id,workdays,monthly_salary,hourly_rate,meal_allowance_eligible,hire_date,ethnicity)
+         VALUES(?,?,?,?,?,?,?,?,?,?,?,?)`,
+        [String(r.P1), r.C1||'', name, r.C7||'', '在职', r.P1,
+         JSON.stringify(workdays), 0, (r.C13||0)/100, (r.C12==1?1:0), r.C4?fmtDate(r.C4):null, ethnicity]
       );
     }
     console.log(`✅ 员工: ${rows.length}`);
@@ -218,14 +229,15 @@ async function main() {
 
   // ── 6. 预约 T1114 ──
   {
-    const [rows] = await conn.execute("SELECT * FROM T1114 WHERE Z1=1");
+    const [rows] = await conn.execute(
+      `SELECT t.*, c.C6 AS client_phone, c.C4 AS client_address FROM T1114 t LEFT JOIN T1002 c ON t.P4 = c.P1 WHERE t.Z1=1`
+    );
     for (const r of rows) {
       const clientName = clientNameMap[r.P4] || '';
       await conn.execute(
-        `INSERT IGNORE INTO a3s_appointments(id,client_name,client_id,appointment_date,appointment_time,description,old_id)
-         VALUES(?,?,?,?,?,?,?)`,
-        [String(r.P1), clientName, r.P4?String(r.P4):'',
-         r.C2?fmtDate(r.C2):'', r.C3||'', r.C4||'', r.P1]
+        `INSERT IGNORE INTO a3s_appointments(id,client_name,client_id,phone,address,appointment_date,appointment_time,description,old_id)
+         VALUES(?,?,?,?,?,?,?,?,?)`,
+        [String(r.P1), clientName, r.P4?String(r.P4):'', String(r.client_phone || ''), String(r.client_address || ''), r.C2?fmtDate(r.C2):'', r.C3||'', r.C4||'', r.P1]
       );
     }
     console.log(`✅ 预约: ${rows.length}`);
@@ -246,11 +258,11 @@ async function main() {
       const t = r.C1;
       batch.push([
         String(r.P1), r.C2?fmtDate(r.C2):'', r.P2?String(r.P2):'', empName,
-        t===0?min:0, t===1?min:0, t===2?min:0, r.C6||''
+        t===0?min:0, t===1?min:0, t===2?min:0, (r.C7==1?1:0), r.C6||''
       ]);
       if (batch.length >= 500) {
         await conn.query(
-          'INSERT IGNORE INTO a3s_attendances(id,date,employee_id,employee_name,worked_minutes,leave_minutes,overtime_minutes,note) VALUES ?',
+          'INSERT IGNORE INTO a3s_attendances(id,date,employee_id,employee_name,worked_minutes,leave_minutes,overtime_minutes,meal_allowance,note) VALUES ?',
           [batch]
         );
         batch = [];
@@ -258,11 +270,78 @@ async function main() {
     }
     if (batch.length) {
       await conn.query(
-        'INSERT IGNORE INTO a3s_attendances(id,date,employee_id,employee_name,worked_minutes,leave_minutes,overtime_minutes,note) VALUES ?',
+        'INSERT IGNORE INTO a3s_attendances(id,date,employee_id,employee_name,worked_minutes,leave_minutes,overtime_minutes,meal_allowance,note) VALUES ?',
         [batch]
       );
     }
     console.log(`✅ 考勤: ${rows.length}`);
+  }
+
+  // ── 8. 工资发放 T1310 → a3s_payrolls ──
+  {
+    const [empRows] = await conn.execute("SELECT P1, C2 FROM T1003 WHERE Z1=1");
+    const empNameMap = {};
+    for (const e of empRows) empNameMap[e.P1] = e.C2;
+
+    // Get T1310 with T1200 cross-reference (P3 = T1200.P1 for salary cash entry)
+    const [rows] = await conn.execute(`
+      SELECT t1310.*, t1200.P1 as t1200_p1
+      FROM T1310 t1310
+      LEFT JOIN T1200 t1200 ON t1310.P3 = t1200.P1 AND t1200.Z1=1
+      WHERE t1310.Z1=1
+    `);
+    let batch = [];
+    for (const r of rows) {
+      const empName = empNameMap[r.P2] || '';
+      const ethnicity = empName.startsWith('A') ? '墨西哥' : '华人';
+      const month = r.C1 ? r.C1.slice(0,4)+'-'+r.C1.slice(4,6) : '';
+      const paidAt = r.C6 ? 
+        r.C6.slice(0,4)+'-'+r.C6.slice(4,6)+'-'+r.C6.slice(6,8)+' '+r.C6.slice(8,10)+':'+r.C6.slice(10,12)+':'+r.C6.slice(12,14) 
+        : null;
+      const amount = (r.C4||0) / 100;
+      batch.push([
+        String(r.P1), month, String(r.P2), empName, '', ethnicity,
+        0, 0, 0, amount, 0, 0, amount,
+        '已发放', paidAt, r.t1200_p1 ? String(r.t1200_p1) : '',
+        new Date(), new Date()
+      ]);
+      if (batch.length >= 500) {
+        await conn.query(
+          `INSERT IGNORE INTO a3s_payrolls(id,month,employee_id,employee_name,employee_code,
+           employee_ethnicity,total_hours,hourly_rate,meal_allowance_total,
+           base_salary,bonus,deduction,net_salary,payment_status,paid_at,
+           expense_id,created_at,updated_at) VALUES ?`,
+          [batch]
+        );
+        batch = [];
+      }
+    }
+    if (batch.length) {
+      await conn.query(
+        `INSERT IGNORE INTO a3s_payrolls(id,month,employee_id,employee_name,employee_code,
+         employee_ethnicity,total_hours,hourly_rate,meal_allowance_total,
+         base_salary,bonus,deduction,net_salary,payment_status,paid_at,
+         expense_id,created_at,updated_at) VALUES ?`,
+        [batch]
+      );
+    }
+    console.log(`✅ 工资: ${rows.length}`);
+  }
+
+  // ── 9. T1200 工资支出 → a3s_cash_entries ──
+  // Old system stores salary payouts in T1200 with C1=3, Z2=0 (expense direction)
+  {
+    const [rows] = await conn.execute("SELECT * FROM T1200 WHERE Z1=1 AND C1=3 AND P2 > 0");
+    for (const r of rows) {
+      await conn.execute(
+        `INSERT IGNORE INTO a3s_cash_entries(id,type,amount,date,note,method,order_number,old_id,source_type,source_id)
+         VALUES(?,?,?,?,?,?,?,?,?,?)`,
+        [`sal-${r.P1}`, '支出', (r.C5||0)/100,
+         r.C6?fmtDate(r.C6):'', '工资', '现金',
+         '', r.P1, 't1200-salary', String(r.P1)]
+      );
+    }
+    console.log(`✅ 工资支出(现金): ${rows.length}`);
   }
 
   // ── Summary ──

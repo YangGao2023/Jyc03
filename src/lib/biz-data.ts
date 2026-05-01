@@ -39,6 +39,7 @@ export type BizOrder = {
   status?: "下单" | "未付清" | "结清" | "已关闭" | string;
   operation_type?: "售货" | "退货" | string;
   install_info?: string;
+  installers?: string;
   remarks?: string;
   payment_history?: PaymentRecord[];
   material_rows?: MaterialRow[];
@@ -385,6 +386,7 @@ function normalizeOrder(raw: Record<string, unknown>): BizOrder {
     status,
     operation_type: raw.operation_type != null ? String(raw.operation_type) : undefined,
     install_info: raw.install_info != null ? String(raw.install_info) : undefined,
+    installers: raw.installers != null ? String(raw.installers) : undefined,
     remarks: raw.remarks != null ? String(raw.remarks) : undefined,
     payment_history: paymentHistory,
     material_rows: materialRows,

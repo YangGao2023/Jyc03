@@ -159,12 +159,13 @@ async function main() {
     const [incRows] = await conn.execute("SELECT * FROM T1200 WHERE Z1=1 AND Z2=1");
     for (const r of incRows) {
       const method = METHOD_MAP[r.C4] || '现金';
+      const isOffice = r.P3 === '110' ? 1 : 0;
       await conn.execute(
-        `INSERT IGNORE INTO a3s_cash_entries(id,type,amount,date,note,method,order_number,old_id,source_type,source_id)
-         VALUES(?,?,?,?,?,?,?,?,?,?)`,
+        `INSERT IGNORE INTO a3s_cash_entries(id,type,amount,date,note,method,order_number,office,category,old_id,source_type,source_id)
+         VALUES(?,?,?,?,?,?,?,?,?,?,?,?)`,
         [`inc-${r.P1}`, '收入', (r.C5||0)/100,
          r.C6?fmtDate(r.C6):'', r.C7||r.C3||'', method,
-         orderNumMap[r.P2]||'', r.P1, 't1200', String(r.P1)]
+         orderNumMap[r.P2]||'', isOffice, r.C7||r.C3||'', r.P1, 't1200', String(r.P1)]
       );
     }
     console.log(`✅ 收入: ${incRows.length}`);
@@ -345,15 +346,31 @@ async function main() {
   {
     const [rows] = await conn.execute("SELECT * FROM T1200 WHERE Z1=1 AND C1=3 AND P2 > 0");
     for (const r of rows) {
+      const isOffice = r.P3 === '110' ? 1 : 0;
       await conn.execute(
-        `INSERT IGNORE INTO a3s_cash_entries(id,type,amount,date,note,method,order_number,old_id,source_type,source_id)
-         VALUES(?,?,?,?,?,?,?,?,?,?)`,
+        `INSERT IGNORE INTO a3s_cash_entries(id,type,amount,date,note,method,order_number,office,old_id,source_type,source_id)
+         VALUES(?,?,?,?,?,?,?,?,?,?,?)`,
         [`sal-${r.P1}`, '支出', (r.C5||0)/100,
          r.C6?fmtDate(r.C6):'', '工资', '现金',
-         '', r.P1, 't1200-salary', String(r.P1)]
+         '', isOffice, r.P1, 't1200-salary', String(r.P1)]
       );
     }
     console.log(`✅ 工资支出(现金): ${rows.length}`);
+
+  // ── 10. T1210 办公室转账 → a3s_cash_entries ──
+  {
+    const [rows] = await conn.execute("SELECT * FROM T1210 WHERE Z1=1");
+    for (const r of rows) {
+      const type = Number(r.Z2) === 1 ? '转入' : '转出';
+      await conn.execute(
+        `INSERT IGNORE INTO a3s_cash_entries(id,type,amount,date,method,note,office,source_type,old_id)
+         VALUES(?,?,?,?,?,?,?,?,?)`,
+        [`transfer-${r.P1}`, type, Number(r.C2||0)/100,
+         r.C3?fmtDate(r.C3):'', '现金', r.C4||'', 1, 'office-transfer', r.P1]
+      );
+    }
+    console.log(`✅ T1210转账(办公室): ${rows.length}`);
+  }
   }
 
   // ── Summary ──

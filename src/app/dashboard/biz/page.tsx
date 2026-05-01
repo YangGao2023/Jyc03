@@ -3572,10 +3572,10 @@ function FinanceSection({ orders, setOrders, expenses, setExpenses, cashEntries,
   const [cashPage, setCashPage] = useState(1);
   const [receivablesPage, setReceivablesPage] = useState(1);
   const paymentRows = orders.flatMap((order) => (order.payment_history ?? []).map((record, index) => ({ order, record, key: `${order.order_number}-${index}` })));
-  const ledgerNonOrderIncome = cashEntries.filter(item => item.type === '收入' && !item.order_number);
+
   const incomeCategories = (settings?.income_categories || '').split(',').map(s => s.trim()).filter(Boolean);
   const miscIncomeRows = cashEntries
-    .filter(item => item.type === '收入' && !item.order_number && (!item.source_type || item.source_type === "misc_income"))
+    .filter(item => item.type === '收入' && !item.order_number)
     .sort((a, b) => b.date.localeCompare(a.date))
     .map(item => ({
       key: `misc-${item.id}`,

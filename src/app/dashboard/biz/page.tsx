@@ -6815,17 +6815,17 @@ const NAV_GROUPS: Array<{
 
 export default function DashboardBizPage() {
   const [section, setSection] = useState<Section>("overview");
-  const [orders, setOrders] = useState<BizOrder[]>(bizOrders);
-  const [appointments, setAppointments] = useState<MeasurementAppointmentRecord[]>(bizAppointments);
-  const [clients, setClients] = useState<ContactRecord[]>(bizClients);
-  const [suppliers, setSuppliers] = useState<SupplierRecord[]>(bizSuppliers);
-  const [expenses, setExpenses] = useState<ExpenseRecord[]>(bizExpenses);
-  const [cashEntries, setCashEntries] = useState<CashEntry[]>(bizCashEntries);
-  const [materials, setMaterials] = useState<MaterialRecord[]>(bizMaterials);
-  const [employees, setEmployees] = useState<EmployeeRecord[]>(bizEmployees);
-  const [attendances, setAttendances] = useState<AttendanceRecord[]>(bizAttendances);
-  const [payrolls, setPayrolls] = useState<PayrollRecord[]>(bizPayrolls);
-  const [printArchives, setPrintArchives] = useState<PrintArchiveRecord[]>(bizPrintArchives);
+  const [orders, setOrders] = useState<BizOrder[]>([]);
+  const [appointments, setAppointments] = useState<MeasurementAppointmentRecord[]>([]);
+  const [clients, setClients] = useState<ContactRecord[]>([]);
+  const [suppliers, setSuppliers] = useState<SupplierRecord[]>([]);
+  const [expenses, setExpenses] = useState<ExpenseRecord[]>([]);
+  const [cashEntries, setCashEntries] = useState<CashEntry[]>([]);
+  const [materials, setMaterials] = useState<MaterialRecord[]>([]);
+  const [employees, setEmployees] = useState<EmployeeRecord[]>([]);
+  const [attendances, setAttendances] = useState<AttendanceRecord[]>([]);
+  const [payrolls, setPayrolls] = useState<PayrollRecord[]>([]);
+  const [printArchives, setPrintArchives] = useState<PrintArchiveRecord[]>([]);
   const [settings, setSettings] = useState<BizSettings>(bizSettings);
   const [storeRevision, setStoreRevision] = useState("");
   const [savedSnapshotJson, setSavedSnapshotJson] = useState("");
@@ -6995,6 +6995,15 @@ export default function DashboardBizPage() {
 
   return (
     <PageSection>
+      {!isHydrated ? (
+        <div className="flex items-center justify-center min-h-[600px] text-slate-400 text-sm">
+          <div className="flex flex-col items-center gap-3">
+            <div className="h-8 w-8 animate-spin rounded-full border-2 border-slate-300 border-t-slate-600" />
+            <span>加载中...</span>
+          </div>
+        </div>
+      ) : (
+        <>
       <DashboardPageHeader
         eyebrow="Owner Backend · Business"
         title="业务管理"
@@ -7137,6 +7146,8 @@ export default function DashboardBizPage() {
         </div>
       </div>
 
+        </>
+      )}
     </PageSection>
   );
 }

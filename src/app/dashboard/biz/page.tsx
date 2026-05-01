@@ -120,7 +120,7 @@ function reconcileCashEntries(
     }
 
     if (entry.source_type === "expense") {
-      const isOffice = Boolean(entry.source_id && officeExpenseIds.has(entry.source_id));
+      const isOffice = Boolean(entry.office) || Boolean(entry.source_id && officeExpenseIds.has(entry.source_id));
       return isOffice ? [{ ...entry, office: true }] : [];
     }
 

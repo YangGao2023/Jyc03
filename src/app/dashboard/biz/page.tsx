@@ -3627,11 +3627,13 @@ function FinanceSection({ orders, setOrders, expenses, setExpenses, cashEntries,
     .filter(item => activeMethods.length > 0 && (item.method ? activeMethods.includes(item.method) : false));
   const allIncomeRows = [
     ...filteredMiscIncomeRows,
-    ...filteredPaymentRows.map(({ order, record, key }) => ({
-      key, type: 'order' as const, category: record.type === 'refund' ? `${order.order_type}退款` : order.order_type,
-      client_name: order.client_name, amount: record.type === 'refund' ? -record.amount : record.amount,
-      method: record.method, date: record.date, note: getIncomeDetail(order, record),
-    })),
+    ...filteredPaymentRows
+      .filter(({ record }) => record.type !== 'refund')  // 退款走支出，不在收入栏显示
+      .map(({ order, record, key }) => ({
+        key, type: 'order' as const, category: order.order_type,
+        client_name: order.client_name, amount: record.amount,
+        method: record.method, date: record.date, note: getIncomeDetail(order, record),
+      })),
   ].sort((a, b) => b.date.localeCompare(a.date));
   const filteredExpenses = expenses.filter((item) => isDateInRange(item.expense_date, financeDateStart, financeDateEnd)).filter((item) => activeMethods.length > 0 && (item.payment_method ? activeMethods.includes(item.payment_method) : false));
   const officeCashEntries = reconcileCashEntries(cashEntries, orders, expenses).filter((item) => item.office);
@@ -3659,7 +3661,7 @@ function FinanceSection({ orders, setOrders, expenses, setExpenses, cashEntries,
   const filteredExpenseRows = activeExpenseTypes.length === 0 ? categorizedExpenses : categorizedExpenses.filter((item) => activeExpenseTypes.includes(item.display_type));
   const totalIncome = allIncomeRows.reduce((sum, item) => sum + item.amount, 0);
   const totalExpense = filteredExpenses.reduce((s, item) => s + item.amount, 0);
-  const actualTotalIncome = paymentRows.reduce((sum, { record }) => sum + (record.type === "refund" ? -record.amount : record.amount), 0) + miscIncomeRows.reduce((sum, item) => sum + item.amount, 0);
+  const actualTotalIncome = paymentRows.reduce((sum, { record }) => sum + (record.type === "refund" ? 0 : record.amount), 0) + miscIncomeRows.reduce((sum, item) => sum + item.amount, 0);
   const actualTotalExpense = expenses.reduce((s, item) => s + item.amount, 0);
   const totalBalance = orders.reduce((s, o) => s + (o.balance ?? 0), 0);
   const payrollAmount = filteredPayrolls.reduce((s, item) => s + item.net_salary, 0);

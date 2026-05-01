@@ -654,14 +654,26 @@ function rowToPrintArchive(r: Record<string, unknown>): PrintArchiveRecord {
 
 // ─── Public API ───────────────────────────────────────────────────────────────
 
+let _cached: { ts: number; snapshot: BizStoreSnapshot } | null = null;
+const CACHE_TTL = 25_000;
+
 export async function readBizStore(): Promise<BizStoreSnapshot> {
+  const now = Date.now();
+  if (_cached && now - _cached.ts < CACHE_TTL) {
+    return _cached.snapshot;
+  }
+
   // 先从旧T表同步新数据（30秒冷却，有更新才跑）
   const { syncFromOldTablesIfNeeded } = await import('@/lib/dual-write');
   await syncFromOldTablesIfNeeded();
-  return mysqlRead();
+
+  const snapshot = await mysqlRead();
+  _cached = { ts: now, snapshot };
+  return snapshot;
 }
 
 export async function writeBizStore(snapshot: BizStoreSnapshot): Promise<void> {
   const normalized = normalizeSnapshot(snapshot);
   await mysqlWrite(normalized);
+  _cached = null; // 写后清缓存，下次读一定是新的
 }

@@ -3764,12 +3764,11 @@ return days.map((day) => {
     }).reverse();
     return rows.filter((item) => isDateInRange(item.date, financeDateStart, financeDateEnd));
   })();
-  const officeExpenseTotal = expenses.filter((item) => item.office).reduce((s, item) => s + item.amount, 0);
   const cashBalance = allOfficeSorted.reduce((sum, item) => {
     const inc = (item.type === "收入" || item.type === "转入") ? item.amount : 0;
     const exp = (item.type !== "收入" && item.type !== "转入") ? item.amount : 0;
     return sum + inc - exp;
-  }, 0) - officeExpenseTotal;
+  }, 0);
   const financeConfigs: Record<FinanceSub, TabularSchemaConfig> = {
     income: {
       title: "订单收入",
@@ -6920,8 +6919,10 @@ export default function DashboardBizPage() {
     }
 
     loadStore();
+    const pollTimer = setInterval(loadStore, 30000);
     return () => {
       cancelled = true;
+      clearInterval(pollTimer);
     };
   }, []);
 

@@ -211,7 +211,6 @@ async function mysqlRead(): Promise<BizStoreSnapshot> {
 
 async function mysqlWrite(snapshot: BizStoreSnapshot): Promise<void> {
   const { executeStmt, queryRows } = await import("@/lib/db-mysql");
-  const now = new Date().toISOString();
 
   // Settings
   const s = snapshot.settings;
@@ -667,17 +666,6 @@ export async function readBizStore(): Promise<BizStoreSnapshot> {
     return _cached.snapshot;
   }
 
-  // 先从旧T表同步新数据（30秒冷却，有更新才跑）
-  const { syncFromOldTablesIfNeeded, fixOfficeFlags, ensureAppointmentFields, ensureOrderInstallInfo } = await import('@/lib/dual-write');
-  await syncFromOldTablesIfNeeded();
-  // 无条件修复办公室标记（即使无新数据也可能被自动保存覆盖）
-  await fixOfficeFlags();
-  // 补漏：预约电话/地址 + 订单安装内容
-  await Promise.allSettled([
-    ensureAppointmentFields(),
-    ensureOrderInstallInfo(),
-  ]);
-
   const snapshot = await mysqlRead();
   _cached = { ts: now, snapshot };
   return snapshot;
@@ -686,12 +674,5 @@ export async function readBizStore(): Promise<BizStoreSnapshot> {
 export async function writeBizStore(snapshot: BizStoreSnapshot): Promise<void> {
   const normalized = normalizeSnapshot(snapshot);
   await mysqlWrite(normalized);
-  // 写后立即修复办公室标记（防止自动保存覆盖）
-  const { fixOfficeFlags, ensureAppointmentFields, ensureOrderInstallInfo } = await import('@/lib/dual-write');
-  await fixOfficeFlags();
-  await Promise.allSettled([
-    ensureAppointmentFields(),
-    ensureOrderInstallInfo(),
-  ]);
   _cached = null; // 写后清缓存，下次读一定是新的
 }

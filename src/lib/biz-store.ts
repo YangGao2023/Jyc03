@@ -212,53 +212,47 @@ async function mysqlRead(): Promise<BizStoreSnapshot> {
 async function mysqlWrite(snapshot: BizStoreSnapshot): Promise<void> {
   const { executeStmt, queryRows } = await import("@/lib/db-mysql");
 
-  // Settings
+  // Settings — written as a single-row batchUpsert to avoid hardcoded ? count mismatches
   const s = snapshot.settings;
-  await executeStmt(
-    `INSERT INTO a3s_settings(id,company_name,company_name_zh,address,company_address,
-      phone,phones,email,website,tax_number,default_tax_rate,default_currency,
-      fiscal_start_month,bank_account,alipay,wechat_pay,other_payment,
-      invoice_title,picking_title,zelle,invoice_note,quote_valid_days,
-      quote_footer,logo_url,expense_types,supplier_categories,meal_allowance_amount,
-      auto_attendance_timezone,auto_attendance_run_time,auto_attendance_default_minutes,
-      auto_attendance_note,work_start,work_end,break_start,break_end,material_categories,income_categories)
-    VALUES(1,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)
-    ON DUPLICATE KEY UPDATE
-      company_name=VALUES(company_name),company_name_zh=VALUES(company_name_zh),
-      address=VALUES(address),company_address=VALUES(company_address),
-      phone=VALUES(phone),phones=VALUES(phones),email=VALUES(email),
-      website=VALUES(website),tax_number=VALUES(tax_number),
-      default_tax_rate=VALUES(default_tax_rate),default_currency=VALUES(default_currency),
-      fiscal_start_month=VALUES(fiscal_start_month),bank_account=VALUES(bank_account),
-      alipay=VALUES(alipay),wechat_pay=VALUES(wechat_pay),
-      other_payment=VALUES(other_payment),invoice_title=VALUES(invoice_title),
-      picking_title=VALUES(picking_title),zelle=VALUES(zelle),
-      invoice_note=VALUES(invoice_note),quote_valid_days=VALUES(quote_valid_days),
-      quote_footer=VALUES(quote_footer),logo_url=VALUES(logo_url),
-      expense_types=VALUES(expense_types),supplier_categories=VALUES(supplier_categories),
-      meal_allowance_amount=VALUES(meal_allowance_amount),
-      auto_attendance_timezone=VALUES(auto_attendance_timezone),
-      auto_attendance_run_time=VALUES(auto_attendance_run_time),
-      auto_attendance_default_minutes=VALUES(auto_attendance_default_minutes),
-      auto_attendance_note=VALUES(auto_attendance_note),
-      material_categories=VALUES(material_categories),income_categories=VALUES(income_categories)`,
-    [s.company_name, s.company_name_zh ?? null, s.address, s.company_address ?? null,
-      s.phone, s.phones ?? null, s.email, s.website, s.tax_number,
-      s.default_tax_rate, s.default_currency, s.fiscal_start_month,
-      s.bank_account, s.alipay, s.wechat_pay, s.other_payment,
-      s.invoice_title ?? null, s.picking_title ?? null, s.zelle ?? null,
-      s.invoice_note ?? null, s.quote_valid_days, s.quote_footer, s.logo_url,
-      s.expense_types ?? null, s.supplier_categories ?? null,
-      s.meal_allowance_amount ?? 8,
-      s.auto_attendance_timezone ?? "America/New_York",
-      s.auto_attendance_run_time ?? "01:00",
-      s.auto_attendance_default_minutes ?? 600,
-      s.auto_attendance_note ?? "",
-      s.work_start ?? null, s.work_end ?? null,
-      s.break_start ?? null, s.break_end ?? null,
-      s.material_categories ?? null,
-      s.income_categories ?? null]
-  );
+  await batchUpsert('a3s_settings', [{
+    id: 1,
+    company_name: s.company_name,
+    company_name_zh: s.company_name_zh ?? null,
+    address: s.address,
+    company_address: s.company_address ?? null,
+    phone: s.phone,
+    phones: s.phones ?? null,
+    email: s.email,
+    website: s.website,
+    tax_number: s.tax_number,
+    default_tax_rate: s.default_tax_rate,
+    default_currency: s.default_currency,
+    fiscal_start_month: s.fiscal_start_month,
+    bank_account: s.bank_account,
+    alipay: s.alipay,
+    wechat_pay: s.wechat_pay,
+    other_payment: s.other_payment,
+    invoice_title: s.invoice_title ?? null,
+    picking_title: s.picking_title ?? null,
+    zelle: s.zelle ?? null,
+    invoice_note: s.invoice_note ?? null,
+    quote_valid_days: s.quote_valid_days,
+    quote_footer: s.quote_footer,
+    logo_url: s.logo_url,
+    expense_types: s.expense_types ?? null,
+    supplier_categories: s.supplier_categories ?? null,
+    meal_allowance_amount: s.meal_allowance_amount ?? 8,
+    auto_attendance_timezone: s.auto_attendance_timezone ?? 'America/New_York',
+    auto_attendance_run_time: s.auto_attendance_run_time ?? '01:00',
+    auto_attendance_default_minutes: s.auto_attendance_default_minutes ?? 600,
+    auto_attendance_note: s.auto_attendance_note ?? '',
+    work_start: s.work_start ?? null,
+    work_end: s.work_end ?? null,
+    break_start: s.break_start ?? null,
+    break_end: s.break_end ?? null,
+    material_categories: s.material_categories ?? null,
+    income_categories: s.income_categories ?? null,
+  }], 'id');
 
   // Helper: batch upsert
   async function batchUpsert(table: string, rows: Record<string, unknown>[], keyCol: string) {

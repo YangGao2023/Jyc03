@@ -187,6 +187,9 @@ async function mysqlRead(): Promise<BizStoreSnapshot> {
   const orders = orderRows.map(rowToOrder);
   const settings = rowToSettings(settingsRows[0] as Record<string, unknown>) ?? {} as BizSettings;
 
+  // 自动考勤：当天没跑就补
+  await autoFillAttendance(settings);
+
   return normalizeSnapshot({
     revision: createStoreRevision(),
     orders,
@@ -675,4 +678,50 @@ export async function writeBizStore(snapshot: BizStoreSnapshot): Promise<void> {
   const normalized = normalizeSnapshot(snapshot);
   await mysqlWrite(normalized);
   _cached = null; // 写后清缓存，下次读一定是新的
+}
+
+// ── 自动考勤 ──────────────────────────────────────────
+// 每天第一次访问 biz-store 时触发，为在职员工补当天考勤
+
+let _attendanceDate = "";
+
+async function autoFillAttendance(settings: BizSettings): Promise<void> {
+  try {
+    const tz = settings.auto_attendance_timezone || "America/New_York";
+    const defMin = settings.auto_attendance_default_minutes || 600;
+    const note = settings.auto_attendance_note || "";
+    const runTime = settings.auto_attendance_run_time || "";
+    if (!runTime) return;
+
+    const now = new Date();
+    const today = now.toLocaleDateString("en-CA", { timeZone: tz });
+    const curTime = now.toLocaleTimeString("en-GB", { timeZone: tz, hour: "2-digit", minute: "2-digit" });
+
+    if (_attendanceDate === today) return;
+    if (curTime < runTime) return;
+    _attendanceDate = today;
+
+    const { queryRows, executeStmt } = await import("@/lib/db-mysql");
+    const emps = await queryRows("SELECT id, code, name FROM a3s_employees WHERE status = '在职'");
+    const todayId = today.replace(/-/g, "");
+
+    for (const e of emps) {
+      const eid = String(e.id);
+      const code = String(e.code || "");
+      const name = String(e.name || "");
+
+      const exist = await queryRows(
+        "SELECT id FROM a3s_attendances WHERE employee_id = ? AND date = ? LIMIT 1",
+        [eid, today]
+      );
+      if (exist.length > 0) continue;
+
+      await executeStmt(
+        "INSERT INTO a3s_attendances (id, date, employee_id, employee_name, employee_code, worked_minutes, leave_minutes, overtime_minutes, meal_allowance, generated_by, note) VALUES (?, ?, ?, ?, ?, ?, 0, 0, 0, 'auto', ?)",
+        [`ATT-${todayId}-${code || eid}`, today, eid, name, code || null, defMin, note || null]
+      );
+    }
+  } catch {
+    // 静默，不影响页面
+  }
 }

@@ -688,6 +688,10 @@ export async function readBizStore(): Promise<BizStoreSnapshot> {
   return snapshot;
 }
 
+export function invalidateBizStoreCache(): void {
+  _cached = null;
+}
+
 export async function writeBizStore(snapshot: BizStoreSnapshot): Promise<void> {
   const normalized = normalizeSnapshot(snapshot);
   await mysqlWrite(normalized);

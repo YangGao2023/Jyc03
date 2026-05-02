@@ -1,5 +1,6 @@
 import { NextResponse } from "next/server";
 import { executeStmt, queryRows } from "@/lib/db-mysql";
+import { invalidateBizStoreCache } from "@/lib/biz-store";
 
 // PUT /api/attendance
 // Body: { employee_id, date, leave_minutes, overtime_minutes, meal_allowance }
@@ -33,6 +34,9 @@ export async function PUT(request: Request) {
       "DELETE FROM a3s_attendances WHERE employee_id = ? AND date = ?",
       [employee_id, date],
     );
+
+    // Clear server-side cache so next GET returns fresh data
+    invalidateBizStoreCache();
 
     // Insert the updated record
     await executeStmt(

@@ -35,11 +35,17 @@ import {
 } from "@/lib/biz-data";
 import type { BizStoreSnapshot } from "@/lib/biz-store";
 
-const PIC_BASE = 'http://43.166.250.145/pic/';
+const PIC_BASE = '/api/pic/';
 function imgUrl(src: string | undefined | null): string {
   if (!src) return '';
-  if (src.startsWith('http://') || src.startsWith('https://') || src.startsWith('data:')) return src;
-  return PIC_BASE + src;
+  const value = src.trim();
+  if (value.startsWith('data:') || value.startsWith('blob:')) return value;
+  if (value.startsWith('/api/pic/')) return value;
+  const legacyMatch = value.match(/^https?:\/\/43\.166\.250\.145\/pic\/(.+)$/i);
+  if (legacyMatch) return `${PIC_BASE}${legacyMatch[1]}`;
+  if (value.startsWith('http://') || value.startsWith('https://')) return value;
+  const normalized = value.replace(/^\/?pic\//i, '').replace(/^\/+/, '');
+  return PIC_BASE + normalized.split('/').filter(Boolean).map(encodeURIComponent).join('/');
 }
 
 function escHtml(s: string) {
@@ -5592,7 +5598,7 @@ function ClientsSection({ clients, setClients, suppliers, setSuppliers, orders, 
       {lightboxImage && (
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/70" onClick={() => setLightboxImage(null)}>
           <div className="relative max-h-[90vh] max-w-[90vw]" onClick={(e) => e.stopPropagation()}>
-            <img src={`http://43.166.250.145/pic/${lightboxImage}`} alt="order image" className="max-h-[85vh] max-w-[85vw] rounded-xl border-4 border-white object-contain shadow-2xl" />
+            <img src={imgUrl(lightboxImage)} alt="order image" className="max-h-[85vh] max-w-[85vw] rounded-xl border-4 border-white object-contain shadow-2xl" />
             <button onClick={() => setLightboxImage(null)} className="absolute -right-3 -top-3 flex h-8 w-8 items-center justify-center rounded-full bg-white text-sm font-bold text-slate-700 shadow-lg hover:bg-gray-100">X</button>
           </div>
         </div>

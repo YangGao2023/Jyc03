@@ -7,6 +7,7 @@
 import { NextResponse } from "next/server";
 
 const UPLOAD_URL = "http://43.166.250.145:8082/index.asp";
+const PIC_PROXY_BASE = "/api/pic";
 
 export async function POST(request: Request) {
   try {
@@ -55,7 +56,7 @@ export async function POST(request: Request) {
     return NextResponse.json({
       ok: true,
       filename,
-      url: `http://43.166.250.145/pic/${filename}`,
+      url: `${PIC_PROXY_BASE}/${encodeURIComponent(filename)}`,
     });
   } catch (err: any) {
     console.error("[upload] Error:", err.message || err);

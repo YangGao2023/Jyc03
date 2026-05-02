@@ -469,6 +469,17 @@ function getSupplierCategoryOptions(settings: BizSettings) {
     .filter(Boolean);
 }
 
+function getMaterialCategoryOptions(settings: BizSettings, materials: MaterialRecord[] = []) {
+  const configured = (settings.material_categories || "")
+    .split(/[\n,，]+/)
+    .map((item) => item.trim())
+    .filter(Boolean);
+  const fromMaterials = materials
+    .map((item) => item.category?.trim())
+    .filter(Boolean) as string[];
+  return Array.from(new Set([...configured, ...fromMaterials])).sort((a, b) => a.localeCompare(b, "zh-CN"));
+}
+
 function calcUsdCost(factoryPriceRmb: number, weight?: number) {
   return Number((((weight && weight > 0 ? weight : 1) + factoryPriceRmb) / 7).toFixed(2));
 }
@@ -2943,6 +2954,7 @@ function OrdersSection({
           materials={materials}
           purchases={purchases}
           expenses={expenses}
+          settings={settings}
           setPurchases={setPurchases}
           setExpenses={setExpenses}
           setCashEntries={setCashEntries}
@@ -4588,6 +4600,7 @@ function PurchaseModal({
   materials,
   purchases,
   expenses,
+  settings,
   setPurchases,
   setExpenses,
   setCashEntries,
@@ -4599,6 +4612,7 @@ function PurchaseModal({
   materials: MaterialRecord[];
   purchases: PurchaseRecord[];
   expenses: ExpenseRecord[];
+  settings: BizSettings;
   setPurchases: React.Dispatch<React.SetStateAction<PurchaseRecord[]>>;
   setExpenses: React.Dispatch<React.SetStateAction<ExpenseRecord[]>>;
   setCashEntries: React.Dispatch<React.SetStateAction<CashEntry[]>>;
@@ -4615,21 +4629,30 @@ function PurchaseModal({
   const [lumpNotes, setLumpNotes] = useState("");
   const [matSearch, setMatSearch] = useState("");
   const [matCategory, setMatCategory] = useState("");
-  const [matSupplierFilter, setMatSupplierFilter] = useState("");
   type LineItem = { material_id: string; name: string; unit: string; qty: string; unit_price: string };
   const [lines, setLines] = useState<LineItem[]>([]);
 
-  const supplierName = suppliers.find((s) => s.id === supplierId)?.name ?? supplierId;
+  const selectedSupplier = suppliers.find((s) => s.id === supplierId);
+  const supplierName = selectedSupplier?.name ?? supplierId;
 
-  const filteredMaterials = useMemo(() => materials.filter((m) => {
-    if (matSearch && !m.name.toLowerCase().includes(matSearch.toLowerCase())) return false;
-    if (matCategory && m.category !== matCategory) return false;
-    if (matSupplierFilter && m.supplier !== matSupplierFilter) return false;
-    return true;
-  }), [materials, matSearch, matCategory, matSupplierFilter]);
+  const filteredMaterials = useMemo(() => {
+    const filtered = materials.filter((m) => {
+      if (matSearch && !m.name.toLowerCase().includes(matSearch.toLowerCase())) return false;
+      if (matCategory && m.category !== matCategory) return false;
+      return true;
+    });
 
-  const matCategories = useMemo(() => [...new Set(materials.map((m) => m.category).filter(Boolean))] as string[], [materials]);
-  const matSuppliers = useMemo(() => [...new Set(materials.map((m) => m.supplier).filter(Boolean))] as string[], [materials]);
+    if (!supplierName) return filtered;
+
+    return [...filtered].sort((a, b) => {
+      const aMatch = a.supplier === supplierName ? 1 : 0;
+      const bMatch = b.supplier === supplierName ? 1 : 0;
+      if (aMatch !== bMatch) return bMatch - aMatch;
+      return a.name.localeCompare(b.name, "zh-CN");
+    });
+  }, [materials, matSearch, matCategory, supplierName]);
+
+  const matCategories = useMemo(() => getMaterialCategoryOptions(settings, materials), [settings, materials]);
 
   function toggleLine(mat: MaterialRecord) {
     setLines((prev) => {
@@ -4754,8 +4777,8 @@ function PurchaseModal({
             <div className="mb-2 flex flex-wrap gap-2">
               <SmallInput value={matSearch} onChange={setMatSearch} placeholder="搜索物料名称..." />
               <SmallSelect value={matCategory} onChange={setMatCategory} options={["", ...matCategories]} labels={{ "": "全部分类" }} />
-              <SmallSelect value={matSupplierFilter} onChange={setMatSupplierFilter} options={["", ...matSuppliers]} labels={{ "": "全部供应商" }} />
             </div>
+            <p className="mb-2 text-[11px] text-slate-500">下方物料会优先显示当前采购供应商相关的材料，不再单独放一个“全部供应商”筛选。</p>
             <div className="max-h-48 overflow-y-auto rounded-xl border border-slate-200 bg-white">
               {filteredMaterials.length === 0 ? (
                 <div className="py-6 text-center text-xs text-slate-500">暂无物料</div>
@@ -5865,6 +5888,7 @@ function ClientsSection({ clients, setClients, suppliers, setSuppliers, orders, 
               materials={materials}
               purchases={purchases}
               expenses={expenses}
+              settings={settings}
               setPurchases={setPurchases}
               setExpenses={setExpenses}
               setCashEntries={setCashEntries}

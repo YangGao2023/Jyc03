@@ -6559,7 +6559,7 @@ function resolvePayrollLink(
 function EmployeesSection({ employees, setEmployees, attendances, setAttendances, payrolls, setPayrolls, expenses, setExpenses, settings, setSettings, storeRevision, onAutoSave }: { employees: EmployeeRecord[]; setEmployees: React.Dispatch<React.SetStateAction<EmployeeRecord[]>>; attendances: AttendanceRecord[]; setAttendances: React.Dispatch<React.SetStateAction<AttendanceRecord[]>>; payrolls: PayrollRecord[]; setPayrolls: React.Dispatch<React.SetStateAction<PayrollRecord[]>>; expenses: ExpenseRecord[]; setExpenses: React.Dispatch<React.SetStateAction<ExpenseRecord[]>>; settings: BizSettings; setSettings: React.Dispatch<React.SetStateAction<BizSettings>>; storeRevision: string; onAutoSave?: () => void; }) {
   async function saveOneAttendance(record: AttendanceRecord) {
     try {
-      await fetch("/api/attendance", {
+      const res = await fetch("/api/attendance", {
         method: "PUT",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
@@ -6570,8 +6570,15 @@ function EmployeesSection({ employees, setEmployees, attendances, setAttendances
           meal_allowance: record.meal_allowance ?? false,
         }),
       });
-      // Full refresh so payroll/summary also updates
-      onAutoSave?.();
+      if (!res.ok) return;
+      // Directly GET fresh data — do NOT call onAutoSave (which would PUT stale state first)
+      const refreshRes = await fetch("/api/biz-store", { cache: "no-store" });
+      if (!refreshRes.ok) return;
+      const payload = (await refreshRes.json()) as { ok: boolean; data: import("@/lib/biz-store").BizStoreSnapshot };
+      if (!payload?.data) return;
+      const refreshed = buildBizSnapshot(payload.data);
+      setAttendances(refreshed.attendances);
+      setPayrolls(refreshed.payrolls);
     } catch {}
   }
   const [sub, setSub] = useState<StaffSub>("profiles");

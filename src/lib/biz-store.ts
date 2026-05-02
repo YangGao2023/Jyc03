@@ -187,9 +187,6 @@ async function mysqlRead(): Promise<BizStoreSnapshot> {
   const orders = orderRows.map(rowToOrder);
   const settings = rowToSettings(settingsRows[0] as Record<string, unknown>) ?? {} as BizSettings;
 
-  // 自动考勤：当天没跑就补
-  await autoFillAttendance(settings);
-
   return normalizeSnapshot({
     revision: createStoreRevision(),
     orders,
@@ -678,7 +675,7 @@ function rowToPrintArchive(r: Record<string, unknown>): PrintArchiveRecord {
 // ─── Public API ───────────────────────────────────────────────────────────────
 
 let _cached: { ts: number; snapshot: BizStoreSnapshot } | null = null;
-const CACHE_TTL = 25_000;
+const CACHE_TTL = 60_000;
 
 export async function readBizStore(): Promise<BizStoreSnapshot> {
   const now = Date.now();

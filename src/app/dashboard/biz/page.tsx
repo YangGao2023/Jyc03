@@ -7673,6 +7673,20 @@ export default function DashboardBizPage() {
         title="业务管理"
         description="订单、财务、客户、物料、员工与设置的统一操作界面。"
       />
+      {isHydrated && (
+        <div className={`px-1 py-1 text-xs flex items-center gap-1 ${
+          saveState === 'saving' ? 'text-sky-600' :
+          saveState === 'saved' ? 'text-emerald-600' :
+          saveState === 'error' ? 'text-rose-600' :
+          isDirty ? 'text-amber-600' : 'text-slate-400'
+        }`}>
+          {saveState === 'saving' && '⏳ 正在保存...'}
+          {saveState === 'saved' && `✅ 已保存 ${lastSavedAt}`}
+          {saveState === 'error' && '❌ 保存失败，请刷新页面'}
+          {saveState === 'idle' && isDirty && '○ 有未保存改动...'}
+          {saveState === 'idle' && !isDirty && lastSavedAt && `✓ 数据已同步 ${lastSavedAt}`}
+        </div>
+      )}
 
       <div className="mt-3 flex flex-wrap items-center justify-between gap-3 rounded-[18px] border border-gray-200 bg-gray-50 px-4 py-3 shadow-sm">
         <div className="flex flex-wrap items-center gap-2">

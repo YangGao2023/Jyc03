@@ -357,9 +357,7 @@ async function mysqlWrite(snapshot: BizStoreSnapshot): Promise<void> {
       item_name: p.item_name || '', quantity: p.quantity ?? 0,
       unit: p.unit || '个', unit_price: p.unit_price ?? 0,
       total_amount: p.total_amount ?? 0, purchase_date: p.purchase_date || '',
-      status: p.status || '待收货', expense_id: p.expense_id || null,
-      group_id: p.group_id || null, material_id: p.material_id || null,
-      notes: p.notes || null,
+      status: p.status || '已完成', expense_id: p.expense_id || null,
     })), 'id');
   }
 

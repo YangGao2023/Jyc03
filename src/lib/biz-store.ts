@@ -222,7 +222,7 @@ async function mysqlWrite(snapshot: BizStoreSnapshot): Promise<void> {
       quote_footer,logo_url,expense_types,supplier_categories,meal_allowance_amount,
       auto_attendance_timezone,auto_attendance_run_time,auto_attendance_default_minutes,
       auto_attendance_note,work_start,work_end,break_start,break_end,material_categories,income_categories)
-    VALUES(1,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)
+    VALUES(1,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)
     ON DUPLICATE KEY UPDATE
       company_name=VALUES(company_name),company_name_zh=VALUES(company_name_zh),
       address=VALUES(address),company_address=VALUES(company_address),

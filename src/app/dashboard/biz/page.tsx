@@ -7376,17 +7376,15 @@ function SettingsSection({ settings, setSettings, saveState, isDirty, lastSavedA
         {page === "company-contact" ? (
           <div className="grid gap-3 xl:grid-cols-2">
             <SettingsGroup title="联系方式">
-              <SettingsField label="后台电话" value={settings.phone} onChange={(value) => update("phone", value)} />
-              <SettingsField label="打印电话" value={settings.phones ?? ""} onChange={(value) => update("phones", value)} />
-              <SettingsField label="电子邮箱" value={settings.email} onChange={(value) => update("email", value)} />
-              <SettingsField label="网站" value={settings.website} onChange={(value) => update("website", value)} />
-              <SettingsField label="Logo URL" value={settings.logo_url ?? ""} onChange={(value) => update("logo_url", value)} />
+              <SettingsField label="后台电话" value={settings.phone} onChange={(value) => update("phone", value)} note="后台客户详情页、订单详情显示。" />
+              <SettingsField label="打印电话" value={settings.phones ?? ""} onChange={(value) => update("phones", value)} note="出库单/发票/报价单底部显示。多行时会合并为一行显示。" />
+              <SettingsField label="电子邮箱" value={settings.email} onChange={(value) => update("email", value)} note="出库单/发票/报价单底部显示。" />
+              <SettingsField label="网站" value={settings.website} onChange={(value) => update("website", value)} note="出库单/发票/报价单底部显示。默认 WWW.JYCNYC.NET" />
             </SettingsGroup>
             <SettingsGroup title="保存确认">
               <div className="space-y-3 text-xs text-slate-600">
                 <p>这里不再自动保存,改完后请点页面上方的"保存更改"。</p>
                 <p>看到 <span className="font-semibold text-emerald-700">设置已保存成功</span>,才表示服务端真的写入成功。</p>
-                <p>考勤工资规则已经从系统设置移走,只在员工管理里维护。</p>
               </div>
             </SettingsGroup>
           </div>
@@ -7394,19 +7392,12 @@ function SettingsSection({ settings, setSettings, saveState, isDirty, lastSavedA
 
         {page === "finance" ? (
           <div className="grid gap-3 xl:grid-cols-2">
-            <SettingsGroup title="税务与默认值">
-              <SettingsField label="税号 (BN)" value={settings.tax_number} note="Business Number" onChange={(value) => update("tax_number", value)} />
-              <SettingsField label="默认税率" value={String(settings.default_tax_rate)} onChange={(value) => update("default_tax_rate", value)} type="number" />
-              <SettingsField label="默认货币" value={settings.default_currency} onChange={(value) => update("default_currency", value)} />
-              <SettingsField label="财年开始月" value={String(settings.fiscal_start_month)} onChange={(value) => update("fiscal_start_month", value)} type="number" />
-              <SettingsField label="报价默认有效期" value={String(settings.quote_valid_days ?? 30)} onChange={(value) => update("quote_valid_days", value)} type="number" />
+            <SettingsGroup title="打印用收款方式">
+              <SettingsField label="Zelle / 电话" value={settings.zelle ?? ""} onChange={(value) => update("zelle", value)} note="出库单/发票/报价单底部显示。默认 3478227777" />
             </SettingsGroup>
-            <SettingsGroup title="收款方式">
-              <SettingsField label="银行账户" value={settings.bank_account} onChange={(value) => update("bank_account", value)} />
-              <SettingsField label="支付宝" value={settings.alipay} onChange={(value) => update("alipay", value)} />
-              <SettingsField label="微信收款" value={settings.wechat_pay} onChange={(value) => update("wechat_pay", value)} />
-              <SettingsField label="其他方式" value={settings.other_payment} onChange={(value) => update("other_payment", value)} />
-              <SettingsField label="Zelle" value={settings.zelle ?? ""} onChange={(value) => update("zelle", value)} />
+            <SettingsGroup title="税与默认值">
+              <SettingsField label="默认税率" value={String(settings.default_tax_rate)} onChange={(value) => update("default_tax_rate", value)} type="number" note="创建新订单时默认填入的税率。" />
+              <SettingsField label="报价默认有效期" value={String(settings.quote_valid_days ?? 30)} onChange={(value) => update("quote_valid_days", value)} type="number" note="报价单上的有效天数。" />
             </SettingsGroup>
           </div>
         ) : null}

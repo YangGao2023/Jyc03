@@ -7429,6 +7429,8 @@ export default function DashboardBizPage() {
     settings,
   }), [storeRevision, orders, clients, suppliers, expenses, cashEntries, materials, purchases, employees, attendances, appointments, payrolls, printArchives, settings]);
   const snapshotJson = useMemo(() => serializeBizSnapshot(snapshot), [snapshot]);
+  const snapshotJsonRef = useRef(snapshotJson);
+  snapshotJsonRef.current = snapshotJson;
   const isDirty = isHydrated && snapshotJson !== savedSnapshotJson;
 
   useEffect(() => {
@@ -7543,7 +7545,7 @@ export default function DashboardBizPage() {
   const saveStateRef = useRef(saveState);
   saveStateRef.current = saveState;
 
-  async function persistSnapshot() {
+  async function persistSnapshot(overrideJson?: string) {
     if (!isHydrated || saveState === "saving") return;
 
     try {
@@ -7551,7 +7553,7 @@ export default function DashboardBizPage() {
       const response = await fetch("/api/biz-store", {
         method: "PUT",
         headers: { "Content-Type": "application/json" },
-        body: snapshotJson,
+        body: overrideJson ?? snapshotJson,
       });
       if (response.status === 409) {
         setSaveState("conflict");
@@ -7600,7 +7602,9 @@ export default function DashboardBizPage() {
   }
 
   const autoSave = useCallback(() => {
-    setTimeout(() => persistSnapshotRef.current(), 0);
+    // queueMicrotask runs after React flushes the current state batch,
+    // so snapshotJsonRef.current will contain the latest serialized state.
+    queueMicrotask(() => persistSnapshotRef.current(snapshotJsonRef.current));
   }, []);
 
   const isSaving = saveState === "saving";

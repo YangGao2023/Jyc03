@@ -5794,7 +5794,7 @@ function ClientsSection({ clients, setClients, suppliers, setSuppliers, orders, 
                                         <button onClick={() => { setEditingAppointment(item); setAppointmentDraft({ appointment_date: item.appointment_date, appointment_time: item.appointment_time ?? '', phone: item.phone ?? '', address: item.address ?? '', description: item.description ?? '' }); setShowAppointmentModal(true); }} className="rounded-md border border-gray-200 bg-gray-50 px-2 py-1 text-[11px] font-semibold text-slate-600 hover:border-slate-400 transition-colors">编辑</button>
                                         {confirmingDeleteAppointmentId === item.id ? (
                                           <>
-                                            <button onClick={() => { setAppointments((prev) => prev.filter((a) => a.id !== item.id)); setConfirmingDeleteAppointmentId(null); }} className="rounded-md border border-red-400 bg-red-50 px-2 py-1 text-[11px] font-semibold text-red-700 hover:bg-red-100">确认</button>
+                                            <button onClick={() => { setAppointments((prev) => prev.filter((a) => a.id !== item.id)); setConfirmingDeleteAppointmentId(null); onAutoSave?.(); }} className="rounded-md border border-red-400 bg-red-50 px-2 py-1 text-[11px] font-semibold text-red-700 hover:bg-red-100">确认</button>
                                             <button onClick={() => setConfirmingDeleteAppointmentId(null)} className="rounded-md border border-slate-200 px-2 py-1 text-[11px] text-slate-700 hover:border-slate-300">取消</button>
                                           </>
                                         ) : (
@@ -5858,6 +5858,7 @@ function ClientsSection({ clients, setClients, suppliers, setSuppliers, orders, 
                                   }
                                   setShowAppointmentModal(false);
                                   setEditingAppointment(null);
+                                  onAutoSave?.();
                                 }}>确认</ActionBtn>
                               </div>
                             </div>
@@ -7690,6 +7691,7 @@ export default function DashboardBizPage() {
               appointments={appointments}
               setAppointments={setAppointments}
               clients={clients}
+              onAutoSave={autoSave}
             />
           )}
           {section === "install" && (
@@ -7739,7 +7741,7 @@ export default function DashboardBizPage() {
   );
 }
 
-function AppointmentsSection({ appointments, setAppointments, clients }: { appointments: MeasurementAppointmentRecord[]; setAppointments: (v: MeasurementAppointmentRecord[]) => void; clients: ContactRecord[] }) {
+function AppointmentsSection({ appointments, setAppointments, clients, onAutoSave }: { appointments: MeasurementAppointmentRecord[]; setAppointments: (v: MeasurementAppointmentRecord[]) => void; clients: ContactRecord[]; onAutoSave?: () => void }) {
   const [search, setSearch] = useState("");
   const [page, setPage] = useState(1);
   const pageSize = 15;
@@ -7833,6 +7835,7 @@ function AppointmentsSection({ appointments, setAppointments, clients }: { appoi
     }
     setShowModal(false);
     setEditing(null);
+    onAutoSave?.();
   }
 
   function copyToClipboard(text: string, onSuccess: () => void) {
@@ -7921,7 +7924,7 @@ function AppointmentsSection({ appointments, setAppointments, clients }: { appoi
                     <button onClick={() => openEdit(item)} className="rounded-md border border-gray-200 bg-gray-50 px-2 py-1 text-[11px] font-semibold text-slate-600 hover:border-slate-400 transition-colors">编辑</button>
                     {confirmDelete === item.id ? (
                       <>
-                        <button onClick={() => { setAppointments(appointments.filter((a) => a.id !== item.id)); setConfirmDelete(null); }} className="rounded-md border border-red-400 bg-red-50 px-2 py-1 text-[11px] font-semibold text-red-700 hover:bg-red-100">确认</button>
+                        <button onClick={() => { setAppointments(appointments.filter((a) => a.id !== item.id)); setConfirmDelete(null); onAutoSave?.(); }} className="rounded-md border border-red-400 bg-red-50 px-2 py-1 text-[11px] font-semibold text-red-700 hover:bg-red-100">确认</button>
                         <button onClick={() => setConfirmDelete(null)} className="rounded-md border border-slate-200 px-2 py-1 text-[11px] text-slate-700 hover:border-slate-300">取消</button>
                       </>
                     ) : (

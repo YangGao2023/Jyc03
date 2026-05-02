@@ -254,20 +254,25 @@ async function mysqlWrite(snapshot: BizStoreSnapshot): Promise<void> {
     income_categories: s.income_categories ?? null,
   }], 'id');
 
-  // Helper: batch upsert
+  // Helper: batch upsert — splits into chunks to avoid MySQL placeholder limit (65535)
   async function batchUpsert(table: string, rows: Record<string, unknown>[], keyCol: string) {
     if (rows.length === 0) return;
     const cols = Object.keys(rows[0]);
-    const placeholders = rows.map(() => `(${cols.map(() => '?').join(',')})`).join(',');
+    // Max rows per batch: floor(65535 / col_count) capped at 400
+    const chunkSize = Math.min(400, Math.floor(65535 / cols.length));
     const updateSet = cols.filter(c => c !== keyCol).map(c => `${c}=VALUES(${c})`).join(',');
-    const values = rows.flatMap(r => cols.map(c => r[c] ?? null));
-    try {
-      await executeStmt(
-        `INSERT INTO ${table}(${cols.join(',')}) VALUES${placeholders} ON DUPLICATE KEY UPDATE ${updateSet}`,
-        values
-      );
-    } catch (err) {
-      console.error(`[mysqlWrite] batch upsert ${table} failed:`, err);
+    for (let i = 0; i < rows.length; i += chunkSize) {
+      const chunk = rows.slice(i, i + chunkSize);
+      const placeholders = chunk.map(() => `(${cols.map(() => '?').join(',')})`).join(',');
+      const values = chunk.flatMap(r => cols.map(c => r[c] ?? null));
+      try {
+        await executeStmt(
+          `INSERT INTO ${table}(${cols.join(',')}) VALUES${placeholders} ON DUPLICATE KEY UPDATE ${updateSet}`,
+          values
+        );
+      } catch (err) {
+        console.error(`[mysqlWrite] batch upsert ${table} chunk ${i}-${i + chunk.length} failed:`, err);
+      }
     }
   }
 

@@ -7909,9 +7909,29 @@ function AppointmentsSection({ appointments, setAppointments, clients, onAutoSav
     ? filteredByDate.filter((a) => a.client_name.toLowerCase().includes(search.toLowerCase()) || (a.phone ?? "").includes(search))
     : filteredByDate;
 
-  const sorted = [...filtered].sort((a, b) => String(b.appointment_date).localeCompare(String(a.appointment_date)));
+  const sorted = [...filtered].sort((a, b) => String(a.appointment_date).localeCompare(String(b.appointment_date)) || String(a.appointment_time ?? "").localeCompare(String(b.appointment_time ?? "")));
   const pageCount = Math.max(1, Math.ceil(sorted.length / pageSize));
   const paged = sorted.slice((page - 1) * pageSize, page * pageSize);
+  // Group by date for calendar view
+  const groupedByDate = sorted.reduce<Record<string, typeof sorted>>((acc, item) => {
+    const d = item.appointment_date || "未知日期";
+    if (!acc[d]) acc[d] = [];
+    acc[d].push(item);
+    return acc;
+  }, {});
+  const dateGroups = Object.keys(groupedByDate).sort();
+  function formatCalendarDate(d: string) {
+    if (!d || d.length < 10) return d;
+    const dt = new Date(`${d}T00:00:00`);
+    const weekdays = ["周日", "周一", "周二", "周三", "周四", "周五", "周六"];
+    const m = dt.getMonth() + 1;
+    const day = dt.getDate();
+    const wd = weekdays[dt.getDay()];
+    const today = new Date().toISOString().slice(0, 10);
+    const tmr = new Date(Date.now() + 86400000).toISOString().slice(0, 10);
+    const tag = d === today ? " · 今天" : d === tmr ? " · 明天" : "";
+    return `${m}月${day}日 ${wd}${tag}`;
+  }
 
   function openNew() {
     setEditing(null);
@@ -8004,55 +8024,52 @@ function AppointmentsSection({ appointments, setAppointments, clients, onAutoSav
           <ActionBtn onClick={openNew} tone="primary">+ 新建预约</ActionBtn>
         </div>
       } />
-      <div className="overflow-x-auto rounded-xl border border-gray-200 bg-gray-50">
-        <table className="w-full text-left text-xs">
-          <thead>
-            <tr className="border-b border-gray-200 bg-gray-50">
-              <th className="px-3 py-2 font-semibold text-slate-600">日期</th>
-              <th className="px-3 py-2 font-semibold text-slate-600">时间</th>
-              <th className="px-3 py-2 font-semibold text-slate-600">客户</th>
-              <th className="px-3 py-2 font-semibold text-slate-600">电话</th>
-              <th className="px-3 py-2 font-semibold text-slate-600">地址</th>
-              <th className="px-3 py-2 font-semibold text-slate-600">描述</th>
-              <th className="px-3 py-2 font-semibold text-slate-600">操作</th>
-            </tr>
-          </thead>
-          <tbody>
-            {paged.map((item) => (
-              <tr key={item.id} className="border-b border-gray-200 last:border-b-0">
-                <td className="px-3 py-2 text-slate-700">{item.appointment_date}</td>
-                <td className="px-3 py-2 text-slate-600">{item.appointment_time ?? "-"}</td>
-                <td className="px-3 py-2 font-medium text-slate-700">{item.client_name}</td>
-                <td className="px-3 py-2 text-slate-600">{item.phone ?? "-"}</td>
-                <td className="px-3 py-2 text-slate-600 max-w-[160px] truncate">{item.address ?? "-"}</td>
-                <td className="px-3 py-2 text-slate-600 max-w-[120px] truncate">{item.description ?? "-"}</td>
-                <td className="px-3 py-2">
-                  <div className="flex flex-wrap items-center gap-1">
-                    <button onClick={() => handleCopy(item)} className="rounded-md border border-gray-200 bg-gray-50 px-2 py-1 text-[11px] text-slate-600 hover:border-slate-300 transition-colors">{copiedId === item.id ? "已复制 ✓" : "复制"}</button>
-                    <button onClick={() => openEdit(item)} className="rounded-md border border-gray-200 bg-gray-50 px-2 py-1 text-[11px] font-semibold text-slate-600 hover:border-slate-400 transition-colors">编辑</button>
-                    {confirmDelete === item.id ? (
-                      <>
-                        <button onClick={() => { setAppointments(appointments.filter((a) => a.id !== item.id)); setConfirmDelete(null); onAutoSave?.(); }} className="rounded-md border border-red-400 bg-red-50 px-2 py-1 text-[11px] font-semibold text-red-700 hover:bg-red-100">确认</button>
-                        <button onClick={() => setConfirmDelete(null)} className="rounded-md border border-slate-200 px-2 py-1 text-[11px] text-slate-700 hover:border-slate-300">取消</button>
-                      </>
-                    ) : (
-                      <button onClick={() => setConfirmDelete(item.id)} className="rounded-md border border-gray-200 bg-gray-50 px-2 py-1 text-[11px] text-slate-700 hover:border-rose-300 hover:text-rose-600 transition-colors">删除</button>
-                    )}
+      {/* Calendar card view */}
+      {sorted.length === 0 ? (
+        <div className="py-12 text-center text-xs text-slate-400">{search ? "没有匹配的预约" : "还没有任何量尺寸预约"}</div>
+      ) : (
+        <div className="space-y-6">
+          {dateGroups.map((date) => (
+            <div key={date}>
+              <div className="mb-2 flex items-center gap-2">
+                <span className={`text-sm font-bold ${
+                  date === todayStr ? "text-sky-600" : date === tomorrowStr ? "text-emerald-600" : "text-slate-700"
+                }`}>{formatCalendarDate(date)}</span>
+                <span className="text-xs text-slate-400">{groupedByDate[date].length} 条预约</span>
+              </div>
+              <div className="grid grid-cols-1 gap-2 sm:grid-cols-2 lg:grid-cols-3">
+                {groupedByDate[date].map((item) => (
+                  <div key={item.id} className={`rounded-xl border p-3 shadow-sm ${
+                    date === todayStr ? "border-sky-200 bg-sky-50" :
+                    date === tomorrowStr ? "border-emerald-200 bg-emerald-50" :
+                    "border-gray-200 bg-white"
+                  }`}>
+                    <div className="flex items-start justify-between gap-2 mb-1">
+                      <div>
+                        <span className="font-semibold text-slate-800 text-sm">{item.client_name}</span>
+                        {item.appointment_time && <span className="ml-2 text-xs text-slate-500">{format12h(item.appointment_time)}</span>}
+                      </div>
+                      <div className="flex gap-1 shrink-0">
+                        <button onClick={() => handleCopy(item)} className="rounded border border-slate-200 px-1.5 py-0.5 text-[10px] text-slate-500 hover:border-slate-300">{copiedId === item.id ? "✓" : "复制"}</button>
+                        <button onClick={() => openEdit(item)} className="rounded border border-slate-200 px-1.5 py-0.5 text-[10px] text-slate-600 hover:border-slate-400">编辑</button>
+                        {confirmDelete === item.id ? (
+                          <>
+                            <button onClick={() => { setAppointments(appointments.filter((a) => a.id !== item.id)); setConfirmDelete(null); onAutoSave?.(); }} className="rounded border border-red-400 bg-red-50 px-1.5 py-0.5 text-[10px] font-semibold text-red-600">确认</button>
+                            <button onClick={() => setConfirmDelete(null)} className="rounded border border-slate-200 px-1.5 py-0.5 text-[10px] text-slate-600">取消</button>
+                          </>
+                        ) : (
+                          <button onClick={() => setConfirmDelete(item.id)} className="rounded border border-slate-200 px-1.5 py-0.5 text-[10px] text-slate-500 hover:border-rose-300 hover:text-rose-500">删除</button>
+                        )}
+                      </div>
+                    </div>
+                    {item.phone && <div className="text-xs text-slate-500">📞 {item.phone}</div>}
+                    {item.address && <div className="text-xs text-slate-500 truncate">📍 {item.address}</div>}
+                    {item.description && <div className="mt-1 text-xs text-slate-600 line-clamp-2">{item.description}</div>}
                   </div>
-                </td>
-              </tr>
-            ))}
-          </tbody>
-        </table>
-        {!paged.length ? <div className="py-10 text-center text-xs text-slate-700">{search ? "没有匹配的预约" : "还没有任何量尺寸预约"}</div> : null}
-      </div>
-      {pageCount > 1 && (
-        <div className="flex items-center justify-between text-xs text-slate-700">
-          <span>第 {page} / {pageCount} 页,共 {sorted.length} 条</span>
-          <div className="flex gap-1">
-            <ActionBtn onClick={() => setPage((p) => Math.max(1, p - 1))} disabled={page <= 1}>上一页</ActionBtn>
-            <ActionBtn onClick={() => setPage((p) => Math.min(pageCount, p + 1))} disabled={page >= pageCount}>下一页</ActionBtn>
-          </div>
+                ))}
+              </div>
+            </div>
+          ))}
         </div>
       )}
       {showModal && (
@@ -8147,9 +8164,27 @@ function InstallSection({ orders, setOrders, clients, onAutoSave }: { orders: Bi
       )
     : filteredByDate;
 
-  const sorted = [...filtered].sort((a, b) => String(b.order_date || "").localeCompare(String(a.order_date || "")));
+  const sorted = [...filtered].sort((a, b) => String(a.order_date || "").localeCompare(String(b.order_date || "")));
   const totalPages = Math.max(1, Math.ceil(sorted.length / pageSize));
   const paginated = sorted.slice((page - 1) * pageSize, page * pageSize);
+  // Group by install date for calendar view
+  const installGroups = sorted.reduce<Record<string, typeof sorted>>((acc, o) => {
+    const d = o.order_date || "未知日期";
+    if (!acc[d]) acc[d] = [];
+    acc[d].push(o);
+    return acc;
+  }, {});
+  const installDateKeys = Object.keys(installGroups).sort();
+  function formatInstallDate(d: string) {
+    if (!d || d.length < 10) return d;
+    const dt = new Date(`${d}T00:00:00`);
+    const weekdays = ["周日", "周一", "周二", "周三", "周四", "周五", "周六"];
+    const m = dt.getMonth() + 1;
+    const day = dt.getDate();
+    const wd = weekdays[dt.getDay()];
+    const tag = d === todayStr ? " · 今天" : d === tomorrowStr ? " · 明天" : "";
+    return `${m}月${day}日 ${wd}${tag}`;
+  }
 
   function formatInstallItem(order: BizOrder) {
     const parts = [
@@ -8230,62 +8265,60 @@ function InstallSection({ orders, setOrders, clients, onAutoSave }: { orders: Bi
           <ActionBtn onClick={handleCopyAll}>{sorted.length > 0 ? `一键复制全部 (${sorted.length})` : "一键复制全部"}</ActionBtn>
         </div>
       } />
-      <div className="overflow-x-auto rounded-xl border border-gray-200 bg-gray-50">
-        <table className="w-full text-left text-xs">
-          <thead>
-            <tr className="border-b border-gray-200 bg-gray-50">
-              <th className="px-3 py-2 font-semibold text-slate-600">单号</th>
-              <th className="px-3 py-2 font-semibold text-slate-600">日期</th>
-              <th className="px-3 py-2 font-semibold text-slate-600">客户</th>
-              <th className="px-3 py-2 font-semibold text-slate-600">电话</th>
-              <th className="px-3 py-2 font-semibold text-slate-600">地址</th>
-              <th className="px-3 py-2 font-semibold text-slate-600">安装人员</th>
-              <th className="px-3 py-2 font-semibold text-slate-600">安装内容</th>
-              <th className="px-3 py-2 font-semibold text-slate-600">操作</th>
-            </tr>
-          </thead>
-          <tbody>
-            {paginated.map((order) => (
-              <tr key={order.order_number} className="border-b border-gray-200 last:border-b-0">
-                <td className="px-3 py-2 font-semibold text-slate-700">{order.order_number}</td>
-                <td className="px-3 py-2 text-slate-600">{order.order_date || "-"}</td>
-                <td className="px-3 py-2 font-medium text-slate-700">{order.client_name || "-"}</td>
-                <td className="px-3 py-2 text-slate-600">{order.phone || "-"}</td>
-                <td className="px-3 py-2 text-slate-600 max-w-[140px] truncate" title={order.address || ""}>{order.address || "-"}</td>
-                <td className="px-3 py-2 text-slate-600">{order.installers || "-"}</td>
-                <td className="px-3 py-2 text-slate-600 max-w-[200px]">
-                  {editingId === order.order_number ? (
-                    <textarea value={editText} onChange={(e) => setEditText(e.target.value)} rows={2} className="w-full rounded border border-blue-300 bg-white p-1 text-[11px] text-slate-700" />
-                  ) : (
-                    <span className="line-clamp-2 text-[11px]" title={order.install_info || ""}>{order.install_info || <span className="text-slate-400">-</span>}</span>
-                  )}
-                </td>
-                <td className="px-3 py-2">
-                  <div className="flex flex-wrap items-center gap-1">
-                    <button onClick={() => handleCopy(order)} className="rounded-md border border-gray-200 bg-gray-50 px-2 py-1 text-[11px] text-slate-600 hover:border-slate-300 transition-colors">{copiedId === order.order_number ? "已复制 ✓" : "复制"}</button>
+      {/* Calendar card view */}
+      {sorted.length === 0 ? (
+        <div className="py-12 text-center text-xs text-slate-400">{search || dateFilter !== "all" ? "没有匹配的安装信息" : "暂无定制订单"}</div>
+      ) : (
+        <div className="space-y-6">
+          {installDateKeys.map((date) => (
+            <div key={date}>
+              <div className="mb-2 flex items-center gap-2">
+                <span className={`text-sm font-bold ${
+                  date === todayStr ? "text-sky-600" : date === tomorrowStr ? "text-emerald-600" : "text-slate-700"
+                }`}>{formatInstallDate(date)}</span>
+                <span className="text-xs text-slate-400">{installGroups[date].length} 单</span>
+              </div>
+              <div className="grid grid-cols-1 gap-2 sm:grid-cols-2 lg:grid-cols-3">
+                {installGroups[date].map((order) => (
+                  <div key={order.order_number} className={`rounded-xl border p-3 shadow-sm ${
+                    date === todayStr ? "border-sky-200 bg-sky-50" :
+                    date === tomorrowStr ? "border-emerald-200 bg-emerald-50" :
+                    "border-gray-200 bg-white"
+                  }`}>
+                    <div className="flex items-start justify-between gap-2 mb-1">
+                      <div>
+                        <span className="font-semibold text-slate-800 text-sm">{order.client_name || "-"}</span>
+                        <span className="ml-2 text-xs text-slate-400">#{order.order_number}</span>
+                      </div>
+                      <div className="flex gap-1 shrink-0">
+                        <button onClick={() => handleCopy(order)} className="rounded border border-slate-200 px-1.5 py-0.5 text-[10px] text-slate-500 hover:border-slate-300">{copiedId === order.order_number ? "✓" : "复制"}</button>
+                        {editingId === order.order_number ? (
+                          <>
+                            <button onClick={() => handleSaveInstall(order.order_number, editText)} className="rounded border border-green-400 bg-green-50 px-1.5 py-0.5 text-[10px] font-semibold text-green-600">保存</button>
+                            <button onClick={() => setEditingId(null)} className="rounded border border-slate-200 px-1.5 py-0.5 text-[10px] text-slate-600">取消</button>
+                          </>
+                        ) : (
+                          <button onClick={() => { setEditingId(order.order_number); setEditText(order.install_info || ""); }} className="rounded border border-slate-200 px-1.5 py-0.5 text-[10px] text-slate-600 hover:border-slate-400">编辑</button>
+                        )}
+                      </div>
+                    </div>
+                    {order.phone && <div className="text-xs text-slate-500">📞 {order.phone}</div>}
+                    {order.address && <div className="text-xs text-slate-500 truncate">📍 {order.address}</div>}
+                    {order.installers && <div className="text-xs text-slate-500">👷 {order.installers}</div>}
                     {editingId === order.order_number ? (
-                      <>
-                        <button onClick={() => handleSaveInstall(order.order_number, editText)} className="rounded-md border border-green-400 bg-green-50 px-2 py-1 text-[11px] font-semibold text-green-700 hover:bg-green-100">保存</button>
-                        <button onClick={() => setEditingId(null)} className="rounded-md border border-slate-200 px-2 py-1 text-[11px] text-slate-700 hover:border-slate-300">取消</button>
-                      </>
+                      <textarea value={editText} onChange={(e) => setEditText(e.target.value)} rows={3} className="mt-1 w-full rounded border border-blue-300 bg-white p-1 text-[11px] text-slate-700" placeholder="安装内容" />
                     ) : (
-                      <button onClick={() => { setEditingId(order.order_number); setEditText(order.install_info || ""); }} className="rounded-md border border-gray-200 bg-gray-50 px-2 py-1 text-[11px] font-semibold text-slate-600 hover:border-slate-400 transition-colors">编辑</button>
+                      order.install_info ? <div className="mt-1 text-xs text-slate-700 line-clamp-3 whitespace-pre-wrap">{order.install_info}</div> : <div className="mt-1 text-xs text-slate-400">暂无安装内容</div>
                     )}
+                    <div className="mt-2 flex items-center justify-between text-[10px] text-slate-400">
+                      <span>总价 ${Number(order.total_after_tax || 0).toFixed(2)}</span>
+                      {Number(order.balance || 0) > 0 && <span className="text-rose-500">余款 ${Number(order.balance || 0).toFixed(2)}</span>}
+                    </div>
                   </div>
-                </td>
-              </tr>
-            ))}
-          </tbody>
-        </table>
-        {!paginated.length ? <div className="py-10 text-center text-xs text-slate-700">{search || dateFilter !== "all" ? "没有匹配的安装信息" : "暂无定制订单"}</div> : null}
-      </div>
-      {totalPages > 1 && (
-        <div className="flex items-center justify-between text-xs text-slate-700">
-          <span>第 {page} / {totalPages} 页,共 {sorted.length} 条</span>
-          <div className="flex gap-1">
-            <ActionBtn onClick={() => setPage((p) => Math.max(1, p - 1))} disabled={page <= 1}>上一页</ActionBtn>
-            <ActionBtn onClick={() => setPage((p) => Math.min(totalPages, p + 1))} disabled={page >= totalPages}>下一页</ActionBtn>
-          </div>
+                ))}
+              </div>
+            </div>
+          ))}
         </div>
       )}
     </>

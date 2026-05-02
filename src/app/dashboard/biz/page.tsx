@@ -942,7 +942,7 @@ function PaymentHistoryTable({ records }: { records: PaymentRecord[] }) {
             <th className="px-3 py-2 font-semibold text-slate-600">日期</th>
             <th className="px-3 py-2 font-semibold text-slate-600">金额</th>
             <th className="px-3 py-2 font-semibold text-slate-600">方式</th>
-            <th className="px-3 py-2 font-semibold text-slate-600">类型</th>
+            <th className="px-3 py-2 font-semibold text-slate-600">类别</th>
             <th className="px-3 py-2 font-semibold text-slate-600">备注</th>
           </tr>
         </thead>
@@ -4481,8 +4481,8 @@ return days.map((day) => {
     </tr>
   );
 }) : <tr><td colSpan={7} className="py-10 text-center text-xs text-slate-400">这个日期范围内没有收入记录</td></tr>}</tbody></table></div><div className="flex flex-wrap items-center justify-between gap-3 rounded-xl border border-slate-200 bg-white px-4 py-3 text-xs text-slate-600"><span>第 {paymentPage} / {incomePageCount} 页,共 {allIncomeRows.length} 条收入</span><div className="flex items-center gap-2"><button type="button" onClick={() => setPaymentPage((p) => Math.max(1, p - 1))} disabled={paymentPage <= 1} className="rounded-lg border border-slate-200 px-3 py-1.5 disabled:cursor-not-allowed disabled:opacity-40">上一页</button><button type="button" onClick={() => setPaymentPage((p) => Math.min(incomePageCount, p + 1))} disabled={paymentPage >= incomePageCount} className="rounded-lg border border-slate-200 px-3 py-1.5 disabled:cursor-not-allowed disabled:opacity-40">下一页</button></div></div></>)}
-      {sub === "expense" && (<><div className="mb-2 rounded-xl border border-slate-200 bg-amber-50 px-4 py-3 text-xs text-amber-800">工资类支出已锁定，不能在普通支出清单里编辑或删除。请到“员工管理 → 工资”里处理。</div><div className="overflow-x-auto rounded-xl border border-slate-200 bg-white"><table className="w-full text-left text-xs"><thead><tr className="border-b border-slate-200 bg-slate-50"><th className="px-4 py-2 font-semibold text-slate-600">对象</th><th className="px-4 py-2 font-semibold text-slate-600">明细</th><th className="px-4 py-2 font-semibold text-slate-600">金额</th><th className="px-4 py-2 font-semibold text-slate-600">类型</th><th className="px-4 py-2 font-semibold text-slate-600">方式</th><th className="px-4 py-2 font-semibold text-slate-600">办公室</th><th className="px-4 py-2 font-semibold text-slate-600">日期</th><th className="px-4 py-2 font-semibold text-slate-600">操作</th></tr></thead><tbody>{filteredExpenseRows.length ? pagedExpenses.map((item) => { const locked = isPayrollLinkedExpense(item, payrolls); return <tr key={item.id} className="border-b border-slate-100 last:border-b-0"><td className="px-4 py-2 text-slate-700">{item.target}</td><td className="px-4 py-2 text-slate-500">{item.detail}</td><td className="px-4 py-2 font-semibold text-rose-600">{formatMoney(item.amount)}</td><td className="px-4 py-2 text-slate-600">{item.display_type}</td><td className="px-4 py-2 text-slate-600">{item.payment_method}</td><td className="px-4 py-2 text-slate-600">{item.office ? "是" : "否"}</td><td className="px-4 py-2 text-slate-500">{item.expense_date}</td><td className="px-4 py-2"><div className="flex items-center gap-2">{locked ? <span className="rounded border border-amber-200 bg-amber-50 px-2 py-0.5 text-[11px] text-amber-700">工资联动，已锁定</span> : editingExpenseId === item.id ? <span className="text-xs text-slate-400">编辑中</span> : <><button onClick={() => openEditExpense(item)} className="rounded border border-slate-200 px-2 py-0.5 text-xs text-slate-600 hover:border-slate-300 hover:bg-slate-50 transition-colors">编辑</button>{confirmingExpenseId === item.id ? <><button onClick={() => deleteExpense(item.id)} className="rounded border border-red-400 bg-red-500 px-2 py-0.5 text-xs font-semibold text-slate-700 hover:bg-red-600 transition-colors">确认</button><button onClick={() => setConfirmingExpenseId(null)} className="rounded border border-slate-200 px-2 py-0.5 text-xs text-slate-500 hover:border-slate-300 transition-colors">取消</button></> : <button onClick={() => setConfirmingExpenseId(item.id)} className="rounded border border-red-100 px-2 py-0.5 text-xs text-red-500 hover:border-red-300 hover:bg-red-50 transition-colors">删除</button>}</>}</div></td></tr>; }) : <tr><td colSpan={8} className="py-10 text-center text-xs text-slate-400">这个日期范围内没有支出记录</td></tr>}</tbody></table></div><div className="flex flex-wrap items-center justify-between gap-3 rounded-xl border border-slate-200 bg-white px-4 py-3 text-xs text-slate-600"><span>第 {expensesPage} / {expensesPageCount} 页,共 {filteredExpenseRows.length} 条支出</span><div className="flex items-center gap-2"><button type="button" onClick={() => setExpensesPage((p) => Math.max(1, p - 1))} disabled={expensesPage <= 1} className="rounded-lg border border-slate-200 px-3 py-1.5 disabled:cursor-not-allowed disabled:opacity-40">上一页</button><button type="button" onClick={() => setExpensesPage((p) => Math.min(expensesPageCount, p + 1))} disabled={expensesPage >= expensesPageCount} className="rounded-lg border border-slate-200 px-3 py-1.5 disabled:cursor-not-allowed disabled:opacity-40">下一页</button></div></div></>)}
-      {sub === "cash" && (<><div className="mb-3 flex items-center justify-end gap-4 rounded-xl border border-slate-200 bg-white px-5 py-3"><span className="text-xs text-slate-500">当前余额</span><span className={`text-xl font-bold ${cashBalance >= 0 ? "text-emerald-600" : "text-rose-600"}`}>{formatMoney(cashBalance)}</span></div><div className="overflow-x-auto rounded-xl border border-slate-200 bg-white"><table className="w-full text-left text-xs"><thead><tr className="border-b border-slate-200 bg-slate-50"><th className="px-4 py-2 font-semibold text-slate-600">日期</th><th className="px-4 py-2 font-semibold text-slate-600">类型</th><th className="px-4 py-2 font-semibold text-slate-600">类别</th><th className="px-4 py-2 font-semibold text-slate-600">对方</th><th className="px-4 py-2 font-semibold text-slate-600">金额</th><th className="px-4 py-2 font-semibold text-slate-600">明细</th><th className="px-4 py-2 font-semibold text-slate-600">余额</th></tr></thead><tbody>{cashRows.length ? cashRows.slice(0, 100).map((item) => { const isPositive = item.type === "收入" || item.type === "转入"; const typeCategory = item.category || (item.type === "转入" || item.type === "转出" ? "-" : "-"); return (<tr key={item.id} className="border-b border-slate-100 last:border-b-0"><td className="px-4 py-2 text-slate-500">{item.date}</td><td className="px-4 py-2"><span className={`rounded-full px-2 py-0.5 text-[11px] font-semibold ${isPositive ? "bg-green-50 text-green-700" : "bg-rose-50 text-rose-700"}`}>{item.type}</span></td><td className="px-4 py-2 text-slate-600">{typeCategory}</td><td className="px-4 py-2 text-slate-700">{item.target_name || "-"}</td><td className={`px-4 py-2 font-semibold ${isPositive ? "text-green-600" : "text-rose-600"}`}>{formatMoney(item.amount)}</td><td className="px-4 py-2 text-slate-500 max-w-[200px] truncate" title={item.note}>{item.note || "-"}</td><td className="px-4 py-2 font-medium text-emerald-600">{formatMoney(item.balance)}</td></tr>); }) : <tr><td colSpan={7} className="py-10 text-center text-xs text-slate-400">没有办公室记录</td></tr>}</tbody></table></div></>)}
+      {sub === "expense" && (<><div className="mb-2 rounded-xl border border-slate-200 bg-amber-50 px-4 py-3 text-xs text-amber-800">工资类支出已锁定，不能在普通支出清单里编辑或删除。请到“员工管理 → 工资”里处理。</div><div className="overflow-x-auto rounded-xl border border-slate-200 bg-white"><table className="w-full text-left text-xs"><thead><tr className="border-b border-slate-200 bg-slate-50"><th className="px-4 py-2 font-semibold text-slate-600">对象</th><th className="px-4 py-2 font-semibold text-slate-600">明细</th><th className="px-4 py-2 font-semibold text-slate-600">金额</th><th className="px-4 py-2 font-semibold text-slate-600">类别</th><th className="px-4 py-2 font-semibold text-slate-600">方式</th><th className="px-4 py-2 font-semibold text-slate-600">办公室</th><th className="px-4 py-2 font-semibold text-slate-600">日期</th><th className="px-4 py-2 font-semibold text-slate-600">操作</th></tr></thead><tbody>{filteredExpenseRows.length ? pagedExpenses.map((item) => { const locked = isPayrollLinkedExpense(item, payrolls); return <tr key={item.id} className="border-b border-slate-100 last:border-b-0"><td className="px-4 py-2 text-slate-700">{item.target}</td><td className="px-4 py-2 text-slate-500">{item.detail}</td><td className="px-4 py-2 font-semibold text-rose-600">{formatMoney(item.amount)}</td><td className="px-4 py-2 text-slate-600">{item.display_type}</td><td className="px-4 py-2 text-slate-600">{item.payment_method}</td><td className="px-4 py-2 text-slate-600">{item.office ? "是" : "否"}</td><td className="px-4 py-2 text-slate-500">{item.expense_date}</td><td className="px-4 py-2"><div className="flex items-center gap-2">{locked ? <span className="rounded border border-amber-200 bg-amber-50 px-2 py-0.5 text-[11px] text-amber-700">工资联动，已锁定</span> : editingExpenseId === item.id ? <span className="text-xs text-slate-400">编辑中</span> : <><button onClick={() => openEditExpense(item)} className="rounded border border-slate-200 px-2 py-0.5 text-xs text-slate-600 hover:border-slate-300 hover:bg-slate-50 transition-colors">编辑</button>{confirmingExpenseId === item.id ? <><button onClick={() => deleteExpense(item.id)} className="rounded border border-red-400 bg-red-500 px-2 py-0.5 text-xs font-semibold text-slate-700 hover:bg-red-600 transition-colors">确认</button><button onClick={() => setConfirmingExpenseId(null)} className="rounded border border-slate-200 px-2 py-0.5 text-xs text-slate-500 hover:border-slate-300 transition-colors">取消</button></> : <button onClick={() => setConfirmingExpenseId(item.id)} className="rounded border border-red-100 px-2 py-0.5 text-xs text-red-500 hover:border-red-300 hover:bg-red-50 transition-colors">删除</button>}</>}</div></td></tr>; }) : <tr><td colSpan={8} className="py-10 text-center text-xs text-slate-400">这个日期范围内没有支出记录</td></tr>}</tbody></table></div><div className="flex flex-wrap items-center justify-between gap-3 rounded-xl border border-slate-200 bg-white px-4 py-3 text-xs text-slate-600"><span>第 {expensesPage} / {expensesPageCount} 页,共 {filteredExpenseRows.length} 条支出</span><div className="flex items-center gap-2"><button type="button" onClick={() => setExpensesPage((p) => Math.max(1, p - 1))} disabled={expensesPage <= 1} className="rounded-lg border border-slate-200 px-3 py-1.5 disabled:cursor-not-allowed disabled:opacity-40">上一页</button><button type="button" onClick={() => setExpensesPage((p) => Math.min(expensesPageCount, p + 1))} disabled={expensesPage >= expensesPageCount} className="rounded-lg border border-slate-200 px-3 py-1.5 disabled:cursor-not-allowed disabled:opacity-40">下一页</button></div></div></>)}
+      {sub === "cash" && (<><div className="mb-3 flex items-center justify-end gap-4 rounded-xl border border-slate-200 bg-white px-5 py-3"><span className="text-xs text-slate-500">当前余额</span><span className={`text-xl font-bold ${cashBalance >= 0 ? "text-emerald-600" : "text-rose-600"}`}>{formatMoney(cashBalance)}</span></div><div className="overflow-x-auto rounded-xl border border-slate-200 bg-white"><table className="w-full text-left text-xs"><thead><tr className="border-b border-slate-200 bg-slate-50"><th className="px-4 py-2 font-semibold text-slate-600">日期</th><th className="px-4 py-2 font-semibold text-slate-600">类别</th><th className="px-4 py-2 font-semibold text-slate-600">类别</th><th className="px-4 py-2 font-semibold text-slate-600">对方</th><th className="px-4 py-2 font-semibold text-slate-600">金额</th><th className="px-4 py-2 font-semibold text-slate-600">明细</th><th className="px-4 py-2 font-semibold text-slate-600">余额</th></tr></thead><tbody>{cashRows.length ? cashRows.slice(0, 100).map((item) => { const isPositive = item.type === "收入" || item.type === "转入"; const typeCategory = item.category || (item.type === "转入" || item.type === "转出" ? "-" : "-"); return (<tr key={item.id} className="border-b border-slate-100 last:border-b-0"><td className="px-4 py-2 text-slate-500">{item.date}</td><td className="px-4 py-2"><span className={`rounded-full px-2 py-0.5 text-[11px] font-semibold ${isPositive ? "bg-green-50 text-green-700" : "bg-rose-50 text-rose-700"}`}>{item.type}</span></td><td className="px-4 py-2 text-slate-600">{typeCategory}</td><td className="px-4 py-2 text-slate-700">{item.target_name || "-"}</td><td className={`px-4 py-2 font-semibold ${isPositive ? "text-green-600" : "text-rose-600"}`}>{formatMoney(item.amount)}</td><td className="px-4 py-2 text-slate-500 max-w-[200px] truncate" title={item.note}>{item.note || "-"}</td><td className="px-4 py-2 font-medium text-emerald-600">{formatMoney(item.balance)}</td></tr>); }) : <tr><td colSpan={7} className="py-10 text-center text-xs text-slate-400">没有办公室记录</td></tr>}</tbody></table></div></>)}
 
       {sub === "ledger" && <div className="overflow-x-auto rounded-xl border border-slate-200 bg-white"><table className="w-full text-left text-xs"><thead><tr className="border-b border-slate-200 bg-slate-50"><th className="px-4 py-2 font-semibold text-slate-600">{ledgerView === "yearly" ? "月份" : "日期"}</th><th className="px-4 py-2 font-semibold text-slate-600">收入</th><th className="px-4 py-2 font-semibold text-slate-600">支出</th><th className="px-4 py-2 font-semibold text-slate-600">净额</th><th className="px-4 py-2 font-semibold text-slate-600">余额</th><th className="px-4 py-2 font-semibold text-slate-600">净利润</th></tr></thead><tbody>{ledgerRows.map((item) => <tr key={item.month} className="border-b border-slate-100 last:border-b-0"><td className="px-4 py-2 font-medium text-slate-700">{item.month}</td><td className="px-4 py-2 text-green-600">{formatMoney(item.income)}</td><td className="px-4 py-2 text-rose-600">{formatMoney(item.expense)}</td><td className="px-4 py-2 text-slate-700">{formatMoney(item.net)}</td><td className="px-4 py-2 text-emerald-600">{formatMoney(item.balance)}</td><td className={`px-4 py-2 font-semibold ${item.profit >= 0 ? "text-emerald-600" : "text-rose-600"}`}>{formatMoney(item.profit)}</td></tr>)}</tbody></table></div>}
       {sub === "receivables" && (
@@ -4623,7 +4623,7 @@ return days.map((day) => {
             <table className="w-full text-left text-xs">
               <thead>
                 <tr className="border-b border-slate-200 bg-slate-50">
-                  <th className="px-4 py-2 font-semibold text-slate-600">类型</th>
+                  <th className="px-4 py-2 font-semibold text-slate-600">类别</th>
                   <th className="px-4 py-2 font-semibold text-slate-600">对象</th>
                   <th className="px-4 py-2 font-semibold text-slate-600">问题</th>
                   <th className="px-4 py-2 font-semibold text-slate-600">当前值</th>
@@ -5778,7 +5778,7 @@ function ClientsSection({ clients, setClients, suppliers, setSuppliers, orders, 
                               <thead>
                                 <tr className="border-b border-gray-200 bg-gray-50">
                                   <th className="px-3 py-2 font-semibold text-slate-600">订单号</th>
-                                  <th className="px-3 py-2 font-semibold text-slate-600">类型</th>
+                                  <th className="px-3 py-2 font-semibold text-slate-600">类别</th>
                                   <th className="px-3 py-2 font-semibold text-slate-600">日期</th>
                                   <th className="px-3 py-2 font-semibold text-slate-600">总额</th>
                                   <th className="px-3 py-2 font-semibold text-slate-600">已收</th>
@@ -7254,8 +7254,8 @@ function SettingsSection({ settings, setSettings, saveState, isDirty, lastSavedA
     { key: "company-base", label: "1. 公司基础 + 打印模板", note: "公司信息、打印标题、模板备注、预览" },
     { key: "company-contact", label: "2. 联系方式", note: "电话、邮箱、网站、 Logo" },
     { key: "finance", label: "3. 财务收款", note: "税率默认值、收款方式" },
-    { key: "lists", label: "4. 分类列表", note: "支付类型和供应商分类" },
-    { key: "categories", label: "5. 物料分类", note: "物料管理分类列表" },
+    { key: "lists", label: "4. 分类列表", note: "支付类别和供应商类别" },
+    { key: "categories", label: "5. 物料类别", note: "物料管理类别列表" },
   ]
   const [page, setPage] = useState<SettingsPageKey>("company-base");
   const pageIndex = pages.findIndex((item) => item.key === page);
@@ -7407,7 +7407,7 @@ function SettingsSection({ settings, setSettings, saveState, isDirty, lastSavedA
         {page === "lists" ? (
           <div className="grid gap-3 xl:grid-cols-2">
             <div>
-              <h3 className="mb-1.5 text-sm font-semibold text-slate-700">支出类型</h3>
+              <h3 className="mb-1.5 text-sm font-semibold text-slate-700">支出类别</h3>
               <p className="mb-2 text-[11px] text-slate-400">录入支出时直接读取。</p>
               <InlineTagEditor
                 tags={parseTagList(settings.expense_types || "采购\n工资\n物流\n办公\n其他")}
@@ -7415,7 +7415,7 @@ function SettingsSection({ settings, setSettings, saveState, isDirty, lastSavedA
               />
             </div>
             <div>
-              <h3 className="mb-1.5 text-sm font-semibold text-slate-700">供应商分类</h3>
+              <h3 className="mb-1.5 text-sm font-semibold text-slate-700">供应商类别</h3>
               <p className="mb-2 text-[11px] text-slate-400">供应商新增/编辑会直接读取。</p>
               <InlineTagEditor
                 tags={parseTagList(settings.supplier_categories || "布料\n五金\n玻璃\n物流\n其他")}
@@ -7423,7 +7423,7 @@ function SettingsSection({ settings, setSettings, saveState, isDirty, lastSavedA
               />
             </div>
             <div>
-              <h3 className="mb-1.5 text-sm font-semibold text-slate-700">收入分类</h3>
+              <h3 className="mb-1.5 text-sm font-semibold text-slate-700">收入类别</h3>
               <p className="mb-2 text-[11px] text-slate-400">杂项收入时直接读取。</p>
               <InlineTagEditor
                 tags={parseTagList(settings.income_categories || "杂项收入,收入尾款,加工,来料加工,供应商退料,运费收退")}
@@ -7436,7 +7436,7 @@ function SettingsSection({ settings, setSettings, saveState, isDirty, lastSavedA
         {page === "categories" ? (
           <div className="grid gap-3 xl:grid-cols-2">
             <div>
-              <h3 className="mb-1.5 text-sm font-semibold text-slate-700">物料分类</h3>
+              <h3 className="mb-1.5 text-sm font-semibold text-slate-700">物料类别</h3>
               <p className="mb-2 text-[11px] text-slate-400">采购单和物料管理会直接读取。</p>
               <InlineTagEditor
                 tags={parseTagList(settings.material_categories)}
@@ -7445,6 +7445,10 @@ function SettingsSection({ settings, setSettings, saveState, isDirty, lastSavedA
             </div>
           </div>
         ) : null}
+
+        {/* ── 类别合并区域 ── */}
+        <CategoryMerge settings={settings} setSettings={setSettings} />
+
       </div>
     </div>
   );
@@ -8390,3 +8394,218 @@ function InstallSection({ orders, setOrders, clients, onAutoSave }: { orders: Bi
     </>
   );
 }
+
+// ─── 类别合并组件 ──────────────────────────────────────────
+
+const MERGE_TABLE_COLUMNS: Record<string, { table: string; column: string; label: string }[]> = {
+  expense: [
+    { table: "a3s_expenses", column: "expense_type", label: "支出类别" },
+  ],
+  income: [
+    { table: "a3s_misc_income", column: "category", label: "收入类别（杂项）" },
+  ],
+  office: [
+    { table: "a3s_cash_entries", column: "category", label: "办公室类别" },
+  ],
+  material: [
+    { table: "a3s_materials", column: "category", label: "物料类别" },
+  ],
+  supplier: [
+    { table: "a3s_suppliers", column: "category", label: "供应商类别" },
+  ],
+};
+
+const MERGE_CATEGORIES = [
+  { key: "expense", label: "支出类别" },
+  { key: "income", label: "收入类别" },
+  { key: "office", label: "办公室类别" },
+  { key: "material", label: "物料类别" },
+  { key: "supplier", label: "供应商类别" },
+];
+
+function _catDefault(key: string): string {
+  const defaults: Record<string, string> = {
+    expense: "采购\n工资\n物流\n办公\n其他",
+    supplier: "布料\n五金\n玻璃\n物流\n其他",
+    material: "",
+    income: "杂项收入,收入尾款,加工,来料加工,供应商退料,运费收退",
+  };
+  return defaults[key] || "";
+}
+
+function getSettingsCategoryList(settings: BizSettings, key: string): string[] {
+  const fieldMap: Record<string, string | undefined> = {
+    expense: settings.expense_types,
+    income: settings.income_categories,
+    office: settings.expense_types,
+    material: settings.material_categories,
+    supplier: settings.supplier_categories,
+  };
+  const raw = fieldMap[key] || _catDefault(key);
+  return raw.split(/[\n,，]+/).map((s: string) => s.trim()).filter(Boolean);
+}
+
+function CategoryMerge({ settings, setSettings }: { settings: BizSettings; setSettings: (fn: React.SetStateAction<BizSettings>) => void }) {
+  const [catKey, setCatKey] = useState("expense");
+  const [fromValue, setFromValue] = useState("");
+  const [toValue, setToValue] = useState("");
+  const [status, setStatus] = useState<{ type: "idle" | "loading" | "done" | "error"; msg: string }>({ type: "idle", msg: "" });
+
+  const categoryList = getSettingsCategoryList(settings, catKey);
+  const targets = MERGE_TABLE_COLUMNS[catKey] || [];
+
+  async function handleMerge() {
+    if (!fromValue || !toValue) {
+      setStatus({ type: "error", msg: "请选择源类别和目标类别" });
+      return;
+    }
+    if (fromValue === toValue) {
+      setStatus({ type: "error", msg: "源类别和目标类别相同，无需合并" });
+      return;
+    }
+    setStatus({ type: "loading", msg: "正在合并..." });
+    let total = 0;
+    let errors: string[] = [];
+    const results: string[] = [];
+    for (const t of targets) {
+      try {
+        const res = await fetch("/api/biz-store/merge-categories", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ table: t.table, column: t.column, fromValue, toValue }),
+        });
+        const json = await res.json();
+        if (json.ok) {
+          total += json.affected || 0;
+          results.push(`${t.label}: ${json.affected} 条`);
+        } else {
+          errors.push(`${t.label}: ${json.error}`);
+        }
+      } catch (e: any) {
+        errors.push(`${t.label}: ${e.message}`);
+      }
+    }
+
+    // Also update settings (remove fromValue from settings list)
+    const fieldMap: Record<string, keyof BizSettings> = {
+      expense: "expense_types",
+      income: "income_categories",
+      office: "expense_types",
+      material: "material_categories",
+      supplier: "supplier_categories",
+    };
+    const field = fieldMap[catKey];
+    const currentList = getSettingsCategoryList(settings, catKey);
+    const newList = currentList.filter((s: string) => s !== fromValue);
+    if (newList.length < currentList.length) {
+      setSettings((prev: BizSettings) => ({ ...prev, [field]: newList.join("\n") }));
+    }
+
+    if (errors.length > 0) {
+      setStatus({
+        type: "error",
+        msg: `合并完成（${total} 条），但有错误: ${errors.join("; ")}`,
+      });
+    } else if (total === 0) {
+      setStatus({
+        type: "done",
+        msg: `没有找到 "${fromValue}" 的记录，但已从设置列表中移除`,
+      });
+    } else {
+      setStatus({
+        type: "done",
+        msg: `合并完成！${results.join(" / ")}，已从设置列表中移除 "${fromValue}"`,
+      });
+    }
+
+    setFromValue("");
+    setToValue("");
+  }
+
+  const statusColor =
+    status.type === "error"
+      ? "border-rose-200 bg-rose-50 text-rose-700"
+      : status.type === "done"
+        ? "border-emerald-200 bg-emerald-50 text-emerald-700"
+        : status.type === "loading"
+          ? "border-sky-200 bg-sky-50 text-sky-700"
+          : "border-slate-200 bg-slate-50 text-slate-500";
+
+  // Remove duplicates for display
+  const uniqueList = Array.from(new Set(categoryList));
+
+  return (
+    <div className="rounded-xl border border-red-200 bg-red-50/50 p-4">
+      <SectionHeader eyebrow="Danger Zone" title="类别合并" />
+      <p className="mb-3 text-xs text-slate-500">
+        将选定的类别合并到另一个类别中。此操作会影响所有历史记录，不可撤销。合并后源类别将从设置列表中移除。
+      </p>
+
+      <div className="mb-3 flex flex-wrap items-center gap-2">
+        <span className="text-xs font-medium text-slate-600">类别类型:</span>
+        {MERGE_CATEGORIES.map((c) => (
+          <button
+            key={c.key}
+            onClick={() => { setCatKey(c.key); setFromValue(""); setToValue(""); setStatus({ type: "idle", msg: "" }); }}
+            className={`rounded-lg px-3 py-1.5 text-xs font-medium transition-colors ${
+              catKey === c.key
+                ? "bg-red-500 text-white"
+                : "border border-slate-200 bg-white text-slate-600 hover:border-red-300"
+            }`}
+          >
+            {c.label}
+          </button>
+        ))}
+      </div>
+
+      <div className="flex flex-wrap items-end gap-3">
+        <div className="flex-1 min-w-[150px]">
+          <label className="mb-1 block text-xs font-medium text-slate-600">源类别（将被替换）</label>
+          <select
+            value={fromValue}
+            onChange={(e) => setFromValue(e.target.value)}
+            className="w-full rounded-lg border border-slate-200 px-3 py-2 text-xs focus:border-red-400 focus:outline-none"
+          >
+            <option value="">-- 选择源类别 --</option>
+            {uniqueList.map((c) => (
+              <option key={c} value={c}>
+                {c}
+              </option>
+            ))}
+          </select>
+        </div>
+
+        <div className="flex-1 min-w-[150px]">
+          <label className="mb-1 block text-xs font-medium text-slate-600">目标类别（替换为）</label>
+          <select
+            value={toValue}
+            onChange={(e) => setToValue(e.target.value)}
+            className="w-full rounded-lg border border-slate-200 px-3 py-2 text-xs focus:border-red-400 focus:outline-none"
+          >
+            <option value="">-- 选择目标类别 --</option>
+            {uniqueList.filter((c) => c !== fromValue).map((c) => (
+              <option key={c} value={c}>
+                {c}
+              </option>
+            ))}
+          </select>
+        </div>
+
+        <button
+          onClick={handleMerge}
+          disabled={!fromValue || !toValue || status.type === "loading"}
+          className="flex items-center gap-1.5 rounded-lg border border-red-300 bg-red-500 px-4 py-2 text-xs font-semibold text-white hover:bg-red-600 disabled:cursor-not-allowed disabled:opacity-50 transition-colors"
+        >
+          {status.type === "loading" ? "合并中..." : "执行合并"}
+        </button>
+      </div>
+
+      {status.msg && (
+        <div className={`mt-3 rounded-lg border px-3 py-2 text-xs ${statusColor}`}>
+          {status.msg}
+        </div>
+      )}
+    </div>
+  );
+}
+

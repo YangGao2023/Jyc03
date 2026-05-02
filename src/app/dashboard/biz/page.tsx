@@ -2886,6 +2886,7 @@ function OrdersSection({
     setSelectedOrderNumbers([]);
     setBulkBusy(false);
     setBulkAction(null);
+    onAutoSave?.();
   }
 
   function handleSaveVipPrice(clientName: string, materialName: string, price: number) {
@@ -3648,6 +3649,7 @@ function FinanceSection({ orders, setOrders, expenses, setExpenses, cashEntries,
       return client.name === keptName;
     }));
     setResolvingDuplicateKey(null);
+    onAutoSave?.();
   }
   const [expenseFromOffice, setExpenseFromOffice] = useState(false);
 
@@ -5084,6 +5086,7 @@ function ClientsSection({ clients, setClients, suppliers, setSuppliers, orders, 
 
   function toggleVip(clientId: string) {
     setClients((prev) => prev.map((item) => item.id === clientId ? { ...item, is_vip: !item.is_vip } : item));
+    onAutoSave?.();
   }
 
   function openVipPriceEditor(client: (typeof clients)[number]) {
@@ -5183,16 +5186,19 @@ function ClientsSection({ clients, setClients, suppliers, setSuppliers, orders, 
   function handleClientOrderCreate(order: BizOrder) {
     setOrders((prev) => [order, ...prev]);
     setNewOrderTypeForClient(null);
+    onAutoSave?.();
   }
 
   function handleClientOrderUpdate(order: BizOrder) {
     setOrders((prev) => prev.map((o) => o.order_number === order.order_number ? order : o));
     setSelectedClientOrderDetail(null);
+    onAutoSave?.();
   }
 
   function handleClientDetailSave(updated: BizOrder) {
     setOrders((prev) => prev.map((o) => o.order_number === updated.order_number ? updated : o));
     setSelectedClientOrderDetail(null);
+    onAutoSave?.();
   }
 
   function handleClientOrderDelete(orderNumber: string) {
@@ -5206,6 +5212,7 @@ function ClientsSection({ clients, setClients, suppliers, setSuppliers, orders, 
       expenseReferencesOrder(item, orderNumber) ? { ...item, voided: true } : item
     ));
     setDeleteOrderConfirm(null);
+    onAutoSave?.();
   }
 
   function handleClientOrderPrint(item: BizOrder, printType: "invoice" | "pickup") {

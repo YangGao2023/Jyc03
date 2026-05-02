@@ -7547,15 +7547,40 @@ export default function DashboardBizPage() {
         return;
       }
       if (!response.ok) throw new Error("save failed");
-      const payload = (await response.json()) as { ok: boolean; data: BizStoreSnapshot };
-      const nextSnapshot = buildBizSnapshot({ ...snapshot, revision: payload.data.revision ?? snapshot.revision });
-      const nextSnapshotJson = serializeBizSnapshot(nextSnapshot);
-      setStoreRevision(nextSnapshot.revision);
-      setSavedSnapshotJson(nextSnapshotJson);
+      const putPayload = (await response.json()) as { ok: boolean; data: BizStoreSnapshot };
+      // After a successful PUT, immediately GET the latest from DB to ensure
+      // the UI reflects the true persisted state (desktop-app style refresh).
+      let refreshed: BizStoreSnapshot | null = null;
+      try {
+        const refreshResponse = await fetch("/api/biz-store", { cache: "no-store" });
+        if (refreshResponse.ok) {
+          const refreshPayload = (await refreshResponse.json()) as { ok: boolean; data: BizStoreSnapshot };
+          if (refreshPayload?.data) refreshed = buildBizSnapshot(refreshPayload.data);
+        }
+      } catch {}
+      const finalSnapshot = refreshed ?? buildBizSnapshot({ ...snapshot, revision: putPayload.data?.revision ?? snapshot.revision });
+      const finalJson = serializeBizSnapshot(finalSnapshot);
+      if (refreshed) {
+        setOrders(refreshed.orders);
+        setClients(refreshed.clients);
+        setSuppliers(refreshed.suppliers);
+        setExpenses(refreshed.expenses);
+        setCashEntries(refreshed.cashEntries);
+        setMaterials(refreshed.materials);
+        setPurchases(refreshed.purchases ?? []);
+        setEmployees(refreshed.employees);
+        setAttendances(refreshed.attendances);
+        setAppointments(refreshed.appointments ?? []);
+        setPayrolls(refreshed.payrolls);
+        setPrintArchives(refreshed.printArchives);
+        setSettings(refreshed.settings);
+      }
+      setStoreRevision(finalSnapshot.revision);
+      setSavedSnapshotJson(finalJson);
       setLastSavedAt(new Date().toLocaleTimeString("zh-CN", { hour12: false }));
       try {
-        localStorage.setItem("biz-store-backup", nextSnapshotJson);
-        localStorage.setItem("biz-store-live-backup", nextSnapshotJson);
+        localStorage.setItem("biz-store-backup", finalJson);
+        localStorage.setItem("biz-store-live-backup", finalJson);
       } catch {}
       setSaveState("saved");
     } catch {

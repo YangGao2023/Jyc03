@@ -7415,35 +7415,43 @@ function SettingsSection({ settings, setSettings, saveState, isDirty, lastSavedA
 
         {page === "lists" ? (
           <div className="grid gap-3 xl:grid-cols-2">
-            <SettingsGroup title="支出类型" note="录入支出时直接读取。">
+            <div>
+              <h3 className="mb-1.5 text-sm font-semibold text-slate-700">支出类型</h3>
+              <p className="mb-2 text-[11px] text-slate-400">录入支出时直接读取。</p>
               <InlineTagEditor
                 tags={parseTagList(settings.expense_types || "采购\n工资\n物流\n办公\n其他")}
                 onChange={(tags) => update("expense_types", serializeTagList(tags))}
               />
-            </SettingsGroup>
-            <SettingsGroup title="供应商分类" note="供应商新增/编辑会直接读取。">
+            </div>
+            <div>
+              <h3 className="mb-1.5 text-sm font-semibold text-slate-700">供应商分类</h3>
+              <p className="mb-2 text-[11px] text-slate-400">供应商新增/编辑会直接读取。</p>
               <InlineTagEditor
                 tags={parseTagList(settings.supplier_categories || "布料\n五金\n玻璃\n物流\n其他")}
                 onChange={(tags) => update("supplier_categories", serializeTagList(tags))}
               />
-            </SettingsGroup>
-            <SettingsGroup title="收入分类" note="杂项收入时直接读取。">
+            </div>
+            <div>
+              <h3 className="mb-1.5 text-sm font-semibold text-slate-700">收入分类</h3>
+              <p className="mb-2 text-[11px] text-slate-400">杂项收入时直接读取。</p>
               <InlineTagEditor
                 tags={parseTagList(settings.income_categories || "杂项收入,收入尾款,加工,来料加工,供应商退料,运费收退")}
                 onChange={(tags) => update("income_categories", serializeTagList(tags))}
               />
-            </SettingsGroup>
+            </div>
           </div>
         ) : null}
 
         {page === "categories" ? (
           <div className="grid gap-3 xl:grid-cols-2">
-            <SettingsGroup title="物料分类" note="采购单和物料管理会直接读取。">
+            <div>
+              <h3 className="mb-1.5 text-sm font-semibold text-slate-700">物料分类</h3>
+              <p className="mb-2 text-[11px] text-slate-400">采购单和物料管理会直接读取。</p>
               <InlineTagEditor
                 tags={parseTagList(settings.material_categories)}
                 onChange={(tags) => update("material_categories", serializeTagList(tags))}
               />
-            </SettingsGroup>
+            </div>
           </div>
         ) : null}
       </div>

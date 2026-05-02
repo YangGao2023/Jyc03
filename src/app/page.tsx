@@ -4,48 +4,56 @@ const products = [
     labelEn: "DOOR",
     category: "IRONWORK",
     image: "https://images.unsplash.com/photo-1558618666-fcd25c85cd64?w=600&q=80",
+    route: "door",
   },
   {
     label: "防盗窗",
     labelEn: "WINDOW GUARD",
     category: "IRONWORK",
     image: "https://images.unsplash.com/photo-1504307651254-35680f356dfd?w=600&q=80",
+    route: "window",
   },
   {
     label: "车道门",
     labelEn: "DRIVEWAY GATE",
     category: "IRONWORK",
     image: "https://images.unsplash.com/photo-1558618666-fcd25c85cd64?w=600&q=80",
+    route: "gate",
   },
   {
     label: "围栏",
     labelEn: "FENCE",
     category: "IRONWORK",
     image: "https://images.unsplash.com/photo-1504307651254-35680f356dfd?w=600&q=80",
+    route: "fence",
   },
   {
     label: "室外栏杆",
     labelEn: "OUTDOOR RAIL",
     category: "IRONWORK",
     image: "https://images.unsplash.com/photo-1558618666-fcd25c85cd64?w=600&q=80",
+    route: "outdoor",
   },
   {
     label: "室内栏杆",
     labelEn: "INDOOR RAIL",
     category: "IRONWORK",
     image: "https://images.unsplash.com/photo-1504307651254-35680f356dfd?w=600&q=80",
+    route: "indoor",
   },
   {
     label: "雨棚",
     labelEn: "RAIN ROOF",
     category: "IRONWORK",
     image: "https://images.unsplash.com/photo-1558618666-fcd25c85cd64?w=600&q=80",
+    route: "awning",
   },
   {
     label: "楼梯",
     labelEn: "STAIR",
     category: "IRONWORK",
     image: "https://images.unsplash.com/photo-1504307651254-35680f356dfd?w=600&q=80",
+    route: "stair",
   },
 ];
 
@@ -114,9 +122,10 @@ export default function HomePage() {
         </h2>
         <div className="grid grid-cols-2 gap-4 lg:grid-cols-4">
           {products.map((p) => (
-            <div
+            <a
               key={p.label}
-              className="group cursor-pointer overflow-hidden rounded-2xl border border-white/10 bg-white/5 transition hover:border-yellow-400/40 hover:bg-white/10"
+              href={`/gallery/${p.route}`}
+              className="group block cursor-pointer overflow-hidden rounded-2xl border border-white/10 bg-white/5 transition hover:border-yellow-400/40 hover:bg-white/10"
             >
               <div className="aspect-square overflow-hidden bg-neutral-800">
                 <img
@@ -129,7 +138,7 @@ export default function HomePage() {
                 <p className="text-sm font-bold text-yellow-400">{p.label}</p>
                 <p className="mt-0.5 text-xs text-white/50">{p.labelEn}</p>
               </div>
-            </div>
+            </a>
           ))}
         </div>
       </section>

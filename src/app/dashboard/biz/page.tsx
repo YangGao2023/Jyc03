@@ -3351,6 +3351,56 @@ function SmallInput({ value, onChange, placeholder, type = "text" }: { value: st
   return <input type={type} value={value} onChange={(e) => onChange(e.target.value)} placeholder={placeholder} className="h-8 w-full rounded-lg border border-slate-300 bg-white px-3 text-xs text-slate-700 focus:border-gray-200 focus:outline-none" />;
 }
 
+// Inline tag list editor: shows each category as a chip with edit/delete, plus add new
+function InlineTagEditor({ tags, onChange }: { tags: string[]; onChange: (tags: string[]) => void }) {
+  const [editingIdx, setEditingIdx] = useState<number | null>(null);
+  const [editVal, setEditVal] = useState("");
+  const [newVal, setNewVal] = useState("");
+  function startEdit(i: number) { setEditingIdx(i); setEditVal(tags[i]); }
+  function commitEdit(i: number) {
+    const v = editVal.trim();
+    if (!v) { onChange(tags.filter((_, idx) => idx !== i)); }
+    else { const next = [...tags]; next[i] = v; onChange(next); }
+    setEditingIdx(null);
+  }
+  function remove(i: number) { onChange(tags.filter((_, idx) => idx !== i)); }
+  function addNew() {
+    const v = newVal.trim();
+    if (!v) return;
+    if (!tags.includes(v)) onChange([...tags, v]);
+    setNewVal("");
+  }
+  return (
+    <div className="space-y-1.5">
+      {tags.map((tag, i) => (
+        <div key={i} className="flex items-center gap-1.5 rounded-lg border border-gray-200 bg-white px-2.5 py-1.5">
+          {editingIdx === i ? (
+            <>
+              <input autoFocus value={editVal} onChange={(e) => setEditVal(e.target.value)}
+                onKeyDown={(e) => { if (e.key === "Enter") commitEdit(i); if (e.key === "Escape") setEditingIdx(null); }}
+                className="flex-1 rounded border border-blue-300 bg-white px-2 py-0.5 text-xs text-slate-700 focus:outline-none" />
+              <button onClick={() => commitEdit(i)} className="rounded bg-emerald-500 px-2 py-0.5 text-[10px] font-semibold text-white hover:bg-emerald-600">确认</button>
+              <button onClick={() => setEditingIdx(null)} className="rounded border border-slate-200 px-2 py-0.5 text-[10px] text-slate-600">取消</button>
+            </>
+          ) : (
+            <>
+              <span className="flex-1 text-xs text-slate-700">{tag}</span>
+              <button onClick={() => startEdit(i)} className="rounded border border-slate-200 px-1.5 py-0.5 text-[10px] text-slate-500 hover:border-slate-400">编辑</button>
+              <button onClick={() => remove(i)} className="rounded border border-rose-100 px-1.5 py-0.5 text-[10px] text-rose-400 hover:border-rose-300 hover:text-rose-600">删除</button>
+            </>
+          )}
+        </div>
+      ))}
+      <div className="flex gap-1.5">
+        <input value={newVal} onChange={(e) => setNewVal(e.target.value)}
+          onKeyDown={(e) => { if (e.key === "Enter") addNew(); }}
+          placeholder="+ 新增分类名称" className="flex-1 h-8 rounded-lg border border-dashed border-slate-300 bg-white px-3 text-xs text-slate-700 focus:border-slate-400 focus:outline-none" />
+        <button onClick={addNew} disabled={!newVal.trim()} className="rounded-lg border border-slate-300 bg-white px-3 text-xs text-slate-600 hover:border-slate-400 disabled:opacity-40">添加</button>
+      </div>
+    </div>
+  );
+}
+
 // Input that shows hours + minutes separately, stores total minutes
 function HourMinuteInput({ minutes, onChange }: { minutes: number; onChange: (totalMinutes: number) => void }) {
   const h = Math.floor(Math.max(0, minutes) / 60);
@@ -7222,6 +7272,13 @@ function SettingsSection({ settings, setSettings, saveState, isDirty, lastSavedA
 
   const expenseTypeValue = settings.expense_types || "采购\n工资\n物流\n办公\n其他";
   const supplierCategoryValue = settings.supplier_categories || "布料\n五金\n玻璃\n物流\n其他";
+
+  function parseTagList(raw: string | null | undefined): string[] {
+    return (raw || "").split(/[\n,，]+/).map((t) => t.trim()).filter(Boolean);
+  }
+  function serializeTagList(tags: string[]): string {
+    return tags.join("\n");
+  }
   const saveTone = saveState === "error" || saveState === "conflict"
     ? "border-rose-200 bg-rose-50 text-rose-700"
     : saveState === "saving"
@@ -7358,24 +7415,34 @@ function SettingsSection({ settings, setSettings, saveState, isDirty, lastSavedA
 
         {page === "lists" ? (
           <div className="grid gap-3 xl:grid-cols-2">
-            <SettingsGroup title="支出类型">
-              <SettingsTextArea label="支出类型列表" value={expenseTypeValue} rows={8} onChange={(value) => update("expense_types", value)} note="一行一个,或者用逗号分隔。收支管理会直接读取这里。" />
+            <SettingsGroup title="支出类型" note="录入支出时直接读取。">
+              <InlineTagEditor
+                tags={parseTagList(settings.expense_types || "采购\n工资\n物流\n办公\n其他")}
+                onChange={(tags) => update("expense_types", serializeTagList(tags))}
+              />
             </SettingsGroup>
-            <SettingsGroup title="供应商分类">
-              <SettingsTextArea label="供应商分类列表" value={supplierCategoryValue} rows={8} onChange={(value) => update("supplier_categories", value)} note="一行一个,或者用逗号分隔。供应商新增/编辑会直接读取这里。" />
+            <SettingsGroup title="供应商分类" note="供应商新增/编辑会直接读取。">
+              <InlineTagEditor
+                tags={parseTagList(settings.supplier_categories || "布料\n五金\n玻璃\n物流\n其他")}
+                onChange={(tags) => update("supplier_categories", serializeTagList(tags))}
+              />
+            </SettingsGroup>
+            <SettingsGroup title="收入分类" note="杂项收入时直接读取。">
+              <InlineTagEditor
+                tags={parseTagList(settings.income_categories || "杂项收入,收入尾款,加工,来料加工,供应商退料,运费收退")}
+                onChange={(tags) => update("income_categories", serializeTagList(tags))}
+              />
             </SettingsGroup>
           </div>
         ) : null}
 
         {page === "categories" ? (
           <div className="grid gap-3 xl:grid-cols-2">
-            <SettingsGroup title="物料分类">
-              <SettingsField label="物料分类" value={settings.material_categories ?? ""} onChange={(value) => update("material_categories", value)} note="用逗号分隔,例如:布料,五金,配件" />
-              <div className="flex flex-wrap gap-1.5 mt-2">
-                {(settings.material_categories || "").split(/[,，]+/).map((tag) => tag.trim()).filter(Boolean).map((tag) => (
-                  <span key={tag} className="rounded-full bg-slate-100 px-2.5 py-0.5 text-xs text-slate-700 border border-slate-200">{tag}</span>
-                ))}
-              </div>
+            <SettingsGroup title="物料分类" note="采购单和物料管理会直接读取。">
+              <InlineTagEditor
+                tags={parseTagList(settings.material_categories)}
+                onChange={(tags) => update("material_categories", serializeTagList(tags))}
+              />
             </SettingsGroup>
           </div>
         ) : null}

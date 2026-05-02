@@ -24,7 +24,7 @@ export type BizStoreSnapshot = {
   expenses: ExpenseRecord[];
   cashEntries: CashEntry[];
   materials: MaterialRecord[];
-  purchases?: PurchaseRecord[];
+  purchases: PurchaseRecord[];
   employees: EmployeeRecord[];
   attendances: AttendanceRecord[];
   appointments?: MeasurementAppointmentRecord[];
@@ -302,15 +302,23 @@ async function mysqlWrite(snapshot: BizStoreSnapshot): Promise<void> {
     phone: c.phone || null, email: c.email || null, address: c.address || null,
     created_at: c.created_at || null, note: c.note || null,
     is_vip: c.is_vip ? 1 : 0, balance: c.balance ?? 0, wechat: c.wechat || null,
+    roles: c.roles?.length ? JSON.stringify(c.roles) : null,
+    master_id: c.master_id || null,
   })), 'id');
 
-  // Suppliers
-  await batchUpsert('a3s_suppliers', snapshot.suppliers.map(s => ({
-    id: s.id, name: s.name || '', category: s.category || null,
-    contact_person: s.contact_person || null, phone: s.phone || null,
-    email: s.email || null, website: s.website || null, address: s.address || null,
-    last_purchase_date: s.last_purchase_date || null, remark: s.remark || null,
-  })), 'id');
+  // Suppliers: write as clients with supplier role into a3s_clients
+  if (snapshot.suppliers.length) {
+    await batchUpsert('a3s_clients', snapshot.suppliers.map(s => ({
+      id: s.id, name: s.name || '',
+      contact: s.contact_person || null,
+      phone: s.phone || null, address: s.address || null,
+      note: s.remark || null,
+      email: s.email || null,
+      is_vip: 0, balance: 0,
+      roles: JSON.stringify(s.roles?.length ? s.roles : ['供应商']),
+      master_id: s.master_id || null,
+    })), 'id');
+  }
 
   // Expenses
   await batchUpsert('a3s_expenses', snapshot.expenses.map(e => ({
@@ -354,6 +362,8 @@ async function mysqlWrite(snapshot: BizStoreSnapshot): Promise<void> {
       unit: p.unit || '个', unit_price: p.unit_price ?? 0,
       total_amount: p.total_amount ?? 0, purchase_date: p.purchase_date || '',
       status: p.status || '待收货', expense_id: p.expense_id || null,
+      group_id: p.group_id || null, material_id: p.material_id || null,
+      notes: p.notes || null,
     })), 'id');
   }
 
@@ -481,6 +491,8 @@ function rowToClient(r: Record<string, unknown>): ContactRecord {
     is_vip: Boolean(r.is_vip),
     balance: Number(r.balance ?? 0),
     wechat: nullStr(r.wechat) ?? undefined,
+    roles: (() => { try { const v = r.roles; if (Array.isArray(v)) return v as Array<"客户" | "供应商">; if (typeof v === 'string' && v) return JSON.parse(v) as Array<"客户" | "供应商">; } catch {} return undefined; })(),
+    master_id: nullStr(r.master_id) ?? undefined,
   };
 }
 
@@ -495,6 +507,8 @@ function rowToSupplier(r: Record<string, unknown>): SupplierRecord {
     address: nullStr(r.address) ?? undefined,
     last_purchase_date: nullStr(r.last_purchase_date) ?? undefined,
     remark: nullStr(r.remark) ?? undefined,
+    master_id: nullStr(r.master_id) ?? undefined,
+    roles: (() => { try { const v = r.roles; if (Array.isArray(v)) return v as Array<"客户" | "供应商">; if (typeof v === 'string' && v) return JSON.parse(v) as Array<"客户" | "供应商">; } catch {} return undefined; })(),
   };
 }
 
@@ -561,6 +575,9 @@ function rowToPurchase(r: Record<string, unknown>): PurchaseRecord {
     total_amount: Number(r.total_amount ?? 0), purchase_date: String(r.purchase_date),
     status: String(r.status),
     expense_id: nullStr(r.expense_id) ?? undefined,
+    group_id: nullStr(r.group_id) ?? undefined,
+    material_id: nullStr(r.material_id) ?? undefined,
+    notes: nullStr(r.notes) ?? undefined,
   };
 }
 
@@ -702,13 +719,21 @@ async function autoFillAttendance(settings: BizSettings): Promise<void> {
     _attendanceDate = today;
 
     const { queryRows, executeStmt } = await import("@/lib/db-mysql");
-    const emps = await queryRows("SELECT id, code, name FROM a3s_employees WHERE status = '在职'");
+    const emps = await queryRows("SELECT id, code, name, workdays FROM a3s_employees WHERE status = '在职'");
     const todayId = today.replace(/-/g, "");
+
+    // 今天星期几 (0=日, 1=一...6=六)
+    const dayNames = ["sun", "mon", "tue", "wed", "thu", "fri", "sat"];
+    const dow = dayNames[new Date(today + "T12:00:00").getDay()]; // 中午12点避免时区问题
 
     for (const e of emps) {
       const eid = String(e.id);
       const code = String(e.code || "");
       const name = String(e.name || "");
+
+      // 检查今天是否是该员工的工作日
+      const workdays = String(e.workdays || "");
+      if (workdays && !workdays.includes(dow)) continue;
 
       const exist = await queryRows(
         "SELECT id FROM a3s_attendances WHERE employee_id = ? AND date = ? LIMIT 1",

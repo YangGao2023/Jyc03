@@ -31,6 +31,7 @@ import {
   type PaymentRecord,
   type PayrollRecord,
   type PrintArchiveRecord,
+  type PurchaseRecord,
   type SupplierRecord,
 } from "@/lib/biz-data";
 import type { BizStoreSnapshot } from "@/lib/biz-store";
@@ -430,6 +431,7 @@ function buildBizSnapshot(input: Partial<BizStoreSnapshot>): BizStoreSnapshot {
     expenses: (input.expenses ?? []).map(normalizeExpenseOfficeMethod),
     cashEntries: (input.cashEntries ?? []).map(normalizeCashEntryMethod),
     materials: input.materials ?? [],
+    purchases: input.purchases ?? [],
     employees: input.employees ?? [],
     attendances: input.attendances ?? [],
     appointments: input.appointments ?? [],
@@ -2600,6 +2602,10 @@ function OrdersSection({
   orders,
   materials,
   clients,
+  suppliers,
+  purchases,
+  setPurchases,
+  expenses,
   setOrders,
   settings,
   printArchives,
@@ -2612,6 +2618,10 @@ function OrdersSection({
   orders: BizOrder[];
   materials: MaterialRecord[];
   clients: ContactRecord[];
+  suppliers: SupplierRecord[];
+  purchases: PurchaseRecord[];
+  setPurchases: React.Dispatch<React.SetStateAction<PurchaseRecord[]>>;
+  expenses: ExpenseRecord[];
   setOrders: React.Dispatch<React.SetStateAction<BizOrder[]>>;
   settings: BizSettings;
   setSettings: React.Dispatch<React.SetStateAction<BizSettings>>;
@@ -2630,12 +2640,34 @@ function OrdersSection({
   const [search, setSearch] = useState("");
   const [showOnlyBalance, setShowOnlyBalance] = useState(false);
   const [createType, setCreateType] = useState<"定制单" | "批发单" | null>(null);
+  const [showOrderPurchaseModal, setShowOrderPurchaseModal] = useState(false);
+  const [showOrderMiscIncomeModal, setShowOrderMiscIncomeModal] = useState(false);
+  const today = formatLocalDate(new Date());
+  const incomeCategories = (settings.income_categories || "").split(/[,，\n]+/).map((t) => t.trim()).filter(Boolean);
+  const [orderMiscIncomeDraft, setOrderMiscIncomeDraft] = useState({ amount: "", date: today, method: "微信", category: "", note: "", target_name: "", office: false });
   const [deleteConfirm, setDeleteConfirm] = useState<string | null>(null);
   const [selectedOrderNumbers, setSelectedOrderNumbers] = useState<string[]>([]);
   const [orderPage, setOrderPage] = useState(1);
   const orderListColumns = ["订单号", "类型", "客户", "描述", "总金额", "下单日期", "状态", "余款", "操作"];
   const [bulkAction, setBulkAction] = useState<null | "pay" | "delete">(null);
   const [bulkBusy, setBulkBusy] = useState(false);
+
+  function addOrderMiscIncome() {
+    const amount = Number(orderMiscIncomeDraft.amount) || 0;
+    if (amount <= 0) return;
+    const category = orderMiscIncomeDraft.category || '杂项收入';
+    const newEntry: CashEntry = {
+      id: nextYearScopedId([], "CASH", new Date().getFullYear()),
+      type: '收入', amount, date: orderMiscIncomeDraft.date, method: orderMiscIncomeDraft.method,
+      category, target_name: orderMiscIncomeDraft.target_name || undefined,
+      office: orderMiscIncomeDraft.office, note: orderMiscIncomeDraft.note || undefined,
+      source_type: "misc_income",
+    };
+    setCashEntries((prev) => [{ ...newEntry, id: nextYearScopedId(prev.map((item) => item.id), "CASH", new Date().getFullYear()) }, ...prev]);
+    setOrderMiscIncomeDraft({ amount: "", date: today, method: "微信", category: "", note: "", target_name: "", office: false });
+    setShowOrderMiscIncomeModal(false);
+    onAutoSave?.();
+  }
 
 
   function handleSave(updated: BizOrder) {
@@ -2905,6 +2937,42 @@ function OrdersSection({
         onConfirm={handleBulkDelete}
       />
 
+      {showOrderPurchaseModal && (
+        <PurchaseModal
+          suppliers={suppliers}
+          materials={materials}
+          purchases={purchases}
+          expenses={expenses}
+          setPurchases={setPurchases}
+          setExpenses={setExpenses}
+          setCashEntries={setCashEntries}
+          onClose={() => setShowOrderPurchaseModal(false)}
+          onAutoSave={onAutoSave}
+        />
+      )}
+      {showOrderMiscIncomeModal && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-slate-950/45 px-4">
+          <div className="w-full max-w-md rounded-2xl border border-gray-200 bg-gray-50 p-5 shadow-2xl">
+            <div className="mb-4 flex items-start justify-between gap-3">
+              <h3 className="text-base font-semibold text-slate-700">新增杂项收入</h3>
+              <button onClick={() => setShowOrderMiscIncomeModal(false)} className="rounded-lg border border-slate-200 px-2.5 py-1 text-xs text-slate-700 hover:border-slate-300 transition-colors">关闭</button>
+            </div>
+            <div className="grid gap-2">
+              <SmallInput value={orderMiscIncomeDraft.target_name} onChange={(v) => setOrderMiscIncomeDraft((d) => ({ ...d, target_name: v }))} placeholder="对方(可选)" />
+              <SmallSelect value={orderMiscIncomeDraft.category} onChange={(v) => setOrderMiscIncomeDraft((d) => ({ ...d, category: v }))} options={incomeCategories.length > 0 ? incomeCategories : ['杂项收入']} />
+              <SmallInput value={orderMiscIncomeDraft.amount} onChange={(v) => setOrderMiscIncomeDraft((d) => ({ ...d, amount: v }))} type="number" placeholder="金额" />
+              <SmallInput value={orderMiscIncomeDraft.date} onChange={(v) => setOrderMiscIncomeDraft((d) => ({ ...d, date: v }))} type="date" />
+              <SmallSelect value={orderMiscIncomeDraft.method} onChange={(v) => setOrderMiscIncomeDraft((d) => ({ ...d, method: v }))} options={PAYMENT_METHODS} />
+              <label className="flex items-center gap-2 text-xs text-slate-600"><input type="checkbox" checked={orderMiscIncomeDraft.office} onChange={(e) => setOrderMiscIncomeDraft((d) => ({ ...d, office: e.target.checked }))} /> 这笔收入入办公室抽屉</label>
+              <SmallInput value={orderMiscIncomeDraft.note} onChange={(v) => setOrderMiscIncomeDraft((d) => ({ ...d, note: v }))} placeholder="备注(可选)" />
+            </div>
+            <div className="mt-5 flex justify-end gap-2">
+              <ActionBtn onClick={() => setShowOrderMiscIncomeModal(false)}>取消</ActionBtn>
+              <ActionBtn tone="primary" onClick={addOrderMiscIncome}>确认记录</ActionBtn>
+            </div>
+          </div>
+        </div>
+      )}
       <SectionHeader
         eyebrow="订单管理"
         title="订单管理"
@@ -2921,6 +2989,18 @@ function OrdersSection({
               className="flex items-center gap-1.5 rounded-lg border border-slate-300 bg-white px-3 py-1.5 text-xs font-medium text-slate-600 hover:border-slate-400 hover:text-slate-700 transition-colors"
             >
               + 新建批发单
+            </button>
+            <button
+              onClick={() => setShowOrderMiscIncomeModal(true)}
+              className="flex items-center gap-1.5 rounded-lg border border-emerald-300 bg-emerald-50 px-3 py-1.5 text-xs font-medium text-emerald-700 hover:border-emerald-400 hover:bg-emerald-100 transition-colors"
+            >
+              + 新增杂项收入
+            </button>
+            <button
+              onClick={() => setShowOrderPurchaseModal(true)}
+              className="flex items-center gap-1.5 rounded-lg border border-violet-300 bg-violet-50 px-3 py-1.5 text-xs font-medium text-violet-700 hover:border-violet-400 hover:bg-violet-100 transition-colors"
+            >
+              + 新建采购单
             </button>
           </>
         }
@@ -4501,12 +4581,230 @@ return days.map((day) => {
   );
 }
 
+// ─── PurchaseModal ────────────────────────────────────────────────────────────
+
+function PurchaseModal({
+  suppliers,
+  materials,
+  purchases,
+  expenses,
+  setPurchases,
+  setExpenses,
+  setCashEntries,
+  onClose,
+  onAutoSave,
+  initialSupplierId,
+}: {
+  suppliers: SupplierRecord[];
+  materials: MaterialRecord[];
+  purchases: PurchaseRecord[];
+  expenses: ExpenseRecord[];
+  setPurchases: React.Dispatch<React.SetStateAction<PurchaseRecord[]>>;
+  setExpenses: React.Dispatch<React.SetStateAction<ExpenseRecord[]>>;
+  setCashEntries: React.Dispatch<React.SetStateAction<CashEntry[]>>;
+  onClose: () => void;
+  onAutoSave?: () => void;
+  initialSupplierId?: string;
+}) {
+  const today = formatLocalDate(new Date());
+  const [mode, setMode] = useState<"materials" | "lump">("lump");
+  const [supplierId, setSupplierId] = useState(initialSupplierId ?? suppliers[0]?.id ?? "");
+  const [purchaseDate, setPurchaseDate] = useState(today);
+  const [paymentMethod, setPaymentMethod] = useState("转账");
+  const [lumpAmount, setLumpAmount] = useState("");
+  const [lumpNotes, setLumpNotes] = useState("");
+  const [matSearch, setMatSearch] = useState("");
+  const [matCategory, setMatCategory] = useState("");
+  const [matSupplierFilter, setMatSupplierFilter] = useState("");
+  type LineItem = { material_id: string; name: string; unit: string; qty: string; unit_price: string };
+  const [lines, setLines] = useState<LineItem[]>([]);
+
+  const supplierName = suppliers.find((s) => s.id === supplierId)?.name ?? supplierId;
+
+  const filteredMaterials = useMemo(() => materials.filter((m) => {
+    if (matSearch && !m.name.toLowerCase().includes(matSearch.toLowerCase())) return false;
+    if (matCategory && m.category !== matCategory) return false;
+    if (matSupplierFilter && m.supplier !== matSupplierFilter) return false;
+    return true;
+  }), [materials, matSearch, matCategory, matSupplierFilter]);
+
+  const matCategories = useMemo(() => [...new Set(materials.map((m) => m.category).filter(Boolean))] as string[], [materials]);
+  const matSuppliers = useMemo(() => [...new Set(materials.map((m) => m.supplier).filter(Boolean))] as string[], [materials]);
+
+  function toggleLine(mat: MaterialRecord) {
+    setLines((prev) => {
+      const exists = prev.findIndex((l) => l.material_id === mat.id);
+      if (exists >= 0) return prev.filter((l) => l.material_id !== mat.id);
+      return [...prev, { material_id: mat.id, name: mat.name, unit: mat.unit, qty: "1", unit_price: String(mat.purchase_price ?? mat.usd_cost ?? 0) }];
+    });
+  }
+
+  function updateLine(id: string, field: "qty" | "unit_price", value: string) {
+    setLines((prev) => prev.map((l) => l.material_id === id ? { ...l, [field]: value } : l));
+  }
+
+  function handleSave() {
+    const year = new Date().getFullYear();
+    const groupId = nextYearScopedId([...purchases.map((p) => p.group_id ?? ""), ...expenses.map((e) => e.id)], "PUR", year);
+    const supplier = suppliers.find((s) => s.id === supplierId);
+    const supplierNameResolved = supplier?.name ?? supplierId;
+
+    if (mode === "lump") {
+      const amount = Number(lumpAmount) || 0;
+      if (amount <= 0) return;
+      const purchaseId = nextSequentialId(purchases.map((p) => p.id), "PUR");
+      const newPurchase: PurchaseRecord = {
+        id: purchaseId, supplier: supplierNameResolved, supplier_id: supplierId || undefined,
+        item_name: "综合采购", quantity: 0, unit: "批", unit_price: amount, total_amount: amount,
+        purchase_date: purchaseDate, status: "已完成", expense_id: groupId, group_id: groupId,
+        notes: lumpNotes || undefined,
+      };
+      const newExpense: ExpenseRecord = {
+        id: groupId, target: supplierNameResolved, detail: lumpNotes || "综合采购",
+        amount, expense_type: "采购", payment_method: paymentMethod,
+        expense_date: purchaseDate, source_type: "purchase", source_id: groupId,
+      };
+      setPurchases((prev) => [newPurchase, ...prev]);
+      setExpenses((prev) => [newExpense, ...prev]);
+      setCashEntries((prev) => {
+        const newCash: CashEntry = {
+          id: nextYearScopedId(prev.map((c) => c.id), "CASH", year),
+          type: "支出", amount, date: purchaseDate, method: paymentMethod,
+          note: `采购 ${supplierNameResolved}${lumpNotes ? " · " + lumpNotes : ""}`,
+          category: "采购", target_name: supplierNameResolved,
+          source_type: "purchase", source_id: groupId,
+        };
+        return [newCash, ...prev];
+      });
+    } else {
+      if (lines.length === 0) return;
+      const validLines = lines.filter((l) => Number(l.qty) > 0);
+      if (validLines.length === 0) return;
+      const totalAmount = validLines.reduce((sum, l) => sum + (Number(l.qty) * Number(l.unit_price)), 0);
+      const newExpense: ExpenseRecord = {
+        id: groupId, target: supplierNameResolved, detail: `采购 ${validLines.length} 种物料`,
+        amount: Number(totalAmount.toFixed(2)), expense_type: "采购", payment_method: paymentMethod,
+        expense_date: purchaseDate, source_type: "purchase", source_id: groupId,
+      };
+      const newPurchases: PurchaseRecord[] = validLines.map((l, idx) => ({
+        id: nextSequentialId([...purchases.map((p) => p.id), ...validLines.slice(0, idx).map((_, i) => `PUR-${i}`)], "PUR"),
+        supplier: supplierNameResolved, supplier_id: supplierId || undefined,
+        item_name: l.name, quantity: Number(l.qty), unit: l.unit,
+        unit_price: Number(l.unit_price), total_amount: Number(l.qty) * Number(l.unit_price),
+        purchase_date: purchaseDate, status: "已完成",
+        expense_id: groupId, group_id: groupId, material_id: l.material_id,
+      }));
+      setPurchases((prev) => [...newPurchases, ...prev]);
+      setExpenses((prev) => [newExpense, ...prev]);
+      setCashEntries((prev) => {
+        const newCash: CashEntry = {
+          id: nextYearScopedId(prev.map((c) => c.id), "CASH", year),
+          type: "支出", amount: Number(totalAmount.toFixed(2)), date: purchaseDate,
+          method: paymentMethod, note: `采购 ${supplierNameResolved}`,
+          category: "采购", target_name: supplierNameResolved,
+          source_type: "purchase", source_id: groupId,
+        };
+        return [newCash, ...prev];
+      });
+    }
+    onAutoSave?.();
+    onClose();
+  }
+
+  return (
+    <div className="fixed inset-0 z-50 flex items-center justify-center bg-slate-950/45 px-4">
+      <div className="w-full max-w-3xl rounded-2xl border border-gray-200 bg-gray-50 p-5 shadow-2xl max-h-[90vh] overflow-y-auto">
+        <div className="mb-4 flex items-start justify-between gap-3">
+          <h3 className="text-base font-semibold text-slate-700">新建采购单</h3>
+          <button onClick={onClose} className="rounded-lg border border-slate-200 px-2.5 py-1 text-xs text-slate-700 hover:border-slate-300 transition-colors">关闭</button>
+        </div>
+        <div className="mb-4 flex items-center gap-2">
+          <button onClick={() => setMode("lump")} className={`rounded-lg px-3 py-1.5 text-xs font-medium transition-colors ${mode === "lump" ? "bg-slate-800 text-white" : "border border-slate-200 bg-white text-slate-600"}`}>整单采购</button>
+          <button onClick={() => setMode("materials")} className={`rounded-lg px-3 py-1.5 text-xs font-medium transition-colors ${mode === "materials" ? "bg-slate-800 text-white" : "border border-slate-200 bg-white text-slate-600"}`}>按物料采购</button>
+        </div>
+        <div className="grid gap-3 sm:grid-cols-2">
+          <div>
+            <label className="mb-1 block text-[11px] font-semibold text-slate-700">供应商</label>
+            <select value={supplierId} onChange={(e) => setSupplierId(e.target.value)} className="h-8 w-full rounded-lg border border-slate-300 bg-white px-2 text-xs text-slate-700">
+              {suppliers.map((s) => <option key={s.id} value={s.id}>{s.name}</option>)}
+            </select>
+          </div>
+          <div>
+            <label className="mb-1 block text-[11px] font-semibold text-slate-700">采购日期</label>
+            <SmallInput value={purchaseDate} onChange={setPurchaseDate} type="date" />
+          </div>
+          <div>
+            <label className="mb-1 block text-[11px] font-semibold text-slate-700">付款方式</label>
+            <SmallSelect value={paymentMethod} onChange={setPaymentMethod} options={PAYMENT_METHODS} />
+          </div>
+        </div>
+        {mode === "lump" ? (
+          <div className="mt-3 grid gap-3 sm:grid-cols-2">
+            <div>
+              <label className="mb-1 block text-[11px] font-semibold text-slate-700">总金额</label>
+              <SmallInput value={lumpAmount} onChange={setLumpAmount} type="number" placeholder="金额" />
+            </div>
+            <div>
+              <label className="mb-1 block text-[11px] font-semibold text-slate-700">备注</label>
+              <SmallInput value={lumpNotes} onChange={setLumpNotes} placeholder="备注（可选）" />
+            </div>
+          </div>
+        ) : (
+          <div className="mt-3">
+            <div className="mb-2 flex flex-wrap gap-2">
+              <SmallInput value={matSearch} onChange={setMatSearch} placeholder="搜索物料名称..." />
+              <SmallSelect value={matCategory} onChange={setMatCategory} options={["", ...matCategories]} labels={{ "": "全部分类" }} />
+              <SmallSelect value={matSupplierFilter} onChange={setMatSupplierFilter} options={["", ...matSuppliers]} labels={{ "": "全部供应商" }} />
+            </div>
+            <div className="max-h-48 overflow-y-auto rounded-xl border border-slate-200 bg-white">
+              {filteredMaterials.length === 0 ? (
+                <div className="py-6 text-center text-xs text-slate-500">暂无物料</div>
+              ) : filteredMaterials.map((mat) => {
+                const line = lines.find((l) => l.material_id === mat.id);
+                return (
+                  <div key={mat.id} className={`flex items-center gap-2 border-b border-slate-100 px-3 py-2 last:border-b-0 ${line ? "bg-sky-50" : ""}`}>
+                    {mat.image && <img src={imgUrl(mat.image)} alt={mat.name} className="h-8 w-8 rounded object-cover flex-shrink-0" />}
+                    <div className="flex-1 min-w-0">
+                      <p className="text-xs font-medium text-slate-700 truncate">{mat.name}</p>
+                      <p className="text-[11px] text-slate-500">{mat.category ?? ""} · {mat.unit}</p>
+                    </div>
+                    <button onClick={() => toggleLine(mat)} className={`rounded px-2 py-0.5 text-[11px] font-medium transition-colors ${line ? "bg-rose-100 text-rose-600" : "bg-sky-100 text-sky-700"}`}>{line ? "移除" : "添加"}</button>
+                  </div>
+                );
+              })}
+            </div>
+            {lines.length > 0 && (
+              <div className="mt-3 space-y-2">
+                <p className="text-xs font-semibold text-slate-700">已选物料 ({lines.length})</p>
+                {lines.map((l) => (
+                  <div key={l.material_id} className="flex items-center gap-2 rounded-lg border border-slate-200 bg-white px-3 py-2">
+                    <span className="flex-1 text-xs text-slate-700">{l.name}</span>
+                    <span className="text-[11px] text-slate-500">{l.unit}</span>
+                    <div className="w-20"><SmallInput value={l.qty} onChange={(v) => updateLine(l.material_id, "qty", v)} type="number" placeholder="数量" /></div>
+                    <div className="w-24"><SmallInput value={l.unit_price} onChange={(v) => updateLine(l.material_id, "unit_price", v)} type="number" placeholder="单价" /></div>
+                    <span className="w-20 text-right text-xs font-medium text-slate-700">{formatMoney(Number(l.qty) * Number(l.unit_price))}</span>
+                  </div>
+                ))}
+                <div className="text-right text-xs font-semibold text-slate-700">合计: {formatMoney(lines.reduce((s, l) => s + Number(l.qty) * Number(l.unit_price), 0))}</div>
+              </div>
+            )}
+          </div>
+        )}
+        <div className="mt-5 flex justify-end gap-2">
+          <ActionBtn onClick={onClose}>取消</ActionBtn>
+          <ActionBtn tone="primary" onClick={handleSave}>确认采购</ActionBtn>
+        </div>
+      </div>
+    </div>
+  );
+}
+
 // ─── Clients ─────────────────────────────────────────────────────────────────
 
 type ContactSub = "clients" | "suppliers";
 type ClientDetailTab = "overview" | "orders" | "appointments" | "activity";
 
-function ClientsSection({ clients, setClients, suppliers, setSuppliers, orders, setOrders, appointments, setAppointments, setCashEntries, setExpenses, materials, setMaterials, settings, setSettings, onAutoSave }: { clients: ContactRecord[]; setClients: React.Dispatch<React.SetStateAction<ContactRecord[]>>; suppliers: SupplierRecord[]; setSuppliers: React.Dispatch<React.SetStateAction<SupplierRecord[]>>; orders: BizOrder[]; setOrders: React.Dispatch<React.SetStateAction<BizOrder[]>>; appointments: MeasurementAppointmentRecord[]; setAppointments: React.Dispatch<React.SetStateAction<MeasurementAppointmentRecord[]>>; setCashEntries: React.Dispatch<React.SetStateAction<CashEntry[]>>; setExpenses: React.Dispatch<React.SetStateAction<ExpenseRecord[]>>; materials: MaterialRecord[]; setMaterials: React.Dispatch<React.SetStateAction<MaterialRecord[]>>; settings: BizSettings; setSettings: React.Dispatch<React.SetStateAction<BizSettings>>; onAutoSave?: () => void; }) {
+function ClientsSection({ clients, setClients, suppliers, setSuppliers, orders, setOrders, appointments, setAppointments, setCashEntries, setExpenses, materials, setMaterials, purchases, setPurchases, expenses, settings, setSettings, onAutoSave }: { clients: ContactRecord[]; setClients: React.Dispatch<React.SetStateAction<ContactRecord[]>>; suppliers: SupplierRecord[]; setSuppliers: React.Dispatch<React.SetStateAction<SupplierRecord[]>>; orders: BizOrder[]; setOrders: React.Dispatch<React.SetStateAction<BizOrder[]>>; appointments: MeasurementAppointmentRecord[]; setAppointments: React.Dispatch<React.SetStateAction<MeasurementAppointmentRecord[]>>; setCashEntries: React.Dispatch<React.SetStateAction<CashEntry[]>>; setExpenses: React.Dispatch<React.SetStateAction<ExpenseRecord[]>>; materials: MaterialRecord[]; setMaterials: React.Dispatch<React.SetStateAction<MaterialRecord[]>>; purchases: PurchaseRecord[]; setPurchases: React.Dispatch<React.SetStateAction<PurchaseRecord[]>>; expenses: ExpenseRecord[]; settings: BizSettings; setSettings: React.Dispatch<React.SetStateAction<BizSettings>>; onAutoSave?: () => void; }) {
   const [sub, setSub] = useState<ContactSub>("clients");
   const today = formatLocalDate(new Date());
   const [clientDraft, setClientDraft] = useState({ name: "", contact: "", phone: "", wechat: "", address: "", note: "" });
@@ -4530,6 +4828,14 @@ function ClientsSection({ clients, setClients, suppliers, setSuppliers, orders, 
   const suppliersPageCount = Math.max(1, Math.ceil(suppliers.length / suppliersPageSize));
   const pagedSuppliers = suppliers.slice((suppliersPage - 1) * suppliersPageSize, suppliersPage * suppliersPageSize);
   useEffect(() => { setSuppliersPage(1); }, [suppliers]);
+  const [showPurchaseModalForSupplier, setShowPurchaseModalForSupplier] = useState<string | null>(null);
+  const [supplierPurchaseHistoryId, setSupplierPurchaseHistoryId] = useState<string | null>(null);
+  const [supplierPurchasePage, setSupplierPurchasePage] = useState(1);
+  const supplierPurchasePageSize = 10;
+  const supplierPurchaseHistory = useMemo(() => purchases.filter((p) => !supplierPurchaseHistoryId || p.supplier_id === supplierPurchaseHistoryId || (!p.supplier_id && suppliers.find((s) => s.name === p.supplier)?.id === supplierPurchaseHistoryId)).sort((a, b) => b.purchase_date.localeCompare(a.purchase_date)), [purchases, supplierPurchaseHistoryId, suppliers]);
+  const supplierPurchasePageCount = Math.max(1, Math.ceil(supplierPurchaseHistory.length / supplierPurchasePageSize));
+  const pagedSupplierPurchases = supplierPurchaseHistory.slice((supplierPurchasePage - 1) * supplierPurchasePageSize, supplierPurchasePage * supplierPurchasePageSize);
+  useEffect(() => { setSupplierPurchasePage(1); }, [supplierPurchaseHistoryId]);
   const [clientOrdersPage, setClientOrdersPage] = useState(1);
   const [clientPaymentsPage, setClientPaymentsPage] = useState(1);
   const [clientFeedPage, setClientFeedPage] = useState(1);
@@ -4990,14 +5296,13 @@ function ClientsSection({ clients, setClients, suppliers, setSuppliers, orders, 
           <div className="w-full max-w-3xl rounded-2xl border border-gray-200 bg-gray-50 p-5 shadow-2xl">
             <div className="mb-4 flex items-start justify-between gap-3">
               <div>
-                <h3 className="text-base font-semibold text-slate-700">{editingClientId ? "编辑客户" : "新建客户"}</h3>
-                <p className="mt-1 text-xs text-slate-700">客户资料现在支持直接新增和编辑。</p>
+                <h3 className="text-base font-semibold text-slate-700">{editingClientId ? "编辑客户" : "新建客户"} <span className="ml-2 rounded-full bg-sky-100 px-2 py-0.5 text-[11px] font-semibold text-sky-700">客户</span></h3>
+                <p className="mt-1 text-xs text-slate-700">客户资料支持直接新增和编辑。</p>
               </div>
               <button onClick={() => setShowClientModal(false)} className="rounded-lg border border-slate-200 px-2.5 py-1 text-xs text-slate-700 hover:border-slate-300 hover:text-slate-700 transition-colors">关闭</button>
             </div>
             <div className="grid gap-2 sm:grid-cols-2 xl:grid-cols-3">
               <div><label className="mb-1 block text-[11px] font-semibold text-slate-700">客户名称</label><SmallInput value={clientDraft.name} onChange={(v) => setClientDraft((d) => ({ ...d, name: v }))} placeholder="客户名称" /></div>
-              <div><label className="mb-1 block text-[11px] font-semibold text-slate-700">联系人</label><SmallInput value={clientDraft.contact} onChange={(v) => setClientDraft((d) => ({ ...d, contact: v }))} placeholder="联系人" /></div>
               <div><label className="mb-1 block text-[11px] font-semibold text-slate-700">电话</label><SmallInput value={clientDraft.phone} onChange={(v) => setClientDraft((d) => ({ ...d, phone: v }))} placeholder="电话" /></div>
               <div><label className="mb-1 block text-[11px] font-semibold text-slate-700">微信 / 邮箱</label><SmallInput value={clientDraft.wechat} onChange={(v) => setClientDraft((d) => ({ ...d, wechat: v }))} placeholder="微信 / 邮箱" /></div>
               <div><label className="mb-1 block text-[11px] font-semibold text-slate-700">地址</label><SmallInput value={clientDraft.address} onChange={(v) => setClientDraft((d) => ({ ...d, address: v }))} placeholder="地址" /></div>
@@ -5016,15 +5321,13 @@ function ClientsSection({ clients, setClients, suppliers, setSuppliers, orders, 
           <div className="w-full max-w-3xl rounded-2xl border border-gray-200 bg-gray-50 p-5 shadow-2xl">
             <div className="mb-4 flex items-start justify-between gap-3">
               <div>
-                <h3 className="text-base font-semibold text-slate-700">{editingSupplierId ? "编辑供应商" : "新建供应商"}</h3>
-                <p className="mt-1 text-xs text-slate-700">供应商资料现在也支持直接新增和编辑。</p>
+                <h3 className="text-base font-semibold text-slate-700">{editingSupplierId ? "编辑供应商" : "新建供应商"} <span className="ml-2 rounded-full bg-violet-100 px-2 py-0.5 text-[11px] font-semibold text-violet-700">供应商</span></h3>
+                <p className="mt-1 text-xs text-slate-700">供应商资料支持直接新增和编辑。</p>
               </div>
               <button onClick={() => setShowSupplierModal(false)} className="rounded-lg border border-slate-200 px-2.5 py-1 text-xs text-slate-700 hover:border-slate-300 hover:text-slate-700 transition-colors">关闭</button>
             </div>
-            <div className="grid gap-2 sm:grid-cols-2 xl:grid-cols-4">
+            <div className="grid gap-2 sm:grid-cols-2 xl:grid-cols-3">
               <SmallInput value={supplierDraft.name} onChange={(v) => setSupplierDraft((d) => ({ ...d, name: v }))} placeholder="供应商名称" />
-              <SmallSelect value={supplierDraft.category} onChange={(v) => setSupplierDraft((d) => ({ ...d, category: v }))} options={supplierCategoryOptions} />
-              <SmallInput value={supplierDraft.contact_person} onChange={(v) => setSupplierDraft((d) => ({ ...d, contact_person: v }))} placeholder="联系人" />
               <SmallInput value={supplierDraft.phone} onChange={(v) => setSupplierDraft((d) => ({ ...d, phone: v }))} placeholder="电话" />
               <SmallInput value={supplierDraft.email} onChange={(v) => setSupplierDraft((d) => ({ ...d, email: v }))} placeholder="Email" />
               <SmallInput value={supplierDraft.website} onChange={(v) => setSupplierDraft((d) => ({ ...d, website: v }))} placeholder="网站" />
@@ -5556,35 +5859,42 @@ function ClientsSection({ clients, setClients, suppliers, setSuppliers, orders, 
         </div>
       ) : (
         <div className="space-y-3 xl:space-y-2">
+          {showPurchaseModalForSupplier !== null && (
+            <PurchaseModal
+              suppliers={suppliers}
+              materials={materials}
+              purchases={purchases}
+              expenses={expenses}
+              setPurchases={setPurchases}
+              setExpenses={setExpenses}
+              setCashEntries={setCashEntries}
+              onClose={() => setShowPurchaseModalForSupplier(null)}
+              onAutoSave={onAutoSave}
+              initialSupplierId={showPurchaseModalForSupplier}
+            />
+          )}
           <div className="overflow-x-auto rounded-xl border border-gray-200 bg-gray-50 xl:max-h-[calc(100vh-18rem)] xl:overflow-y-auto">
             <table className="w-full text-left text-xs">
               <thead>
                 <tr className="border-b border-gray-200 bg-gray-50">
                   <th className="px-4 py-2 font-semibold text-slate-600">供应商名称</th>
-                  <th className="px-4 py-2 font-semibold text-slate-600">分类</th>
-                  <th className="px-4 py-2 font-semibold text-slate-600">联系人</th>
-                  <th className="px-4 py-2 font-semibold text-slate-600">电话</th>
-                  <th className="px-4 py-2 font-semibold text-slate-600">Email</th>
-                  <th className="px-4 py-2 font-semibold text-slate-600">网站</th>
-                  <th className="px-4 py-2 font-semibold text-slate-600">地址</th>
-                  <th className="px-4 py-2 font-semibold text-slate-600">最近采购</th>
                   <th className="px-4 py-2 font-semibold text-slate-600">操作</th>
                 </tr>
               </thead>
               <tbody>
                 {pagedSuppliers.map((item) => (
                   <tr key={item.id} className="border-b border-gray-200 last:border-b-0">
-                    <td className="px-4 py-2 font-medium text-slate-700"><div className="flex flex-wrap items-center gap-2"><span>{item.name}</span><span className="rounded-full bg-violet-50 px-2 py-0.5 text-[11px] font-semibold text-violet-700">{directoryBadgeLabel(item, clients, "供应商")}</span></div></td>
-                    <td className="px-4 py-2 text-slate-600">{item.category ?? "-"}</td>
-                    <td className="px-4 py-2 text-slate-600">{item.contact_person ?? "-"}</td>
-                    <td className="px-4 py-2 text-slate-600">{item.phone ?? "-"}</td>
-                    <td className="px-4 py-2 text-slate-600">{item.email ?? "-"}</td>
-                    <td className="px-4 py-2 text-slate-600">{item.website ?? "-"}</td>
-                    <td className="px-4 py-2 text-slate-700">{item.address ?? "-"}</td>
+                    <td className="px-4 py-2 font-medium text-slate-700">
+                      <div className="flex flex-wrap items-center gap-2">
+                        <span>{item.name}</span>
+                        <span className="rounded-full bg-violet-50 px-2 py-0.5 text-[11px] font-semibold text-violet-700">{directoryBadgeLabel(item, clients, "供应商")}</span>
+                      </div>
+                    </td>
                     <td className="px-4 py-2">
                       <div className="flex flex-wrap gap-2">
                         <button onClick={() => openEditSupplier(item)} className="rounded border border-slate-200 px-2 py-1 text-[11px] text-slate-600 hover:border-slate-300 hover:bg-slate-50 transition-colors">编辑</button>
                         {confirmingSupplierId === item.id ? <><button onClick={() => deleteSupplier(item)} className="rounded border border-red-400 bg-red-500 px-2 py-1 text-[11px] font-semibold text-white hover:bg-red-600 transition-colors">确认</button><button onClick={() => setConfirmingSupplierId(null)} className="rounded border border-slate-200 px-2 py-1 text-[11px] text-slate-700 hover:border-slate-300 transition-colors">取消</button></> : <button onClick={() => setConfirmingSupplierId(item.id)} className="rounded border border-rose-100 px-2 py-1 text-[11px] text-rose-500 hover:border-rose-300 hover:bg-rose-50 transition-colors">删除</button>}
+                        <button onClick={() => { setShowPurchaseModalForSupplier(item.id); setSupplierPurchaseHistoryId(item.id); }} className="rounded border border-emerald-200 bg-emerald-50 px-2 py-1 text-[11px] text-emerald-700 hover:border-emerald-300 hover:bg-emerald-100 transition-colors">采购</button>
                       </div>
                     </td>
                   </tr>
@@ -5592,6 +5902,47 @@ function ClientsSection({ clients, setClients, suppliers, setSuppliers, orders, 
               </tbody>
             </table>
           </div>
+          {/* Supplier purchase history */}
+          {supplierPurchaseHistory.length > 0 && (
+            <div className="rounded-xl border border-gray-200 bg-gray-50 p-3">
+              <p className="mb-2 text-xs font-semibold text-slate-700">采购历史 · {supplierPurchaseHistoryId ? (suppliers.find((s) => s.id === supplierPurchaseHistoryId)?.name ?? "") : "全部"}</p>
+              <div className="overflow-x-auto">
+                <table className="w-full text-left text-xs">
+                  <thead>
+                    <tr className="border-b border-gray-200">
+                      <th className="px-3 py-1.5 font-semibold text-slate-600">日期</th>
+                      <th className="px-3 py-1.5 font-semibold text-slate-600">供应商</th>
+                      <th className="px-3 py-1.5 font-semibold text-slate-600">物料</th>
+                      <th className="px-3 py-1.5 font-semibold text-slate-600">数量</th>
+                      <th className="px-3 py-1.5 font-semibold text-slate-600">单价</th>
+                      <th className="px-3 py-1.5 font-semibold text-slate-600">合计</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {pagedSupplierPurchases.map((p) => (
+                      <tr key={p.id} className="border-b border-gray-100 last:border-b-0">
+                        <td className="px-3 py-1.5 text-slate-600">{p.purchase_date}</td>
+                        <td className="px-3 py-1.5 text-slate-600">{p.supplier}</td>
+                        <td className="px-3 py-1.5 text-slate-700 font-medium">{p.item_name}</td>
+                        <td className="px-3 py-1.5 text-slate-600">{p.quantity} {p.unit}</td>
+                        <td className="px-3 py-1.5 text-slate-600">{formatMoney(p.unit_price)}</td>
+                        <td className="px-3 py-1.5 text-slate-700 font-medium">{formatMoney(p.total_amount)}</td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              </div>
+              {supplierPurchasePageCount > 1 && (
+                <div className="mt-2 flex items-center justify-between text-xs text-slate-600">
+                  <span>第 {supplierPurchasePage} / {supplierPurchasePageCount} 页</span>
+                  <div className="flex gap-1">
+                    <button onClick={() => setSupplierPurchasePage((p) => Math.max(1, p - 1))} disabled={supplierPurchasePage <= 1} className="rounded border border-slate-200 px-2 py-1 disabled:opacity-40">上一页</button>
+                    <button onClick={() => setSupplierPurchasePage((p) => Math.min(supplierPurchasePageCount, p + 1))} disabled={supplierPurchasePage >= supplierPurchasePageCount} className="rounded border border-slate-200 px-2 py-1 disabled:opacity-40">下一页</button>
+                  </div>
+                </div>
+              )}
+            </div>
+          )}
           <div className="flex flex-wrap items-center justify-between gap-3 rounded-xl border border-gray-200 bg-gray-50 px-4 py-3 text-xs text-slate-600"><span>第 {suppliersPage} / {suppliersPageCount} 页,共 {suppliers.length} 条供应商</span><div className="flex items-center gap-2"><button type="button" onClick={() => setSuppliersPage((p) => Math.max(1, p - 1))} disabled={suppliersPage <= 1} className="rounded-lg border border-slate-200 px-3 py-1.5 disabled:cursor-not-allowed disabled:opacity-40">上一页</button><button type="button" onClick={() => setSuppliersPage((p) => Math.min(suppliersPageCount, p + 1))} disabled={suppliersPage >= suppliersPageCount} className="rounded-lg border border-slate-200 px-3 py-1.5 disabled:cursor-not-allowed disabled:opacity-40">下一页</button></div></div>
         </div>
       )}
@@ -5763,7 +6114,7 @@ function getCommittedMaterialMap(materials: MaterialRecord[], orders: BizOrder[]
   return committed;
 }
 
-function MaterialsSection({ materials, setMaterials, suppliers, orders, setExpenses, setCashEntries, materialCategoryOptions, onAutoSave }: { materials: MaterialRecord[]; setMaterials: React.Dispatch<React.SetStateAction<MaterialRecord[]>>; suppliers: SupplierRecord[]; orders: BizOrder[]; setExpenses: React.Dispatch<React.SetStateAction<ExpenseRecord[]>>; setCashEntries: React.Dispatch<React.SetStateAction<CashEntry[]>>; materialCategoryOptions: string[]; onAutoSave?: () => void; }) {
+function MaterialsSection({ materials, setMaterials, suppliers, orders, purchases, setExpenses, setCashEntries, materialCategoryOptions, onAutoSave }: { materials: MaterialRecord[]; setMaterials: React.Dispatch<React.SetStateAction<MaterialRecord[]>>; suppliers: SupplierRecord[]; orders: BizOrder[]; purchases: PurchaseRecord[]; setExpenses: React.Dispatch<React.SetStateAction<ExpenseRecord[]>>; setCashEntries: React.Dispatch<React.SetStateAction<CashEntry[]>>; materialCategoryOptions: string[]; onAutoSave?: () => void; }) {
   const [sub, setSub] = useState<MaterialSub>("inventory");
   const today = formatLocalDate(new Date());
   const [editingMaterialId, setEditingMaterialId] = useState<string | null>(null);
@@ -5789,6 +6140,7 @@ function MaterialsSection({ materials, setMaterials, suppliers, orders, setExpen
   const inventoryPageCount = Math.max(1, Math.ceil(inventoryRows.length / inventoryPageSize));
   const pagedInventoryRows = inventoryRows.slice((inventoryPage - 1) * inventoryPageSize, inventoryPage * inventoryPageSize);
   useEffect(() => { setInventoryPage(1); }, [inventoryRows]);
+  const [expandedPurchaseMatId, setExpandedPurchaseMatId] = useState<string | null>(null);
 
   function resetMaterialDraft() {
     setMaterialDraft({ code: "", name: "", specification: "", size: "", unit: "个", stock_quantity: "", factory_price_rmb: "", weight: "", usd_cost: "", sale_price_usd: "", vip_sale_price_usd: "", supplier: suppliers[0]?.name ?? "", image: "", remark: "", color: "", material: "", other: "", category: "" });
@@ -5939,6 +6291,25 @@ function MaterialsSection({ materials, setMaterials, suppliers, orders, setExpen
                     <button onClick={() => setConfirmingMaterialId(item.id)} className="flex-1 rounded-lg border border-rose-100 px-2 py-1.5 text-[11px] text-rose-500 hover:border-rose-300 hover:bg-rose-50 transition-colors text-center">删除</button>
                   )}
                 </div>
+                {(() => {
+                  const matPurchases = purchases.filter((p) => p.material_id === item.id || p.item_name === item.name).sort((a, b) => b.purchase_date.localeCompare(a.purchase_date)).slice(0, 5);
+                  if (matPurchases.length === 0) return null;
+                  const isExpanded = expandedPurchaseMatId === item.id;
+                  return (
+                    <div className="mt-1.5 border-t border-slate-100 pt-1.5">
+                      <button onClick={() => setExpandedPurchaseMatId(isExpanded ? null : item.id)} className="text-[10px] text-sky-600 hover:underline">{isExpanded ? "收起采购记录" : `查看 ${matPurchases.length} 条采购记录`}</button>
+                      {isExpanded && (
+                        <div className="mt-1.5 space-y-1">
+                          {matPurchases.map((p) => (
+                            <div key={p.id} className="rounded bg-sky-50 px-2 py-1 text-[10px] text-slate-600">
+                              <span className="font-medium">{p.purchase_date}</span> · {p.supplier} · {p.quantity}{p.unit} · {formatMoney(p.unit_price)}/单位
+                            </div>
+                          ))}
+                        </div>
+                      )}
+                    </div>
+                  );
+                })()}
               </div>
             </div>
           ))}
@@ -6815,6 +7186,7 @@ export default function DashboardBizPage() {
   const [expenses, setExpenses] = useState<ExpenseRecord[]>([]);
   const [cashEntries, setCashEntries] = useState<CashEntry[]>([]);
   const [materials, setMaterials] = useState<MaterialRecord[]>([]);
+  const [purchases, setPurchases] = useState<PurchaseRecord[]>([]);
   const [employees, setEmployees] = useState<EmployeeRecord[]>([]);
   const [attendances, setAttendances] = useState<AttendanceRecord[]>([]);
   const [payrolls, setPayrolls] = useState<PayrollRecord[]>([]);
@@ -6836,13 +7208,14 @@ export default function DashboardBizPage() {
     expenses,
     cashEntries,
     materials,
+    purchases,
     employees,
     attendances,
     appointments,
     payrolls,
     printArchives,
     settings,
-  }), [storeRevision, orders, clients, suppliers, expenses, cashEntries, materials, employees, attendances, appointments, payrolls, printArchives, settings]);
+  }), [storeRevision, orders, clients, suppliers, expenses, cashEntries, materials, purchases, employees, attendances, appointments, payrolls, printArchives, settings]);
   const snapshotJson = useMemo(() => serializeBizSnapshot(snapshot), [snapshot]);
   const isDirty = isHydrated && snapshotJson !== savedSnapshotJson;
 
@@ -6871,6 +7244,7 @@ export default function DashboardBizPage() {
         setExpenses(loadedSnapshot.expenses);
         setCashEntries(loadedSnapshot.cashEntries);
         setMaterials(loadedSnapshot.materials);
+        setPurchases(loadedSnapshot.purchases ?? []);
         setEmployees(loadedSnapshot.employees);
         setAttendances(loadedSnapshot.attendances);
         setAppointments(loadedSnapshot.appointments ?? []);
@@ -6897,6 +7271,7 @@ export default function DashboardBizPage() {
             setExpenses(backupSnapshot.expenses);
             setCashEntries(backupSnapshot.cashEntries);
             setMaterials(backupSnapshot.materials);
+            setPurchases(backupSnapshot.purchases ?? []);
             setEmployees(backupSnapshot.employees);
             setAttendances(backupSnapshot.attendances);
             setAppointments(backupSnapshot.appointments ?? []);
@@ -7062,7 +7437,7 @@ export default function DashboardBizPage() {
               employees={employees}
             />
           )}
-          {section === "orders" && <OrdersSection orders={showVoided ? orders : orders.filter((o) => o.status !== "已作废")} materials={materials} clients={clients} setOrders={setOrders} settings={settings} setSettings={setSettings} printArchives={printArchives} setPrintArchives={setPrintArchives} setCashEntries={setCashEntries} setExpenses={setExpenses} onAutoSave={autoSave} />}
+          {section === "orders" && <OrdersSection orders={showVoided ? orders : orders.filter((o) => o.status !== "已作废")} materials={materials} clients={clients} suppliers={suppliers} purchases={purchases} setPurchases={setPurchases} expenses={expenses} setOrders={setOrders} settings={settings} setSettings={setSettings} printArchives={printArchives} setPrintArchives={setPrintArchives} setCashEntries={setCashEntries} setExpenses={setExpenses} onAutoSave={autoSave} />}
           {section === "finance" && (
             <FinanceSection
               orders={showVoided ? orders : orders.filter((o) => o.status !== "已作废")}
@@ -7096,6 +7471,9 @@ export default function DashboardBizPage() {
               setExpenses={setExpenses}
               materials={materials}
               setMaterials={setMaterials}
+              purchases={purchases}
+              setPurchases={setPurchases}
+              expenses={expenses}
               settings={settings}
               setSettings={setSettings}
               onAutoSave={autoSave}
@@ -7124,6 +7502,7 @@ export default function DashboardBizPage() {
               setMaterials={setMaterials}
               suppliers={suppliers}
               orders={showVoided ? orders : orders.filter((o) => o.status !== "已作废")}
+              purchases={purchases}
               setExpenses={setExpenses}
               setCashEntries={setCashEntries}
               materialCategoryOptions={["", ...(settings.material_categories || "").split(/[,，]+/).map((t) => t.trim()).filter(Boolean)]}

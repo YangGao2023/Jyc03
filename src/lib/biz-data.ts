@@ -149,6 +149,9 @@ export type PurchaseRecord = {
   purchase_date: string;
   status: string;
   expense_id?: string;
+  group_id?: string;
+  material_id?: string;
+  notes?: string;
 };
 
 export type EmployeeRecord = {

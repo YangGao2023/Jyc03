@@ -7579,9 +7579,17 @@ export default function DashboardBizPage() {
   persistSnapshotRef.current = persistSnapshot;
   const saveStateRef = useRef(saveState);
   saveStateRef.current = saveState;
+  // Pending save flag: if a save is in-flight when autoSave is called, queue one more run
+  const pendingSaveRef = useRef(false);
 
   async function persistSnapshot(overrideJson?: string) {
-    if (!isHydrated || saveState === "saving") return;
+    if (!isHydrated) return;
+    if (saveState === "saving") {
+      // Another save in-flight; mark as pending so we retry after it finishes
+      pendingSaveRef.current = true;
+      return;
+    }
+    pendingSaveRef.current = false;
 
     try {
       setSaveState("saving");
@@ -7631,6 +7639,11 @@ export default function DashboardBizPage() {
         localStorage.setItem("biz-store-live-backup", finalJson);
       } catch {}
       setSaveState("saved");
+      // If another save was requested while this one was in-flight, run it now
+      if (pendingSaveRef.current) {
+        pendingSaveRef.current = false;
+        queueMicrotask(() => persistSnapshotRef.current(snapshotJsonRef.current));
+      }
     } catch {
       setSaveState("error");
     }

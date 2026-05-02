@@ -2222,9 +2222,12 @@ function NewOrderModal({
       return;
     }
 
-    const prefix = type === "定制单" ? "C" : "W";
-    const year = new Date().getFullYear();
-    const orderNumber = nextYearScopedId(existingOrders.map((item) => item.order_number), prefix, year, 4);
+    // Generate purely numeric incrementing order number (e.g. 13753)
+    const maxOrderNum = existingOrders.reduce((max, item) => {
+      const n = Number(item.order_number);
+      return Number.isFinite(n) && n > max ? n : max;
+    }, 0);
+    const orderNumber = String(maxOrderNum + 1);
 
     const totalPrice = type === "批发单" ? wholesaleTotal : (Number(fields.total_price) || 0);
     const deposit = Number(fields.deposit) || 0;
@@ -7485,9 +7488,9 @@ export default function DashboardBizPage() {
         if (!response.ok) throw new Error("load failed");
         const payload = (await response.json()) as { ok: boolean; data: BizStoreSnapshot };
         if (cancelled || !payload?.data) return;
-        // Skip overwriting local state if a save is in progress — avoids race condition
+        // Skip overwriting local state if a save is in-flight or queued — avoids race condition
         // where poll returns stale data and wipes an unsaved edit.
-        if (saveStateRef.current === "saving") return;
+        if (saveStateRef.current === "saving" || pendingSaveRef.current) return;
         const loadedSnapshot = buildBizSnapshot(payload.data);
         setStoreRevision(loadedSnapshot.revision);
         setOrders(loadedSnapshot.orders);
@@ -7650,6 +7653,8 @@ export default function DashboardBizPage() {
   }
 
   const autoSave = useCallback(() => {
+    // Mark pending immediately so poll doesn't overwrite state before save runs
+    pendingSaveRef.current = true;
     // queueMicrotask runs after React flushes the current state batch,
     // so snapshotJsonRef.current will contain the latest serialized state.
     queueMicrotask(() => persistSnapshotRef.current(snapshotJsonRef.current));

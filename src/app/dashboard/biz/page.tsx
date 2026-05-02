@@ -2648,7 +2648,7 @@ function OrdersSection({
   const [selectedOrder, setSelectedOrder] = useState<BizOrder | null>(null);
   const [typeFilter, setTypeFilter] = useState("全部");
   const [statusFilter, setStatusFilter] = useState("全部");
-  const [dateFilter, setDateFilter] = useState("全部");
+  const [dateFilter, setDateFilter] = useState("今天");
   const [dateFrom, setDateFrom] = useState("");
   const [dateTo, setDateTo] = useState("");
   const [search, setSearch] = useState("");

@@ -21,12 +21,8 @@ export default async function LoginPage({
           <p className="text-xs uppercase tracking-[0.35em] text-slate-600">Owner Login</p>
           <h1 className="mt-3 text-3xl font-bold tracking-tight text-slate-800 lg:text-4xl">老板后台登录入口</h1>
           <p className="mt-4 text-sm leading-7 text-slate-600">
-            这个登录页先保留着，但当前本地原型已经临时改成可直接进入 `/dashboard`，方便你先做页面和流程验证。
+            请使用账号密码登录。
           </p>
-
-          <div className="mt-4 rounded-2xl border border-amber-200 bg-amber-50 p-4 text-sm leading-6 text-amber-800">
-            当前为本地临时放行模式，后台暂时不需要账号密码。后面如果要恢复，只需要重新挂回 `/dashboard` 的访问门即可。
-          </div>
 
           {hasError ? (
             <div className="mt-4 rounded-2xl border border-rose-200 bg-rose-50 p-4 text-sm text-rose-700">
@@ -42,7 +38,7 @@ export default async function LoginPage({
                 <input
                   name="username"
                   className="mt-2 w-full rounded-2xl border border-gray-300 bg-white px-4 py-3 text-slate-700 outline-none placeholder:text-slate-400"
-                  placeholder="owner / admin"
+                  placeholder="JYCSTEEL"
                 />
               </label>
               <label className="text-sm font-medium text-slate-600">
@@ -63,9 +59,6 @@ export default async function LoginPage({
           <div className="mt-6 flex flex-wrap gap-3 text-sm">
             <Link href="/" className="rounded-2xl border border-gray-200 bg-white px-4 py-2 text-slate-600 hover:bg-gray-50">
               返回前台
-            </Link>
-            <Link href="/dashboard" className="rounded-2xl border border-gray-200 bg-white px-4 py-2 text-slate-600 hover:bg-gray-50">
-              试图进入后台
             </Link>
           </div>
         </div>

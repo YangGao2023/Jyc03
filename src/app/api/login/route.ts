@@ -2,7 +2,8 @@ import { cookies } from "next/headers";
 import { NextResponse } from "next/server";
 
 const SESSION_COOKIE = "jyc_owner_session";
-const DEMO_PASSWORD = "jyc-owner-demo";
+const VALID_USERNAME = "JYCSTEEL";
+const VALID_PASSWORD = "Ding123qwe.";
 
 export async function POST(request: Request) {
   const formData = await request.formData();
@@ -10,9 +11,8 @@ export async function POST(request: Request) {
   const password = String(formData.get("password") || "").trim();
   const next = String(formData.get("next") || "/dashboard").trim() || "/dashboard";
 
-  const expectedPassword = process.env.OWNER_PANEL_PASSWORD || DEMO_PASSWORD;
-  const validUser = username.length > 0;
-  const validPassword = password === expectedPassword;
+  const validUser = username === VALID_USERNAME;
+  const validPassword = password === VALID_PASSWORD;
 
   if (!validUser || !validPassword) {
     const params = new URLSearchParams({ error: "1" });
@@ -33,7 +33,7 @@ export async function POST(request: Request) {
     sameSite: "lax",
     secure: false,
     path: "/",
-    maxAge: 60 * 60 * 12,
+    maxAge: 60 * 60 * 24 * 7,
   });
 
   return new NextResponse(null, {

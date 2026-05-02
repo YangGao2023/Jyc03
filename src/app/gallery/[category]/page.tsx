@@ -4,7 +4,7 @@ import { useState } from "react";
 import { useParams, useRouter } from "next/navigation";
 import Lightbox from "../../../components/Lightbox";
 
-const CATEGORIES: Record<string, { label: string; images: string[] }> = {
+const CATEGORIES: Record<string, { label: string; labelEn: string; images: string[] }> = {
   door: {
     label: "防盗门",
     labelEn: "DOOR",

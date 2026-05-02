@@ -7429,6 +7429,9 @@ export default function DashboardBizPage() {
         if (!response.ok) throw new Error("load failed");
         const payload = (await response.json()) as { ok: boolean; data: BizStoreSnapshot };
         if (cancelled || !payload?.data) return;
+        // Skip overwriting local state if a save is in progress — avoids race condition
+        // where poll returns stale data and wipes an unsaved edit.
+        if (saveStateRef.current === "saving") return;
         const loadedSnapshot = buildBizSnapshot(payload.data);
         setStoreRevision(loadedSnapshot.revision);
         setOrders(loadedSnapshot.orders);
@@ -7518,6 +7521,8 @@ export default function DashboardBizPage() {
 
   const persistSnapshotRef = useRef(persistSnapshot);
   persistSnapshotRef.current = persistSnapshot;
+  const saveStateRef = useRef(saveState);
+  saveStateRef.current = saveState;
 
   async function persistSnapshot() {
     if (!isHydrated || saveState === "saving") return;

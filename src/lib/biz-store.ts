@@ -168,7 +168,7 @@ async function mysqlRead(): Promise<BizStoreSnapshot> {
     queryRows("SELECT * FROM a3s_orders"),
     queryRows("SELECT * FROM a3s_clients"),
     // Suppliers are stored as roles in a3s_clients
-    queryRows("SELECT id, name, '' as category, contact as contact_person, phone, '' as email, '' as website, address, '' as last_purchase_date, note as remark, master_id, roles, updated_at FROM a3s_clients WHERE roles LIKE '%供应商%'"),
+    queryRows("SELECT id, name, category, contact_person, phone, email, website, address, last_purchase_date, remark, master_id, roles, updated_at FROM a3s_clients WHERE roles LIKE '%供应商%'"),
     queryRows("SELECT * FROM a3s_expenses"),
     queryRows("SELECT * FROM a3s_cash_entries"),
     queryRows("SELECT * FROM a3s_materials"),
@@ -186,6 +186,9 @@ async function mysqlRead(): Promise<BizStoreSnapshot> {
 
   const orders = orderRows.map(rowToOrder);
   const settings = rowToSettings(settingsRows[0] as Record<string, unknown>) ?? {} as BizSettings;
+
+  // 自动考勤：当天没跑就补
+  await autoFillAttendance(settings);
 
   return normalizeSnapshot({
     revision: createStoreRevision(),
@@ -212,67 +215,68 @@ async function mysqlRead(): Promise<BizStoreSnapshot> {
 async function mysqlWrite(snapshot: BizStoreSnapshot): Promise<void> {
   const { executeStmt, queryRows } = await import("@/lib/db-mysql");
 
-  // Settings — written as a single-row batchUpsert to avoid hardcoded ? count mismatches
+  // Settings
   const s = snapshot.settings;
-  await batchUpsert('a3s_settings', [{
-    id: 1,
-    company_name: s.company_name,
-    company_name_zh: s.company_name_zh ?? null,
-    address: s.address,
-    company_address: s.company_address ?? null,
-    phone: s.phone,
-    phones: s.phones ?? null,
-    email: s.email,
-    website: s.website,
-    tax_number: s.tax_number,
-    default_tax_rate: s.default_tax_rate,
-    default_currency: s.default_currency,
-    fiscal_start_month: s.fiscal_start_month,
-    bank_account: s.bank_account,
-    alipay: s.alipay,
-    wechat_pay: s.wechat_pay,
-    other_payment: s.other_payment,
-    invoice_title: s.invoice_title ?? null,
-    picking_title: s.picking_title ?? null,
-    zelle: s.zelle ?? null,
-    invoice_note: s.invoice_note ?? null,
-    quote_valid_days: s.quote_valid_days,
-    quote_footer: s.quote_footer,
-    logo_url: s.logo_url,
-    expense_types: s.expense_types ?? null,
-    supplier_categories: s.supplier_categories ?? null,
-    meal_allowance_amount: s.meal_allowance_amount ?? 8,
-    auto_attendance_timezone: s.auto_attendance_timezone ?? 'America/New_York',
-    auto_attendance_run_time: s.auto_attendance_run_time ?? '01:00',
-    auto_attendance_default_minutes: s.auto_attendance_default_minutes ?? 600,
-    auto_attendance_note: s.auto_attendance_note ?? '',
-    work_start: s.work_start ?? null,
-    work_end: s.work_end ?? null,
-    break_start: s.break_start ?? null,
-    break_end: s.break_end ?? null,
-    material_categories: s.material_categories ?? null,
-    income_categories: s.income_categories ?? null,
-  }], 'id');
+  await executeStmt(
+    `INSERT INTO a3s_settings(id,company_name,company_name_zh,address,company_address,
+      phone,phones,email,website,tax_number,default_tax_rate,default_currency,
+      fiscal_start_month,bank_account,alipay,wechat_pay,other_payment,
+      invoice_title,picking_title,zelle,invoice_note,quote_valid_days,
+      quote_footer,logo_url,expense_types,supplier_categories,meal_allowance_amount,
+      auto_attendance_timezone,auto_attendance_run_time,auto_attendance_default_minutes,
+      auto_attendance_note,work_start,work_end,break_start,break_end,material_categories,income_categories)
+    VALUES(1,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)
+    ON DUPLICATE KEY UPDATE
+      company_name=VALUES(company_name),company_name_zh=VALUES(company_name_zh),
+      address=VALUES(address),company_address=VALUES(company_address),
+      phone=VALUES(phone),phones=VALUES(phones),email=VALUES(email),
+      website=VALUES(website),tax_number=VALUES(tax_number),
+      default_tax_rate=VALUES(default_tax_rate),default_currency=VALUES(default_currency),
+      fiscal_start_month=VALUES(fiscal_start_month),bank_account=VALUES(bank_account),
+      alipay=VALUES(alipay),wechat_pay=VALUES(wechat_pay),
+      other_payment=VALUES(other_payment),invoice_title=VALUES(invoice_title),
+      picking_title=VALUES(picking_title),zelle=VALUES(zelle),
+      invoice_note=VALUES(invoice_note),quote_valid_days=VALUES(quote_valid_days),
+      quote_footer=VALUES(quote_footer),logo_url=VALUES(logo_url),
+      expense_types=VALUES(expense_types),supplier_categories=VALUES(supplier_categories),
+      meal_allowance_amount=VALUES(meal_allowance_amount),
+      auto_attendance_timezone=VALUES(auto_attendance_timezone),
+      auto_attendance_run_time=VALUES(auto_attendance_run_time),
+      auto_attendance_default_minutes=VALUES(auto_attendance_default_minutes),
+      auto_attendance_note=VALUES(auto_attendance_note),
+      material_categories=VALUES(material_categories),income_categories=VALUES(income_categories)`,
+    [s.company_name, s.company_name_zh ?? null, s.address, s.company_address ?? null,
+      s.phone, s.phones ?? null, s.email, s.website, s.tax_number,
+      s.default_tax_rate, s.default_currency, s.fiscal_start_month,
+      s.bank_account, s.alipay, s.wechat_pay, s.other_payment,
+      s.invoice_title ?? null, s.picking_title ?? null, s.zelle ?? null,
+      s.invoice_note ?? null, s.quote_valid_days, s.quote_footer, s.logo_url,
+      s.expense_types ?? null, s.supplier_categories ?? null,
+      s.meal_allowance_amount ?? 8,
+      s.auto_attendance_timezone ?? "America/New_York",
+      s.auto_attendance_run_time ?? "01:00",
+      s.auto_attendance_default_minutes ?? 600,
+      s.auto_attendance_note ?? "",
+      s.work_start ?? null, s.work_end ?? null,
+      s.break_start ?? null, s.break_end ?? null,
+      s.material_categories ?? null,
+      s.income_categories ?? null]
+  );
 
-  // Helper: batch upsert — splits into chunks to avoid MySQL placeholder limit (65535)
+  // Helper: batch upsert
   async function batchUpsert(table: string, rows: Record<string, unknown>[], keyCol: string) {
     if (rows.length === 0) return;
     const cols = Object.keys(rows[0]);
-    // Max rows per batch: floor(65535 / col_count) capped at 400
-    const chunkSize = Math.min(400, Math.floor(65535 / cols.length));
+    const placeholders = rows.map(() => `(${cols.map(() => '?').join(',')})`).join(',');
     const updateSet = cols.filter(c => c !== keyCol).map(c => `${c}=VALUES(${c})`).join(',');
-    for (let i = 0; i < rows.length; i += chunkSize) {
-      const chunk = rows.slice(i, i + chunkSize);
-      const placeholders = chunk.map(() => `(${cols.map(() => '?').join(',')})`).join(',');
-      const values = chunk.flatMap(r => cols.map(c => r[c] ?? null));
-      try {
-        await executeStmt(
-          `INSERT INTO ${table}(${cols.join(',')}) VALUES${placeholders} ON DUPLICATE KEY UPDATE ${updateSet}`,
-          values
-        );
-      } catch (err) {
-        console.error(`[mysqlWrite] batch upsert ${table} chunk ${i}-${i + chunk.length} failed:`, err);
-      }
+    const values = rows.flatMap(r => cols.map(c => r[c] ?? null));
+    try {
+      await executeStmt(
+        `INSERT INTO ${table}(${cols.join(',')}) VALUES${placeholders} ON DUPLICATE KEY UPDATE ${updateSet}`,
+        values
+      );
+    } catch (err) {
+      console.error(`[mysqlWrite] batch upsert ${table} failed:`, err);
     }
   }
 
@@ -295,26 +299,18 @@ async function mysqlWrite(snapshot: BizStoreSnapshot): Promise<void> {
   // Clients
   await batchUpsert('a3s_clients', snapshot.clients.map(c => ({
     id: c.id, name: c.name || '', contact: c.contact || null,
-    phone: c.phone || null, email: c.email || null, address: c.address || null,
-    created_at: c.created_at || null, note: c.note || null,
+    phone: c.phone || null, email: c.email || null, website: c.website || null,
+    address: c.address || null,
+    created_at: c.created_at || null, note: c.note || null, remark: c.remark || null,
     is_vip: c.is_vip ? 1 : 0, balance: c.balance ?? 0, wechat: c.wechat || null,
     roles: c.roles?.length ? JSON.stringify(c.roles) : null,
     master_id: c.master_id || null,
+    category: c.category || null, contact_person: c.contact_person || null,
+    last_purchase_date: c.last_purchase_date || null,
   })), 'id');
 
-  // Suppliers: write as clients with supplier role into a3s_clients
-  if (snapshot.suppliers.length) {
-    await batchUpsert('a3s_clients', snapshot.suppliers.map(s => ({
-      id: s.id, name: s.name || '',
-      contact: s.contact_person || null,
-      phone: s.phone || null, address: s.address || null,
-      note: s.remark || null,
-      email: s.email || null,
-      is_vip: 0, balance: 0,
-      roles: JSON.stringify(s.roles?.length ? s.roles : ['供应商']),
-      master_id: s.master_id || null,
-    })), 'id');
-  }
+  // Suppliers are derived from a3s_clients rows via roles.
+  // Do not write them separately, otherwise shared client fields can be overwritten.
 
   // Expenses
   await batchUpsert('a3s_expenses', snapshot.expenses.map(e => ({
@@ -357,7 +353,9 @@ async function mysqlWrite(snapshot: BizStoreSnapshot): Promise<void> {
       item_name: p.item_name || '', quantity: p.quantity ?? 0,
       unit: p.unit || '个', unit_price: p.unit_price ?? 0,
       total_amount: p.total_amount ?? 0, purchase_date: p.purchase_date || '',
-      status: p.status || '已完成', expense_id: p.expense_id || null,
+      status: p.status || '待收货', expense_id: p.expense_id || null,
+      group_id: p.group_id || null, material_id: p.material_id || null,
+      notes: p.notes || null,
     })), 'id');
   }
 
@@ -479,12 +477,17 @@ function rowToClient(r: Record<string, unknown>): ContactRecord {
     contact: nullStr(r.contact) ?? undefined,
     phone: nullStr(r.phone) ?? undefined,
     email: nullStr(r.email) ?? undefined,
+    website: nullStr(r.website) ?? undefined,
     address: nullStr(r.address) ?? undefined,
     created_at: nullStr(r.created_at) ?? undefined,
     note: nullStr(r.note) ?? undefined,
+    remark: nullStr(r.remark) ?? undefined,
     is_vip: Boolean(r.is_vip),
     balance: Number(r.balance ?? 0),
     wechat: nullStr(r.wechat) ?? undefined,
+    category: nullStr(r.category) ?? undefined,
+    contact_person: nullStr(r.contact_person) ?? undefined,
+    last_purchase_date: nullStr(r.last_purchase_date) ?? undefined,
     roles: (() => { try { const v = r.roles; if (Array.isArray(v)) return v as Array<"客户" | "供应商">; if (typeof v === 'string' && v) return JSON.parse(v) as Array<"客户" | "供应商">; } catch {} return undefined; })(),
     master_id: nullStr(r.master_id) ?? undefined,
   };
@@ -672,7 +675,7 @@ function rowToPrintArchive(r: Record<string, unknown>): PrintArchiveRecord {
 // ─── Public API ───────────────────────────────────────────────────────────────
 
 let _cached: { ts: number; snapshot: BizStoreSnapshot } | null = null;
-const CACHE_TTL = 60_000;
+const CACHE_TTL = 25_000;
 
 export async function readBizStore(): Promise<BizStoreSnapshot> {
   const now = Date.now();
@@ -685,14 +688,24 @@ export async function readBizStore(): Promise<BizStoreSnapshot> {
   return snapshot;
 }
 
-export function invalidateBizStoreCache(): void {
-  _cached = null;
-}
-
 export async function writeBizStore(snapshot: BizStoreSnapshot): Promise<void> {
   const normalized = normalizeSnapshot(snapshot);
   await mysqlWrite(normalized);
   _cached = null; // 写后清缓存，下次读一定是新的
+}
+
+export function invalidateBizStoreCache(): void {
+  _cached = null;
+}
+
+export async function deleteBizClient(id: string): Promise<void> {
+  const { executeStmt } = await import("@/lib/db-mysql");
+  await executeStmt("DELETE FROM a3s_clients WHERE id=?", [id]);
+}
+
+export async function deleteBizSupplier(id: string): Promise<void> {
+  const { executeStmt } = await import("@/lib/db-mysql");
+  await executeStmt("DELETE FROM a3s_clients WHERE id=?", [id]);
 }
 
 // ── 自动考勤 ──────────────────────────────────────────

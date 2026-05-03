@@ -469,17 +469,6 @@ function getSupplierCategoryOptions(settings: BizSettings) {
     .filter(Boolean);
 }
 
-function getMaterialCategoryOptions(settings: BizSettings, materials: MaterialRecord[] = []) {
-  const configured = (settings.material_categories || "")
-    .split(/[\n,，]+/)
-    .map((item) => item.trim())
-    .filter(Boolean);
-  const fromMaterials = materials
-    .map((item) => item.category?.trim())
-    .filter(Boolean) as string[];
-  return Array.from(new Set([...configured, ...fromMaterials])).sort((a, b) => a.localeCompare(b, "zh-CN"));
-}
-
 function calcUsdCost(factoryPriceRmb: number, weight?: number) {
   return Number((((weight && weight > 0 ? weight : 1) + factoryPriceRmb) / 7).toFixed(2));
 }
@@ -942,7 +931,7 @@ function PaymentHistoryTable({ records }: { records: PaymentRecord[] }) {
             <th className="px-3 py-2 font-semibold text-slate-600">日期</th>
             <th className="px-3 py-2 font-semibold text-slate-600">金额</th>
             <th className="px-3 py-2 font-semibold text-slate-600">方式</th>
-            <th className="px-3 py-2 font-semibold text-slate-600">类别</th>
+            <th className="px-3 py-2 font-semibold text-slate-600">类型</th>
             <th className="px-3 py-2 font-semibold text-slate-600">备注</th>
           </tr>
         </thead>
@@ -2222,12 +2211,9 @@ function NewOrderModal({
       return;
     }
 
-    // Generate purely numeric incrementing order number (e.g. 13753)
-    const maxOrderNum = existingOrders.reduce((max, item) => {
-      const n = Number(item.order_number);
-      return Number.isFinite(n) && n > max ? n : max;
-    }, 0);
-    const orderNumber = String(maxOrderNum + 1);
+    const prefix = type === "定制单" ? "C" : "W";
+    const year = new Date().getFullYear();
+    const orderNumber = nextYearScopedId(existingOrders.map((item) => item.order_number), prefix, year, 4);
 
     const totalPrice = type === "批发单" ? wholesaleTotal : (Number(fields.total_price) || 0);
     const deposit = Number(fields.deposit) || 0;
@@ -2648,7 +2634,7 @@ function OrdersSection({
   const [selectedOrder, setSelectedOrder] = useState<BizOrder | null>(null);
   const [typeFilter, setTypeFilter] = useState("全部");
   const [statusFilter, setStatusFilter] = useState("全部");
-  const [dateFilter, setDateFilter] = useState("今天");
+  const [dateFilter, setDateFilter] = useState("全部");
   const [dateFrom, setDateFrom] = useState("");
   const [dateTo, setDateTo] = useState("");
   const [search, setSearch] = useState("");
@@ -2889,7 +2875,6 @@ function OrdersSection({
     setSelectedOrderNumbers([]);
     setBulkBusy(false);
     setBulkAction(null);
-    onAutoSave?.();
   }
 
   function handleSaveVipPrice(clientName: string, materialName: string, price: number) {
@@ -2958,7 +2943,6 @@ function OrdersSection({
           materials={materials}
           purchases={purchases}
           expenses={expenses}
-          settings={settings}
           setPurchases={setPurchases}
           setExpenses={setExpenses}
           setCashEntries={setCashEntries}
@@ -3351,78 +3335,6 @@ function SmallInput({ value, onChange, placeholder, type = "text" }: { value: st
   return <input type={type} value={value} onChange={(e) => onChange(e.target.value)} placeholder={placeholder} className="h-8 w-full rounded-lg border border-slate-300 bg-white px-3 text-xs text-slate-700 focus:border-gray-200 focus:outline-none" />;
 }
 
-// Inline tag list editor: shows each category as a chip with edit/delete, plus add new
-function InlineTagEditor({ tags, onChange }: { tags: string[]; onChange: (tags: string[]) => void }) {
-  const [editingIdx, setEditingIdx] = useState<number | null>(null);
-  const [editVal, setEditVal] = useState("");
-  const [newVal, setNewVal] = useState("");
-  function startEdit(i: number) { setEditingIdx(i); setEditVal(tags[i]); }
-  function commitEdit(i: number) {
-    const v = editVal.trim();
-    if (!v) { onChange(tags.filter((_, idx) => idx !== i)); }
-    else { const next = [...tags]; next[i] = v; onChange(next); }
-    setEditingIdx(null);
-  }
-  function remove(i: number) { onChange(tags.filter((_, idx) => idx !== i)); }
-  function addNew() {
-    const v = newVal.trim();
-    if (!v) return;
-    if (!tags.includes(v)) onChange([...tags, v]);
-    setNewVal("");
-  }
-  return (
-    <div className="space-y-1.5">
-      {tags.map((tag, i) => (
-        <div key={i} className="flex items-center gap-1.5 rounded-lg border border-gray-200 bg-white px-2.5 py-1.5">
-          {editingIdx === i ? (
-            <>
-              <input autoFocus value={editVal} onChange={(e) => setEditVal(e.target.value)}
-                onKeyDown={(e) => { if (e.key === "Enter") commitEdit(i); if (e.key === "Escape") setEditingIdx(null); }}
-                className="flex-1 rounded border border-blue-300 bg-white px-2 py-0.5 text-xs text-slate-700 focus:outline-none" />
-              <button onClick={() => commitEdit(i)} className="rounded bg-emerald-500 px-2 py-0.5 text-[10px] font-semibold text-white hover:bg-emerald-600">确认</button>
-              <button onClick={() => setEditingIdx(null)} className="rounded border border-slate-200 px-2 py-0.5 text-[10px] text-slate-600">取消</button>
-            </>
-          ) : (
-            <>
-              <span className="flex-1 text-xs text-slate-700">{tag}</span>
-              <button onClick={() => startEdit(i)} className="rounded border border-slate-200 px-1.5 py-0.5 text-[10px] text-slate-500 hover:border-slate-400">编辑</button>
-              <button onClick={() => remove(i)} className="rounded border border-rose-100 px-1.5 py-0.5 text-[10px] text-rose-400 hover:border-rose-300 hover:text-rose-600">删除</button>
-            </>
-          )}
-        </div>
-      ))}
-      <div className="flex gap-1.5">
-        <input value={newVal} onChange={(e) => setNewVal(e.target.value)}
-          onKeyDown={(e) => { if (e.key === "Enter") addNew(); }}
-          placeholder="+ 新增分类名称" className="flex-1 h-8 rounded-lg border border-dashed border-slate-300 bg-white px-3 text-xs text-slate-700 focus:border-slate-400 focus:outline-none" />
-        <button onClick={addNew} disabled={!newVal.trim()} className="rounded-lg border border-slate-300 bg-white px-3 text-xs text-slate-600 hover:border-slate-400 disabled:opacity-40">添加</button>
-      </div>
-    </div>
-  );
-}
-
-// Input that shows hours + minutes separately, stores total minutes
-function HourMinuteInput({ minutes, onChange }: { minutes: number; onChange: (totalMinutes: number) => void }) {
-  const h = Math.floor(Math.max(0, minutes) / 60);
-  const m = Math.max(0, minutes) % 60;
-  return (
-    <div className="flex items-center gap-1">
-      <input
-        type="number" min="0" max="23" value={h}
-        onChange={(e) => onChange(Math.max(0, Number(e.target.value) || 0) * 60 + m)}
-        className="h-8 w-14 rounded-lg border border-slate-300 bg-white px-2 text-center text-xs text-slate-700 focus:border-gray-400 focus:outline-none"
-      />
-      <span className="text-xs text-slate-500">时</span>
-      <input
-        type="number" min="0" max="59" value={m}
-        onChange={(e) => onChange(h * 60 + Math.min(59, Math.max(0, Number(e.target.value) || 0)))}
-        className="h-8 w-14 rounded-lg border border-slate-300 bg-white px-2 text-center text-xs text-slate-700 focus:border-gray-400 focus:outline-none"
-      />
-      <span className="text-xs text-slate-500">分</span>
-    </div>
-  );
-}
-
 function SmallSelect({ value, onChange, options, labels, disabled = false }: { value: string; onChange: (v: string) => void; options: string[]; labels?: Record<string, string>; disabled?: boolean; }) {
   return (
     <select value={value} disabled={disabled} onChange={(e) => onChange(e.target.value)} className="h-8 w-full rounded-lg border border-slate-300 bg-white px-3 text-xs text-slate-700 focus:border-gray-200 focus:outline-none disabled:cursor-not-allowed disabled:bg-slate-100">
@@ -3703,7 +3615,6 @@ function FinanceSection({ orders, setOrders, expenses, setExpenses, cashEntries,
   const [draft, setDraft] = useState<FinanceDraft>({ target: "", detail: "", amount: "", expense_type: expenseTypeOptions[0] ?? "采购", payment_method: "转账", expense_date: today, remark: "" });
   const [auditReport, setAuditReport] = useState<FinanceAuditReport | null>(null);
   const [showExpenseModal, setShowExpenseModal] = useState(false);
-  const [expenseModalError, setExpenseModalError] = useState("");
   const [confirmingExpenseId, setConfirmingExpenseId] = useState<string | null>(null);
   const [editingExpenseId, setEditingExpenseId] = useState<string | null>(null);
   const [quickPayTarget, setQuickPayTarget] = useState<string | null>(null);
@@ -3724,7 +3635,6 @@ function FinanceSection({ orders, setOrders, expenses, setExpenses, cashEntries,
       return client.name === keptName;
     }));
     setResolvingDuplicateKey(null);
-    onAutoSave?.();
   }
   const [expenseFromOffice, setExpenseFromOffice] = useState(false);
 
@@ -4082,8 +3992,6 @@ return days.map((day) => {
   }
 
   function openEditExpense(item: ExpenseRecord) {
-    if (isPayrollLinkedExpense(item, payrolls)) return;
-    setExpenseModalError("");
     setEditingExpenseId(item.id);
     setDraft({ target: item.target, detail: item.detail, amount: String(item.amount), expense_type: item.expense_type, payment_method: item.payment_method, expense_date: item.expense_date, remark: item.remark ?? "" });
     setExpenseFromOffice(item.office ?? false);
@@ -4093,15 +4001,6 @@ return days.map((day) => {
   function addExpense() {
     const amount = Number(draft.amount) || 0;
     if (!draft.target.trim() || !draft.detail.trim() || amount <= 0) return;
-    if (draft.expense_type === "工资") {
-      setExpenseModalError("工资类支出只能从员工管理 → 工资发放里创建，普通支出这里不允许手工录。");
-      return;
-    }
-    if (editingExpenseId && isPayrollLinkedExpense(expenses.find((item) => item.id === editingExpenseId) || { id: editingExpenseId, target: "", detail: "", amount: 0, expense_type: "", payment_method: "", expense_date: "" }, payrolls)) {
-      setExpenseModalError("这条支出已和工资发放关联，不能在普通支出里修改。");
-      return;
-    }
-    setExpenseModalError("");
     if (editingExpenseId) {
       const nextExpense: ExpenseRecord = {
         ...(expenses.find((item) => item.id === editingExpenseId) ?? { id: editingExpenseId }),
@@ -4181,10 +4080,6 @@ return days.map((day) => {
 
   function deleteExpense(expenseId: string) {
     const removedExpense = expenses.find((item) => item.id === expenseId);
-    if (removedExpense && isPayrollLinkedExpense(removedExpense, payrolls)) {
-      setConfirmingExpenseId(null);
-      return;
-    }
     setExpenses((prev) => prev.filter((item) => item.id !== expenseId));
     setCashEntries((prev) => prev.filter((item) => !(item.source_type === "expense" && item.source_id === expenseId)));
     if (removedExpense?.expense_type === "工资") {
@@ -4244,7 +4139,7 @@ return days.map((day) => {
 
   return (
     <div>
-      <SectionHeader eyebrow="收支管理" title={sub === "cash" ? "办公室管理" : "收支管理"} actions={<>{sub === "audit" ? <ActionBtn onClick={runFinanceAudit}>↻ 重新扫描</ActionBtn> : null}{sub === "audit" ? <ActionBtn tone="success" onClick={applyFinanceRepair}>🔧 应用自动修复</ActionBtn> : null}{sub === "expense" ? <ActionBtn tone="primary" onClick={() => { setExpenseModalError(""); setEditingExpenseId(null); setDraft({ target: "", detail: "", amount: "", expense_type: expenseTypeOptions[0] ?? "采购", payment_method: "转账", expense_date: today, remark: "" }); setShowExpenseModal(true); }}>+ 录入支出</ActionBtn> : null}{sub === "cash" ? <ActionBtn tone="primary" onClick={() => setShowOfficeTransferModal(true)}>+ 办公室转入/转出</ActionBtn> : null}</>} />
+      <SectionHeader eyebrow="收支管理" title={sub === "cash" ? "办公室管理" : "收支管理"} actions={<>{sub === "audit" ? <ActionBtn onClick={runFinanceAudit}>↻ 重新扫描</ActionBtn> : null}{sub === "audit" ? <ActionBtn tone="success" onClick={applyFinanceRepair}>🔧 应用自动修复</ActionBtn> : null}{sub === "expense" ? <ActionBtn tone="primary" onClick={() => setShowExpenseModal(true)}>+ 录入支出</ActionBtn> : null}{sub === "cash" ? <ActionBtn tone="primary" onClick={() => setShowOfficeTransferModal(true)}>+ 办公室转入/转出</ActionBtn> : null}</>} />
       <div className="mb-4 rounded-xl border border-slate-200 bg-white p-2">
         <div className="flex flex-wrap items-center justify-between gap-2">
           <div className="flex flex-wrap items-center gap-1">
@@ -4441,9 +4336,9 @@ return days.map((day) => {
             <div className="mb-4 flex items-start justify-between gap-3">
               <div>
                 <h3 className="text-base font-semibold text-slate-900">{editingExpenseId ? "编辑支出" : "录入支出"}</h3>
-                <p className="mt-1 text-xs text-slate-500">现金付款会自动补一条现金流水。工资类支出请去员工管理 → 工资发放。</p>
+                <p className="mt-1 text-xs text-slate-500">现金付款会自动补一条现金流水。</p>
               </div>
-              <button onClick={() => { setShowExpenseModal(false); setEditingExpenseId(null); setExpenseModalError(""); }} className="rounded-lg border border-slate-200 px-2.5 py-1 text-xs text-slate-500 hover:border-slate-300 hover:text-slate-700 transition-colors">关闭</button>
+              <button onClick={() => { setShowExpenseModal(false); setEditingExpenseId(null); }} className="rounded-lg border border-slate-200 px-2.5 py-1 text-xs text-slate-500 hover:border-slate-300 hover:text-slate-700 transition-colors">关闭</button>
             </div>
             <div className="grid gap-2 sm:grid-cols-2">
               <div>
@@ -4457,10 +4352,9 @@ return days.map((day) => {
               <SmallInput value={draft.expense_date} onChange={(v) => setDraft((d) => ({ ...d, expense_date: v }))} type="date" />
             </div>
             <div className="mt-2"><SmallInput value={draft.remark} onChange={(v) => setDraft((d) => ({ ...d, remark: v }))} placeholder="备注(可选)" /></div>
-            {expenseModalError ? <div className="mt-3 rounded-lg border border-rose-200 bg-rose-50 px-3 py-2 text-xs text-rose-600">{expenseModalError}</div> : null}
             <label className="mt-3 flex items-center gap-2 text-xs text-slate-600"><input type="checkbox" checked={expenseFromOffice} onChange={(e) => { const checked = e.target.checked; setExpenseFromOffice(checked); if (checked) setDraft((d) => ({ ...d, payment_method: OFFICE_PAYMENT_METHOD })); }} /> 这笔支出从办公室抽屉里出</label>
             <div className="mt-5 flex justify-end gap-2">
-              <ActionBtn onClick={() => { setShowExpenseModal(false); setEditingExpenseId(null); setExpenseModalError(""); }}>取消</ActionBtn>
+              <ActionBtn onClick={() => { setShowExpenseModal(false); setEditingExpenseId(null); }}>取消</ActionBtn>
               <ActionBtn tone="primary" onClick={addExpense}>确认录入</ActionBtn>
             </div>
           </div>
@@ -4481,8 +4375,8 @@ return days.map((day) => {
     </tr>
   );
 }) : <tr><td colSpan={7} className="py-10 text-center text-xs text-slate-400">这个日期范围内没有收入记录</td></tr>}</tbody></table></div><div className="flex flex-wrap items-center justify-between gap-3 rounded-xl border border-slate-200 bg-white px-4 py-3 text-xs text-slate-600"><span>第 {paymentPage} / {incomePageCount} 页,共 {allIncomeRows.length} 条收入</span><div className="flex items-center gap-2"><button type="button" onClick={() => setPaymentPage((p) => Math.max(1, p - 1))} disabled={paymentPage <= 1} className="rounded-lg border border-slate-200 px-3 py-1.5 disabled:cursor-not-allowed disabled:opacity-40">上一页</button><button type="button" onClick={() => setPaymentPage((p) => Math.min(incomePageCount, p + 1))} disabled={paymentPage >= incomePageCount} className="rounded-lg border border-slate-200 px-3 py-1.5 disabled:cursor-not-allowed disabled:opacity-40">下一页</button></div></div></>)}
-      {sub === "expense" && (<><div className="mb-2 rounded-xl border border-slate-200 bg-amber-50 px-4 py-3 text-xs text-amber-800">工资类支出已锁定，不能在普通支出清单里编辑或删除。请到“员工管理 → 工资”里处理。</div><div className="overflow-x-auto rounded-xl border border-slate-200 bg-white"><table className="w-full text-left text-xs"><thead><tr className="border-b border-slate-200 bg-slate-50"><th className="px-4 py-2 font-semibold text-slate-600">对象</th><th className="px-4 py-2 font-semibold text-slate-600">明细</th><th className="px-4 py-2 font-semibold text-slate-600">金额</th><th className="px-4 py-2 font-semibold text-slate-600">类别</th><th className="px-4 py-2 font-semibold text-slate-600">方式</th><th className="px-4 py-2 font-semibold text-slate-600">办公室</th><th className="px-4 py-2 font-semibold text-slate-600">日期</th><th className="px-4 py-2 font-semibold text-slate-600">操作</th></tr></thead><tbody>{filteredExpenseRows.length ? pagedExpenses.map((item) => { const locked = isPayrollLinkedExpense(item, payrolls); return <tr key={item.id} className="border-b border-slate-100 last:border-b-0"><td className="px-4 py-2 text-slate-700">{item.target}</td><td className="px-4 py-2 text-slate-500">{item.detail}</td><td className="px-4 py-2 font-semibold text-rose-600">{formatMoney(item.amount)}</td><td className="px-4 py-2 text-slate-600">{item.display_type}</td><td className="px-4 py-2 text-slate-600">{item.payment_method}</td><td className="px-4 py-2 text-slate-600">{item.office ? "是" : "否"}</td><td className="px-4 py-2 text-slate-500">{item.expense_date}</td><td className="px-4 py-2"><div className="flex items-center gap-2">{locked ? <span className="rounded border border-amber-200 bg-amber-50 px-2 py-0.5 text-[11px] text-amber-700">工资联动，已锁定</span> : editingExpenseId === item.id ? <span className="text-xs text-slate-400">编辑中</span> : <><button onClick={() => openEditExpense(item)} className="rounded border border-slate-200 px-2 py-0.5 text-xs text-slate-600 hover:border-slate-300 hover:bg-slate-50 transition-colors">编辑</button>{confirmingExpenseId === item.id ? <><button onClick={() => deleteExpense(item.id)} className="rounded border border-red-400 bg-red-500 px-2 py-0.5 text-xs font-semibold text-slate-700 hover:bg-red-600 transition-colors">确认</button><button onClick={() => setConfirmingExpenseId(null)} className="rounded border border-slate-200 px-2 py-0.5 text-xs text-slate-500 hover:border-slate-300 transition-colors">取消</button></> : <button onClick={() => setConfirmingExpenseId(item.id)} className="rounded border border-red-100 px-2 py-0.5 text-xs text-red-500 hover:border-red-300 hover:bg-red-50 transition-colors">删除</button>}</>}</div></td></tr>; }) : <tr><td colSpan={8} className="py-10 text-center text-xs text-slate-400">这个日期范围内没有支出记录</td></tr>}</tbody></table></div><div className="flex flex-wrap items-center justify-between gap-3 rounded-xl border border-slate-200 bg-white px-4 py-3 text-xs text-slate-600"><span>第 {expensesPage} / {expensesPageCount} 页,共 {filteredExpenseRows.length} 条支出</span><div className="flex items-center gap-2"><button type="button" onClick={() => setExpensesPage((p) => Math.max(1, p - 1))} disabled={expensesPage <= 1} className="rounded-lg border border-slate-200 px-3 py-1.5 disabled:cursor-not-allowed disabled:opacity-40">上一页</button><button type="button" onClick={() => setExpensesPage((p) => Math.min(expensesPageCount, p + 1))} disabled={expensesPage >= expensesPageCount} className="rounded-lg border border-slate-200 px-3 py-1.5 disabled:cursor-not-allowed disabled:opacity-40">下一页</button></div></div></>)}
-      {sub === "cash" && (<><div className="mb-3 flex items-center justify-end gap-4 rounded-xl border border-slate-200 bg-white px-5 py-3"><span className="text-xs text-slate-500">当前余额</span><span className={`text-xl font-bold ${cashBalance >= 0 ? "text-emerald-600" : "text-rose-600"}`}>{formatMoney(cashBalance)}</span></div><div className="overflow-x-auto rounded-xl border border-slate-200 bg-white"><table className="w-full text-left text-xs"><thead><tr className="border-b border-slate-200 bg-slate-50"><th className="px-4 py-2 font-semibold text-slate-600">日期</th><th className="px-4 py-2 font-semibold text-slate-600">类别</th><th className="px-4 py-2 font-semibold text-slate-600">类别</th><th className="px-4 py-2 font-semibold text-slate-600">对方</th><th className="px-4 py-2 font-semibold text-slate-600">金额</th><th className="px-4 py-2 font-semibold text-slate-600">明细</th><th className="px-4 py-2 font-semibold text-slate-600">余额</th></tr></thead><tbody>{cashRows.length ? cashRows.slice(0, 100).map((item) => { const isPositive = item.type === "收入" || item.type === "转入"; const typeCategory = item.category || (item.type === "转入" || item.type === "转出" ? "-" : "-"); return (<tr key={item.id} className="border-b border-slate-100 last:border-b-0"><td className="px-4 py-2 text-slate-500">{item.date}</td><td className="px-4 py-2"><span className={`rounded-full px-2 py-0.5 text-[11px] font-semibold ${isPositive ? "bg-green-50 text-green-700" : "bg-rose-50 text-rose-700"}`}>{item.type}</span></td><td className="px-4 py-2 text-slate-600">{typeCategory}</td><td className="px-4 py-2 text-slate-700">{item.target_name || "-"}</td><td className={`px-4 py-2 font-semibold ${isPositive ? "text-green-600" : "text-rose-600"}`}>{formatMoney(item.amount)}</td><td className="px-4 py-2 text-slate-500 max-w-[200px] truncate" title={item.note}>{item.note || "-"}</td><td className="px-4 py-2 font-medium text-emerald-600">{formatMoney(item.balance)}</td></tr>); }) : <tr><td colSpan={7} className="py-10 text-center text-xs text-slate-400">没有办公室记录</td></tr>}</tbody></table></div></>)}
+      {sub === "expense" && (<><div className="overflow-x-auto rounded-xl border border-slate-200 bg-white"><table className="w-full text-left text-xs"><thead><tr className="border-b border-slate-200 bg-slate-50"><th className="px-4 py-2 font-semibold text-slate-600">对象</th><th className="px-4 py-2 font-semibold text-slate-600">明细</th><th className="px-4 py-2 font-semibold text-slate-600">金额</th><th className="px-4 py-2 font-semibold text-slate-600">类型</th><th className="px-4 py-2 font-semibold text-slate-600">方式</th><th className="px-4 py-2 font-semibold text-slate-600">办公室</th><th className="px-4 py-2 font-semibold text-slate-600">日期</th><th className="px-4 py-2 font-semibold text-slate-600">操作</th></tr></thead><tbody>{filteredExpenseRows.length ? pagedExpenses.map((item) => <tr key={item.id} className="border-b border-slate-100 last:border-b-0"><td className="px-4 py-2 text-slate-700">{item.target}</td><td className="px-4 py-2 text-slate-500">{item.detail}</td><td className="px-4 py-2 font-semibold text-rose-600">{formatMoney(item.amount)}</td><td className="px-4 py-2 text-slate-600">{item.display_type}</td><td className="px-4 py-2 text-slate-600">{item.payment_method}</td><td className="px-4 py-2 text-slate-600">{item.office ? "是" : "否"}</td><td className="px-4 py-2 text-slate-500">{item.expense_date}</td><td className="px-4 py-2"><div className="flex items-center gap-2">{editingExpenseId === item.id ? <span className="text-xs text-slate-400">编辑中</span> : <><button onClick={() => openEditExpense(item)} className="rounded border border-slate-200 px-2 py-0.5 text-xs text-slate-600 hover:border-slate-300 hover:bg-slate-50 transition-colors">编辑</button>{confirmingExpenseId === item.id ? <><button onClick={() => deleteExpense(item.id)} className="rounded border border-red-400 bg-red-500 px-2 py-0.5 text-xs font-semibold text-slate-700 hover:bg-red-600 transition-colors">确认</button><button onClick={() => setConfirmingExpenseId(null)} className="rounded border border-slate-200 px-2 py-0.5 text-xs text-slate-500 hover:border-slate-300 transition-colors">取消</button></> : <button onClick={() => setConfirmingExpenseId(item.id)} className="rounded border border-red-100 px-2 py-0.5 text-xs text-red-500 hover:border-red-300 hover:bg-red-50 transition-colors">删除</button>}</>}</div></td></tr>) : <tr><td colSpan={8} className="py-10 text-center text-xs text-slate-400">这个日期范围内没有支出记录</td></tr>}</tbody></table></div><div className="flex flex-wrap items-center justify-between gap-3 rounded-xl border border-slate-200 bg-white px-4 py-3 text-xs text-slate-600"><span>第 {expensesPage} / {expensesPageCount} 页,共 {filteredExpenseRows.length} 条支出</span><div className="flex items-center gap-2"><button type="button" onClick={() => setExpensesPage((p) => Math.max(1, p - 1))} disabled={expensesPage <= 1} className="rounded-lg border border-slate-200 px-3 py-1.5 disabled:cursor-not-allowed disabled:opacity-40">上一页</button><button type="button" onClick={() => setExpensesPage((p) => Math.min(expensesPageCount, p + 1))} disabled={expensesPage >= expensesPageCount} className="rounded-lg border border-slate-200 px-3 py-1.5 disabled:cursor-not-allowed disabled:opacity-40">下一页</button></div></div></>)}
+      {sub === "cash" && (<><div className="mb-3 flex items-center justify-end gap-4 rounded-xl border border-slate-200 bg-white px-5 py-3"><span className="text-xs text-slate-500">当前余额</span><span className={`text-xl font-bold ${cashBalance >= 0 ? "text-emerald-600" : "text-rose-600"}`}>{formatMoney(cashBalance)}</span></div><div className="overflow-x-auto rounded-xl border border-slate-200 bg-white"><table className="w-full text-left text-xs"><thead><tr className="border-b border-slate-200 bg-slate-50"><th className="px-4 py-2 font-semibold text-slate-600">日期</th><th className="px-4 py-2 font-semibold text-slate-600">类型</th><th className="px-4 py-2 font-semibold text-slate-600">类别</th><th className="px-4 py-2 font-semibold text-slate-600">对方</th><th className="px-4 py-2 font-semibold text-slate-600">金额</th><th className="px-4 py-2 font-semibold text-slate-600">明细</th><th className="px-4 py-2 font-semibold text-slate-600">余额</th></tr></thead><tbody>{cashRows.length ? cashRows.slice(0, 100).map((item) => { const isPositive = item.type === "收入" || item.type === "转入"; const typeCategory = item.category || (item.type === "转入" || item.type === "转出" ? "-" : "-"); return (<tr key={item.id} className="border-b border-slate-100 last:border-b-0"><td className="px-4 py-2 text-slate-500">{item.date}</td><td className="px-4 py-2"><span className={`rounded-full px-2 py-0.5 text-[11px] font-semibold ${isPositive ? "bg-green-50 text-green-700" : "bg-rose-50 text-rose-700"}`}>{item.type}</span></td><td className="px-4 py-2 text-slate-600">{typeCategory}</td><td className="px-4 py-2 text-slate-700">{item.target_name || "-"}</td><td className={`px-4 py-2 font-semibold ${isPositive ? "text-green-600" : "text-rose-600"}`}>{formatMoney(item.amount)}</td><td className="px-4 py-2 text-slate-500 max-w-[200px] truncate" title={item.note}>{item.note || "-"}</td><td className="px-4 py-2 font-medium text-emerald-600">{formatMoney(item.balance)}</td></tr>); }) : <tr><td colSpan={7} className="py-10 text-center text-xs text-slate-400">没有办公室记录</td></tr>}</tbody></table></div></>)}
 
       {sub === "ledger" && <div className="overflow-x-auto rounded-xl border border-slate-200 bg-white"><table className="w-full text-left text-xs"><thead><tr className="border-b border-slate-200 bg-slate-50"><th className="px-4 py-2 font-semibold text-slate-600">{ledgerView === "yearly" ? "月份" : "日期"}</th><th className="px-4 py-2 font-semibold text-slate-600">收入</th><th className="px-4 py-2 font-semibold text-slate-600">支出</th><th className="px-4 py-2 font-semibold text-slate-600">净额</th><th className="px-4 py-2 font-semibold text-slate-600">余额</th><th className="px-4 py-2 font-semibold text-slate-600">净利润</th></tr></thead><tbody>{ledgerRows.map((item) => <tr key={item.month} className="border-b border-slate-100 last:border-b-0"><td className="px-4 py-2 font-medium text-slate-700">{item.month}</td><td className="px-4 py-2 text-green-600">{formatMoney(item.income)}</td><td className="px-4 py-2 text-rose-600">{formatMoney(item.expense)}</td><td className="px-4 py-2 text-slate-700">{formatMoney(item.net)}</td><td className="px-4 py-2 text-emerald-600">{formatMoney(item.balance)}</td><td className={`px-4 py-2 font-semibold ${item.profit >= 0 ? "text-emerald-600" : "text-rose-600"}`}>{formatMoney(item.profit)}</td></tr>)}</tbody></table></div>}
       {sub === "receivables" && (
@@ -4623,7 +4517,7 @@ return days.map((day) => {
             <table className="w-full text-left text-xs">
               <thead>
                 <tr className="border-b border-slate-200 bg-slate-50">
-                  <th className="px-4 py-2 font-semibold text-slate-600">类别</th>
+                  <th className="px-4 py-2 font-semibold text-slate-600">类型</th>
                   <th className="px-4 py-2 font-semibold text-slate-600">对象</th>
                   <th className="px-4 py-2 font-semibold text-slate-600">问题</th>
                   <th className="px-4 py-2 font-semibold text-slate-600">当前值</th>
@@ -4694,7 +4588,6 @@ function PurchaseModal({
   materials,
   purchases,
   expenses,
-  settings,
   setPurchases,
   setExpenses,
   setCashEntries,
@@ -4706,7 +4599,6 @@ function PurchaseModal({
   materials: MaterialRecord[];
   purchases: PurchaseRecord[];
   expenses: ExpenseRecord[];
-  settings: BizSettings;
   setPurchases: React.Dispatch<React.SetStateAction<PurchaseRecord[]>>;
   setExpenses: React.Dispatch<React.SetStateAction<ExpenseRecord[]>>;
   setCashEntries: React.Dispatch<React.SetStateAction<CashEntry[]>>;
@@ -4723,30 +4615,21 @@ function PurchaseModal({
   const [lumpNotes, setLumpNotes] = useState("");
   const [matSearch, setMatSearch] = useState("");
   const [matCategory, setMatCategory] = useState("");
+  const [matSupplierFilter, setMatSupplierFilter] = useState("");
   type LineItem = { material_id: string; name: string; unit: string; qty: string; unit_price: string };
   const [lines, setLines] = useState<LineItem[]>([]);
 
-  const selectedSupplier = suppliers.find((s) => s.id === supplierId);
-  const supplierName = selectedSupplier?.name ?? supplierId;
+  const supplierName = suppliers.find((s) => s.id === supplierId)?.name ?? supplierId;
 
-  const filteredMaterials = useMemo(() => {
-    const filtered = materials.filter((m) => {
-      if (matSearch && !m.name.toLowerCase().includes(matSearch.toLowerCase())) return false;
-      if (matCategory && m.category !== matCategory) return false;
-      return true;
-    });
+  const filteredMaterials = useMemo(() => materials.filter((m) => {
+    if (matSearch && !m.name.toLowerCase().includes(matSearch.toLowerCase())) return false;
+    if (matCategory && m.category !== matCategory) return false;
+    if (matSupplierFilter && m.supplier !== matSupplierFilter) return false;
+    return true;
+  }), [materials, matSearch, matCategory, matSupplierFilter]);
 
-    if (!supplierName) return filtered;
-
-    return [...filtered].sort((a, b) => {
-      const aMatch = a.supplier === supplierName ? 1 : 0;
-      const bMatch = b.supplier === supplierName ? 1 : 0;
-      if (aMatch !== bMatch) return bMatch - aMatch;
-      return a.name.localeCompare(b.name, "zh-CN");
-    });
-  }, [materials, matSearch, matCategory, supplierName]);
-
-  const matCategories = useMemo(() => getMaterialCategoryOptions(settings, materials), [settings, materials]);
+  const matCategories = useMemo(() => [...new Set(materials.map((m) => m.category).filter(Boolean))] as string[], [materials]);
+  const matSuppliers = useMemo(() => [...new Set(materials.map((m) => m.supplier).filter(Boolean))] as string[], [materials]);
 
   function toggleLine(mat: MaterialRecord) {
     setLines((prev) => {
@@ -4871,8 +4754,8 @@ function PurchaseModal({
             <div className="mb-2 flex flex-wrap gap-2">
               <SmallInput value={matSearch} onChange={setMatSearch} placeholder="搜索物料名称..." />
               <SmallSelect value={matCategory} onChange={setMatCategory} options={["", ...matCategories]} labels={{ "": "全部分类" }} />
+              <SmallSelect value={matSupplierFilter} onChange={setMatSupplierFilter} options={["", ...matSuppliers]} labels={{ "": "全部供应商" }} />
             </div>
-            <p className="mb-2 text-[11px] text-slate-500">下方物料会优先显示当前采购供应商相关的材料，不再单独放一个“全部供应商”筛选。</p>
             <div className="max-h-48 overflow-y-auto rounded-xl border border-slate-200 bg-white">
               {filteredMaterials.length === 0 ? (
                 <div className="py-6 text-center text-xs text-slate-500">暂无物料</div>
@@ -4924,16 +4807,19 @@ type ClientDetailTab = "overview" | "orders" | "appointments" | "activity";
 function ClientsSection({ clients, setClients, suppliers, setSuppliers, orders, setOrders, appointments, setAppointments, setCashEntries, setExpenses, materials, setMaterials, purchases, setPurchases, expenses, settings, setSettings, onAutoSave }: { clients: ContactRecord[]; setClients: React.Dispatch<React.SetStateAction<ContactRecord[]>>; suppliers: SupplierRecord[]; setSuppliers: React.Dispatch<React.SetStateAction<SupplierRecord[]>>; orders: BizOrder[]; setOrders: React.Dispatch<React.SetStateAction<BizOrder[]>>; appointments: MeasurementAppointmentRecord[]; setAppointments: React.Dispatch<React.SetStateAction<MeasurementAppointmentRecord[]>>; setCashEntries: React.Dispatch<React.SetStateAction<CashEntry[]>>; setExpenses: React.Dispatch<React.SetStateAction<ExpenseRecord[]>>; materials: MaterialRecord[]; setMaterials: React.Dispatch<React.SetStateAction<MaterialRecord[]>>; purchases: PurchaseRecord[]; setPurchases: React.Dispatch<React.SetStateAction<PurchaseRecord[]>>; expenses: ExpenseRecord[]; settings: BizSettings; setSettings: React.Dispatch<React.SetStateAction<BizSettings>>; onAutoSave?: () => void; }) {
   const [sub, setSub] = useState<ContactSub>("clients");
   const today = formatLocalDate(new Date());
-  const [clientDraft, setClientDraft] = useState({ name: "", contact: "", phone: "", wechat: "", address: "", note: "" });
+  const [contactDraft, setContactDraft] = useState({
+    name: "", contact: "", phone: "", wechat: "", email: "", website: "",
+    address: "", note: "", remark: "", category: "", contact_person: "",
+    roles: ["客户"] as Array<"客户" | "供应商">,
+    last_purchase_date: "",
+  });
+  const [editingContactId, setEditingContactId] = useState<string | null>(null);
+  const [editingContactType, setEditingContactType] = useState<"客户" | "供应商">("客户");
+  const [showContactModal, setShowContactModal] = useState(false);
   const supplierCategoryOptions = useMemo(() => getSupplierCategoryOptions(settings), [settings]);
-  const [supplierDraft, setSupplierDraft] = useState({ name: "", category: supplierCategoryOptions[0] ?? "布料", contact_person: "", phone: "", email: "", website: "", address: "", remark: "" });
-  const [showClientModal, setShowClientModal] = useState(false);
-  const [showSupplierModal, setShowSupplierModal] = useState(false);
   const [showVipPriceModal, setShowVipPriceModal] = useState(false);
   const [vipPriceClient, setVipPriceClient] = useState<(typeof clients)[number] | null>(null);
   const [vipPriceDraft, setVipPriceDraft] = useState<Record<string, number>>({});
-  const [editingClientId, setEditingClientId] = useState<string | null>(null);
-  const [editingSupplierId, setEditingSupplierId] = useState<string | null>(null);
   const [confirmingClientId, setConfirmingClientId] = useState<string | null>(null);
   const [confirmingSupplierId, setConfirmingSupplierId] = useState<string | null>(null);
   const [directoryHint, setDirectoryHint] = useState("");
@@ -4993,75 +4879,113 @@ function ClientsSection({ clients, setClients, suppliers, setSuppliers, orders, 
     },
   };
 
-  function addClient() {
-    if (!clientDraft.name.trim()) return;
-    if (editingClientId) {
-      const originalClient = clients.find((item) => item.id === editingClientId);
-      const nextName = clientDraft.name.trim();
-      const nextPhone = clientDraft.phone || undefined;
-      const nextAddress = clientDraft.address || undefined;
-      setClients((prev) => prev.map((item) => item.id === editingClientId ? { ...item, name: nextName, contact: clientDraft.contact || undefined, phone: nextPhone, wechat: clientDraft.wechat || undefined, address: nextAddress, note: clientDraft.note || undefined } : item));
-      if (originalClient) {
-        setOrders((prev) => prev.map((item) => orderBelongsToClient(item, originalClient) ? { ...item, client_name: nextName, client_id: originalClient.id, phone: nextPhone, address: nextAddress } : item));
+  function saveContact() {
+    if (!contactDraft.name.trim()) return;
+    const d = contactDraft;
+    const isClient = d.roles.includes("客户");
+    const isSupplier = d.roles.includes("供应商");
+    const clientBase = {
+      name: d.name.trim(),
+      contact: d.contact || undefined,
+      phone: d.phone || undefined,
+      email: d.email || undefined,
+      website: d.website || undefined,
+      address: d.address || undefined,
+      note: d.note || undefined,
+      remark: d.remark || undefined,
+      category: d.category || undefined,
+      contact_person: d.contact_person || undefined,
+      roles: d.roles,
+    };
+    const supplierBase = {
+      ...clientBase,
+      last_purchase_date: d.last_purchase_date || undefined,
+    };
+    if (editingContactId) {
+      setClients((prev) => prev.map((item) => item.id === editingContactId ? {
+        ...item,
+        ...clientBase,
+        last_purchase_date: isSupplier ? d.last_purchase_date || undefined : item.last_purchase_date,
+      } : item));
+      if (isSupplier) {
+        setSuppliers((prev) => prev.map((item) => item.id === editingContactId ? {
+          ...item,
+          ...supplierBase,
+        } : item));
+      } else {
+        setSuppliers((prev) => prev.filter((item) => item.id !== editingContactId));
       }
-      setSelectedClientId(editingClientId);
-      setDirectoryHint(`已同步客户 ${nextName} 的订单关联。`);
+      setDirectoryHint(`已保存联系人 ${d.name.trim()}。`);
     } else {
-      const newId = nextSequentialId(clients.map((item) => item.id), "CL");
-      setClients((prev) => [{ id: newId, name: clientDraft.name.trim(), contact: clientDraft.contact || undefined, phone: clientDraft.phone || undefined, wechat: clientDraft.wechat || undefined, address: clientDraft.address || undefined, note: clientDraft.note || undefined, created_at: today, balance: 0, is_vip: false }, ...prev]);
-      setSelectedClientId(newId);
-      setDirectoryHint(`已新增客户 ${clientDraft.name.trim()}。`);
+      const newId = nextSequentialId([...clients, ...suppliers].map((item) => item.id), "CNT");
+      const clientRecord = {
+        id: newId,
+        created_at: today,
+        balance: 0,
+        is_vip: false,
+        ...clientBase,
+        last_purchase_date: isSupplier ? d.last_purchase_date || undefined : undefined,
+      };
+      if (isClient || isSupplier) setClients((prev) => [clientRecord as ContactRecord, ...prev]);
+      if (isSupplier) setSuppliers((prev) => [{ ...clientRecord } as unknown as SupplierRecord, ...prev]);
+      setDirectoryHint(`已新增联系人 ${d.name.trim()}。`);
     }
-    setEditingClientId(null);
-    setClientDraft({ name: "", contact: "", phone: "", wechat: "", address: "", note: "" });
-    setShowClientModal(false);
+    setEditingContactId(null);
+    setContactDraft({ name: "", contact: "", phone: "", wechat: "", email: "", website: "", address: "", note: "", remark: "", category: supplierCategoryOptions[0] ?? "布料", contact_person: "", roles: ["客户"], last_purchase_date: "" });
+    setShowContactModal(false);
     onAutoSave?.();
   }
 
-  function openEditClient(client: ContactRecord) {
-    setEditingClientId(client.id);
-    setClientDraft({ name: client.name, contact: client.contact ?? "", phone: client.phone ?? "", wechat: client.wechat ?? client.email ?? "", address: client.address ?? "", note: client.note ?? "" });
-    setShowClientModal(true);
+  function openEditContact(record: ContactRecord | SupplierRecord, type: "客户" | "供应商") {
+    setEditingContactId(record.id);
+    setEditingContactType(type);
+    setContactDraft({
+      name: record.name,
+      contact: record.contact ?? "",
+      phone: record.phone ?? "",
+      wechat: record.wechat ?? "",
+      email: record.email ?? "",
+      website: record.website ?? "",
+      address: record.address ?? "",
+      note: record.note ?? "",
+      remark: record.remark ?? "",
+      category: record.category ?? supplierCategoryOptions[0] ?? "布料",
+      contact_person: record.contact_person ?? "",
+      roles: record.roles ?? [type],
+      last_purchase_date: (record as SupplierRecord).last_purchase_date ?? "",
+    });
+    setShowContactModal(true);
   }
 
-  function deleteClient(client: ContactRecord) {
-    const linkedOrders = orders.filter((item) => orderBelongsToClient(item, client));
-    if (linkedOrders.length) {
-      setDirectoryHint(`客户 ${client.name} 还有 ${linkedOrders.length} 个订单,先处理这些记录再删。`);
-      setConfirmingClientId(null);
-      return;
-    }
-    setClients((prev) => prev.filter((item) => item.id !== client.id));
-    if (selectedClientId === client.id) setSelectedClientId("");
-    setDirectoryHint(`已删除客户 ${client.name}。`);
-    setConfirmingClientId(null);
+  function openNewContact(type: "客户" | "供应商") {
+    setEditingContactId(null);
+    setEditingContactType(type);
+    setContactDraft({ name: "", contact: "", phone: "", wechat: "", email: "", website: "", address: "", note: "", remark: "", category: supplierCategoryOptions[0] ?? "布料", contact_person: "", roles: [type], last_purchase_date: "" });
+    setShowContactModal(true);
+  }
+
+  function deleteContact(id: string) {
+    setClients((prev) => prev.filter((item) => item.id !== id));
+    setSuppliers((prev) => prev.filter((item) => item.id !== id));
+    if (selectedClientId === id) setSelectedClientId("");
+    setShowContactModal(false);
+    setEditingContactId(null);
     onAutoSave?.();
   }
 
-  function addSupplier() {
-    if (!supplierDraft.name.trim()) return;
-    if (editingSupplierId) {
-      const originalSupplier = suppliers.find((item) => item.id === editingSupplierId);
-      const nextName = supplierDraft.name.trim();
-      setSuppliers((prev) => prev.map((item) => item.id === editingSupplierId ? { ...item, name: nextName, category: supplierDraft.category, contact_person: supplierDraft.contact_person || undefined, phone: supplierDraft.phone || undefined, email: supplierDraft.email || undefined, website: supplierDraft.website || undefined, address: supplierDraft.address || undefined, remark: supplierDraft.remark || undefined } : item));
-      if (originalSupplier) {
-        setMaterials((prev) => prev.map((item) => materialBelongsToSupplier(item, originalSupplier) ? { ...item, supplier: nextName, supplier_id: originalSupplier.id } : item));
-      }
-      setDirectoryHint(`已同步供应商 ${nextName} 的物料关联。`);
+  function deleteContactFromList(id: string, type: "客户" | "供应商") {
+    if (type === "客户") {
+      const linkedOrders = orders.filter((item) => { const c = clients.find(cl => cl.id === id); return c ? orderBelongsToClient(item, c) : false; });
+      if (linkedOrders.length) { setDirectoryHint(`客户还有 ${linkedOrders.length} 个订单,先处理这些记录再删。`); return; }
     } else {
-      setSuppliers((prev) => [{ id: nextSequentialId(prev.map((item) => item.id), "SUP"), name: supplierDraft.name.trim(), category: supplierDraft.category, contact_person: supplierDraft.contact_person || undefined, phone: supplierDraft.phone || undefined, email: supplierDraft.email || undefined, website: supplierDraft.website || undefined, address: supplierDraft.address || undefined, remark: supplierDraft.remark || undefined, last_purchase_date: today }, ...prev]);
-      setDirectoryHint(`已新增供应商 ${supplierDraft.name.trim()}。`);
+      const linkedMaterials = materials.filter((item) => { const s = suppliers.find(su => su.id === id); return s ? materialBelongsToSupplier(item, s) : false; });
+      if (linkedMaterials.length) { setDirectoryHint(`供应商还有 ${linkedMaterials.length} 个物料关联,先处理这些记录再删。`); return; }
     }
-    setSupplierDraft({ name: "", category: supplierCategoryOptions[0] ?? "布料", contact_person: "", phone: "", email: "", website: "", address: "", remark: "" });
-    setEditingSupplierId(null);
-    setShowSupplierModal(false);
+    setClients((prev) => prev.filter((item) => item.id !== id));
+    setSuppliers((prev) => prev.filter((item) => item.id !== id));
+    if (selectedClientId === id) setSelectedClientId("");
+    setDirectoryHint(`已删除联系人。`);
     onAutoSave?.();
-  }
-
-  function openEditSupplier(supplier: SupplierRecord) {
-    setEditingSupplierId(supplier.id);
-    setSupplierDraft({ name: supplier.name, category: supplier.category ?? supplierCategoryOptions[0] ?? "布料", contact_person: supplier.contact_person ?? "", phone: supplier.phone ?? "", email: supplier.email ?? "", website: supplier.website ?? "", address: supplier.address ?? "", remark: supplier.remark ?? "" });
-    setShowSupplierModal(true);
   }
 
   function deleteSupplier(supplier: SupplierRecord) {
@@ -5071,6 +4995,7 @@ function ClientsSection({ clients, setClients, suppliers, setSuppliers, orders, 
       setConfirmingSupplierId(null);
       return;
     }
+    setClients((prev) => prev.filter((item) => item.id !== supplier.id));
     setSuppliers((prev) => prev.filter((item) => item.id !== supplier.id));
     setDirectoryHint(`已删除供应商 ${supplier.name}。`);
     setConfirmingSupplierId(null);
@@ -5161,7 +5086,6 @@ function ClientsSection({ clients, setClients, suppliers, setSuppliers, orders, 
 
   function toggleVip(clientId: string) {
     setClients((prev) => prev.map((item) => item.id === clientId ? { ...item, is_vip: !item.is_vip } : item));
-    onAutoSave?.();
   }
 
   function openVipPriceEditor(client: (typeof clients)[number]) {
@@ -5261,19 +5185,16 @@ function ClientsSection({ clients, setClients, suppliers, setSuppliers, orders, 
   function handleClientOrderCreate(order: BizOrder) {
     setOrders((prev) => [order, ...prev]);
     setNewOrderTypeForClient(null);
-    onAutoSave?.();
   }
 
   function handleClientOrderUpdate(order: BizOrder) {
     setOrders((prev) => prev.map((o) => o.order_number === order.order_number ? order : o));
     setSelectedClientOrderDetail(null);
-    onAutoSave?.();
   }
 
   function handleClientDetailSave(updated: BizOrder) {
     setOrders((prev) => prev.map((o) => o.order_number === updated.order_number ? updated : o));
     setSelectedClientOrderDetail(null);
-    onAutoSave?.();
   }
 
   function handleClientOrderDelete(orderNumber: string) {
@@ -5287,7 +5208,6 @@ function ClientsSection({ clients, setClients, suppliers, setSuppliers, orders, 
       expenseReferencesOrder(item, orderNumber) ? { ...item, voided: true } : item
     ));
     setDeleteOrderConfirm(null);
-    onAutoSave?.();
   }
 
   function handleClientOrderPrint(item: BizOrder, printType: "invoice" | "pickup") {
@@ -5389,8 +5309,8 @@ function ClientsSection({ clients, setClients, suppliers, setSuppliers, orders, 
         title="客户与供应商"
         actions={
           <>
-            <ActionBtn tone="primary" onClick={() => sub === "clients" ? (setEditingClientId(null), setClientDraft({ name: "", contact: "", phone: "", wechat: "", address: "", note: "" }), setShowClientModal(true)) : setShowSupplierModal(true)}>
-              + 新建{sub === "clients" ? "客户" : "供应商"}
+            <ActionBtn tone="primary" onClick={() => openNewContact(sub === "clients" ? "客户" : "供应商")}>
+              + 新建联系人
             </ActionBtn>
           </>
         }
@@ -5413,52 +5333,41 @@ function ClientsSection({ clients, setClients, suppliers, setSuppliers, orders, 
 
       {directoryHint ? <div className="mb-4 rounded-xl border border-sky-100 bg-sky-50 px-4 py-3 text-xs text-sky-700">{directoryHint}</div> : null}
 
-      {showClientModal && (
+      {showContactModal && (
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-slate-950/45 px-4">
           <div className="w-full max-w-3xl rounded-2xl border border-gray-200 bg-gray-50 p-5 shadow-2xl">
             <div className="mb-4 flex items-start justify-between gap-3">
               <div>
-                <h3 className="text-base font-semibold text-slate-700">{editingClientId ? "编辑客户" : "新建客户"} <span className="ml-2 rounded-full bg-sky-100 px-2 py-0.5 text-[11px] font-semibold text-sky-700">客户</span></h3>
-                <p className="mt-1 text-xs text-slate-700">客户资料支持直接新增和编辑。</p>
+                <h3 className="text-base font-semibold text-slate-700">{editingContactId ? "编辑联系人" : "新建联系人"} <span className="ml-2 rounded-full bg-sky-100 px-2 py-0.5 text-[11px] font-semibold text-sky-700">联系人</span></h3>
+                <p className="mt-1 text-xs text-slate-700">支持客户、供应商或两者兼有。</p>
               </div>
-              <button onClick={() => setShowClientModal(false)} className="rounded-lg border border-slate-200 px-2.5 py-1 text-xs text-slate-700 hover:border-slate-300 hover:text-slate-700 transition-colors">关闭</button>
+              <button onClick={() => setShowContactModal(false)} className="rounded-lg border border-slate-200 px-2.5 py-1 text-xs text-slate-700 hover:border-slate-300 hover:text-slate-700 transition-colors">关闭</button>
             </div>
             <div className="grid gap-2 sm:grid-cols-2 xl:grid-cols-3">
-              <div><label className="mb-1 block text-[11px] font-semibold text-slate-700">客户名称</label><SmallInput value={clientDraft.name} onChange={(v) => setClientDraft((d) => ({ ...d, name: v }))} placeholder="客户名称" /></div>
-              <div><label className="mb-1 block text-[11px] font-semibold text-slate-700">电话</label><SmallInput value={clientDraft.phone} onChange={(v) => setClientDraft((d) => ({ ...d, phone: v }))} placeholder="电话" /></div>
-              <div><label className="mb-1 block text-[11px] font-semibold text-slate-700">微信 / 邮箱</label><SmallInput value={clientDraft.wechat} onChange={(v) => setClientDraft((d) => ({ ...d, wechat: v }))} placeholder="微信 / 邮箱" /></div>
-              <div><label className="mb-1 block text-[11px] font-semibold text-slate-700">地址</label><SmallInput value={clientDraft.address} onChange={(v) => setClientDraft((d) => ({ ...d, address: v }))} placeholder="地址" /></div>
-              <div><label className="mb-1 block text-[11px] font-semibold text-slate-700">备注</label><SmallInput value={clientDraft.note} onChange={(v) => setClientDraft((d) => ({ ...d, note: v }))} placeholder="备注" /></div>
-            </div>
-            <div className="mt-5 flex justify-end gap-2">
-              <ActionBtn onClick={() => setShowClientModal(false)}>取消</ActionBtn>
-              <ActionBtn tone="primary" onClick={addClient}>{editingClientId ? "确认保存" : "确认新建"}</ActionBtn>
-            </div>
-          </div>
-        </div>
-      )}
-
-      {showSupplierModal && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center bg-slate-950/45 px-4">
-          <div className="w-full max-w-3xl rounded-2xl border border-gray-200 bg-gray-50 p-5 shadow-2xl">
-            <div className="mb-4 flex items-start justify-between gap-3">
-              <div>
-                <h3 className="text-base font-semibold text-slate-700">{editingSupplierId ? "编辑供应商" : "新建供应商"} <span className="ml-2 rounded-full bg-violet-100 px-2 py-0.5 text-[11px] font-semibold text-violet-700">供应商</span></h3>
-                <p className="mt-1 text-xs text-slate-700">供应商资料支持直接新增和编辑。</p>
+              <div><label className="mb-1 block text-[11px] font-semibold text-slate-700">角色</label>
+                <div className="flex gap-2">
+                  <label className="flex items-center gap-1 text-xs"><input type="checkbox" checked={contactDraft.roles.includes("客户")} onChange={(e) => { const r = e.target.checked ? [...contactDraft.roles, "客户"] : contactDraft.roles.filter(x => x !== "客户"); setContactDraft((d) => ({ ...d, roles: r as Array<"客户"|"供应商"> })); }} /> 客户</label>
+                  <label className="flex items-center gap-1 text-xs"><input type="checkbox" checked={contactDraft.roles.includes("供应商")} onChange={(e) => { const r = e.target.checked ? [...contactDraft.roles, "供应商"] : contactDraft.roles.filter(x => x !== "供应商"); setContactDraft((d) => ({ ...d, roles: r as Array<"客户"|"供应商"> })); }} /> 供应商</label>
+                </div>
               </div>
-              <button onClick={() => setShowSupplierModal(false)} className="rounded-lg border border-slate-200 px-2.5 py-1 text-xs text-slate-700 hover:border-slate-300 hover:text-slate-700 transition-colors">关闭</button>
-            </div>
-            <div className="grid gap-2 sm:grid-cols-2 xl:grid-cols-3">
-              <SmallInput value={supplierDraft.name} onChange={(v) => setSupplierDraft((d) => ({ ...d, name: v }))} placeholder="供应商名称" />
-              <SmallInput value={supplierDraft.phone} onChange={(v) => setSupplierDraft((d) => ({ ...d, phone: v }))} placeholder="电话" />
-              <SmallInput value={supplierDraft.email} onChange={(v) => setSupplierDraft((d) => ({ ...d, email: v }))} placeholder="Email" />
-              <SmallInput value={supplierDraft.website} onChange={(v) => setSupplierDraft((d) => ({ ...d, website: v }))} placeholder="网站" />
-              <SmallInput value={supplierDraft.address} onChange={(v) => setSupplierDraft((d) => ({ ...d, address: v }))} placeholder="地址" />
-              <SmallInput value={supplierDraft.remark} onChange={(v) => setSupplierDraft((d) => ({ ...d, remark: v }))} placeholder="备注" />
+              <div><label className="mb-1 block text-[11px] font-semibold text-slate-700">名称</label><SmallInput value={contactDraft.name} onChange={(v) => setContactDraft((d) => ({ ...d, name: v }))} placeholder="名称" /></div>
+              <div><label className="mb-1 block text-[11px] font-semibold text-slate-700">电话</label><SmallInput value={contactDraft.phone} onChange={(v) => setContactDraft((d) => ({ ...d, phone: v }))} placeholder="电话" /></div>
+              <div><label className="mb-1 block text-[11px] font-semibold text-slate-700">联系人</label><SmallInput value={contactDraft.contact_person} onChange={(v) => setContactDraft((d) => ({ ...d, contact_person: v }))} placeholder="联系人" /></div>
+              <div><label className="mb-1 block text-[11px] font-semibold text-slate-700">微信</label><SmallInput value={contactDraft.wechat} onChange={(v) => setContactDraft((d) => ({ ...d, wechat: v }))} placeholder="微信" /></div>
+              <div><label className="mb-1 block text-[11px] font-semibold text-slate-700">邮箱</label><SmallInput value={contactDraft.email} onChange={(v) => setContactDraft((d) => ({ ...d, email: v }))} placeholder="邮箱" /></div>
+              <div><label className="mb-1 block text-[11px] font-semibold text-slate-700">网站</label><SmallInput value={contactDraft.website} onChange={(v) => setContactDraft((d) => ({ ...d, website: v }))} placeholder="网站" /></div>
+              <div><label className="mb-1 block text-[11px] font-semibold text-slate-700">地址</label><SmallInput value={contactDraft.address} onChange={(v) => setContactDraft((d) => ({ ...d, address: v }))} placeholder="地址" /></div>
+              {contactDraft.roles.includes("供应商") && (
+                <>
+                  <div><label className="mb-1 block text-[11px] font-semibold text-slate-700">类别</label><SmallSelect value={contactDraft.category} onChange={(v) => setContactDraft((d) => ({ ...d, category: v }))} options={supplierCategoryOptions} /></div>
+                  <div><label className="mb-1 block text-[11px] font-semibold text-slate-700">最近采购日期</label><SmallInput value={contactDraft.last_purchase_date} onChange={(v) => setContactDraft((d) => ({ ...d, last_purchase_date: v }))} placeholder="YYYY-MM-DD" /></div>
+                </>
+              )}
+              <div><label className="mb-1 block text-[11px] font-semibold text-slate-700">备注</label><SmallInput value={contactDraft.remark} onChange={(v) => setContactDraft((d) => ({ ...d, remark: v }))} placeholder="备注" /></div>
             </div>
             <div className="mt-5 flex justify-end gap-2">
-              <ActionBtn onClick={() => setShowSupplierModal(false)}>取消</ActionBtn>
-              <ActionBtn tone="primary" onClick={addSupplier}>{editingSupplierId ? "确认保存" : "确认新建"}</ActionBtn>
+              <ActionBtn onClick={() => setShowContactModal(false)}>取消</ActionBtn>
+              <ActionBtn tone="primary" onClick={saveContact}>{editingContactId ? "确认保存" : "确认新建"}</ActionBtn>
             </div>
           </div>
         </div>
@@ -5550,10 +5459,10 @@ function ClientsSection({ clients, setClients, suppliers, setSuppliers, orders, 
                       <div className="flex flex-wrap gap-1 shrink-0">
                         <ActionBtn onClick={() => toggleVip(selectedClient.id)}>{selectedClient.is_vip ? "取消VIP" : "设为VIP"}</ActionBtn>
                         {selectedClient.is_vip ? <ActionBtn onClick={() => openVipPriceEditor(selectedClient)}>VIP价格</ActionBtn> : null}
-                        <ActionBtn onClick={() => openEditClient(selectedClient)}>编辑</ActionBtn>
+                        <ActionBtn onClick={() => openEditContact(selectedClient, "客户")}>编辑</ActionBtn>
                         {confirmingClientId === selectedClient.id ? (
                           <>
-                            <button onClick={() => deleteClient(selectedClient)} className="rounded-lg border border-red-500 bg-red-500 px-2 py-1 text-[11px] font-semibold text-white hover:bg-red-600 transition-colors">确认</button>
+                            <button onClick={() => deleteContactFromList(selectedClient.id, "客户")} className="rounded-lg border border-red-500 bg-red-500 px-2 py-1 text-[11px] font-semibold text-white hover:bg-red-600 transition-colors">确认</button>
                             <button onClick={() => setConfirmingClientId(null)} className="rounded-lg border border-slate-200 px-2 py-1 text-[11px] text-slate-700 hover:border-slate-300 transition-colors">取消</button>
                           </>
                         ) : (
@@ -5778,7 +5687,7 @@ function ClientsSection({ clients, setClients, suppliers, setSuppliers, orders, 
                               <thead>
                                 <tr className="border-b border-gray-200 bg-gray-50">
                                   <th className="px-3 py-2 font-semibold text-slate-600">订单号</th>
-                                  <th className="px-3 py-2 font-semibold text-slate-600">类别</th>
+                                  <th className="px-3 py-2 font-semibold text-slate-600">类型</th>
                                   <th className="px-3 py-2 font-semibold text-slate-600">日期</th>
                                   <th className="px-3 py-2 font-semibold text-slate-600">总额</th>
                                   <th className="px-3 py-2 font-semibold text-slate-600">已收</th>
@@ -5869,7 +5778,7 @@ function ClientsSection({ clients, setClients, suppliers, setSuppliers, orders, 
                                         <button onClick={() => { setEditingAppointment(item); setAppointmentDraft({ appointment_date: item.appointment_date, appointment_time: item.appointment_time ?? '', phone: item.phone ?? '', address: item.address ?? '', description: item.description ?? '' }); setShowAppointmentModal(true); }} className="rounded-md border border-gray-200 bg-gray-50 px-2 py-1 text-[11px] font-semibold text-slate-600 hover:border-slate-400 transition-colors">编辑</button>
                                         {confirmingDeleteAppointmentId === item.id ? (
                                           <>
-                                            <button onClick={() => { setAppointments((prev) => prev.filter((a) => a.id !== item.id)); setConfirmingDeleteAppointmentId(null); onAutoSave?.(); }} className="rounded-md border border-red-400 bg-red-50 px-2 py-1 text-[11px] font-semibold text-red-700 hover:bg-red-100">确认</button>
+                                            <button onClick={() => { setAppointments((prev) => prev.filter((a) => a.id !== item.id)); setConfirmingDeleteAppointmentId(null); }} className="rounded-md border border-red-400 bg-red-50 px-2 py-1 text-[11px] font-semibold text-red-700 hover:bg-red-100">确认</button>
                                             <button onClick={() => setConfirmingDeleteAppointmentId(null)} className="rounded-md border border-slate-200 px-2 py-1 text-[11px] text-slate-700 hover:border-slate-300">取消</button>
                                           </>
                                         ) : (
@@ -5933,7 +5842,6 @@ function ClientsSection({ clients, setClients, suppliers, setSuppliers, orders, 
                                   }
                                   setShowAppointmentModal(false);
                                   setEditingAppointment(null);
-                                  onAutoSave?.();
                                 }}>确认</ActionBtn>
                               </div>
                             </div>
@@ -5988,7 +5896,6 @@ function ClientsSection({ clients, setClients, suppliers, setSuppliers, orders, 
               materials={materials}
               purchases={purchases}
               expenses={expenses}
-              settings={settings}
               setPurchases={setPurchases}
               setExpenses={setExpenses}
               setCashEntries={setCashEntries}
@@ -6016,8 +5923,8 @@ function ClientsSection({ clients, setClients, suppliers, setSuppliers, orders, 
                     </td>
                     <td className="px-4 py-2">
                       <div className="flex flex-wrap gap-2">
-                        <button onClick={() => openEditSupplier(item)} className="rounded border border-slate-200 px-2 py-1 text-[11px] text-slate-600 hover:border-slate-300 hover:bg-slate-50 transition-colors">编辑</button>
-                        {confirmingSupplierId === item.id ? <><button onClick={() => deleteSupplier(item)} className="rounded border border-red-400 bg-red-500 px-2 py-1 text-[11px] font-semibold text-white hover:bg-red-600 transition-colors">确认</button><button onClick={() => setConfirmingSupplierId(null)} className="rounded border border-slate-200 px-2 py-1 text-[11px] text-slate-700 hover:border-slate-300 transition-colors">取消</button></> : <button onClick={() => setConfirmingSupplierId(item.id)} className="rounded border border-rose-100 px-2 py-1 text-[11px] text-rose-500 hover:border-rose-300 hover:bg-rose-50 transition-colors">删除</button>}
+                        <button onClick={() => openEditContact(item, "供应商")} className="rounded border border-slate-200 px-2 py-1 text-[11px] text-slate-600 hover:border-slate-300 hover:bg-slate-50 transition-colors">编辑</button>
+                        {confirmingSupplierId === item.id ? <><button onClick={() => deleteContactFromList(item.id, "供应商")} className="rounded border border-red-400 bg-red-500 px-2 py-1 text-[11px] font-semibold text-white hover:bg-red-600 transition-colors">确认</button><button onClick={() => setConfirmingSupplierId(null)} className="rounded border border-slate-200 px-2 py-1 text-[11px] text-slate-700 hover:border-slate-300 transition-colors">取消</button></> : <button onClick={() => setConfirmingSupplierId(item.id)} className="rounded border border-rose-100 px-2 py-1 text-[11px] text-rose-500 hover:border-rose-300 hover:bg-rose-50 transition-colors">删除</button>}
                         <button onClick={() => { setShowPurchaseModalForSupplier(item.id); setSupplierPurchaseHistoryId(item.id); }} className="rounded border border-emerald-200 bg-emerald-50 px-2 py-1 text-[11px] text-emerald-700 hover:border-emerald-300 hover:bg-emerald-100 transition-colors">采购</button>
                       </div>
                     </td>
@@ -6501,56 +6408,6 @@ function getPayrollWeekRange(filter: PayrollWeekFilter) {
   return { start: addDaysIso(thisWeekStart, -7), end: addDaysIso(thisWeekStart, -1), label: "上周" };
 }
 
-function compactIsoDate(value: string) {
-  return value.replace(/\D/g, "");
-}
-
-function normalizePayrollRangeValue(value: string) {
-  const compact = compactIsoDate(value);
-  if (compact.length !== 8) return "";
-  return `${compact.slice(0, 4)}-${compact.slice(4, 6)}-${compact.slice(6, 8)}`;
-}
-
-function extractPayrollDateRange(...values: Array<string | undefined | null>) {
-  for (const value of values) {
-    const text = String(value || "").trim();
-    if (!text) continue;
-    const match = text.match(/(\d{4})[-/]?(\d{2})[-/]?(\d{2})\s*(?:~|～|至|到|to|-|–|—)\s*(\d{4})[-/]?(\d{2})[-/]?(\d{2})/i);
-    if (!match) continue;
-    const start = normalizePayrollRangeValue(`${match[1]}${match[2]}${match[3]}`);
-    const end = normalizePayrollRangeValue(`${match[4]}${match[5]}${match[6]}`);
-    if (start && end) return { start, end };
-  }
-  return null;
-}
-
-function matchesPayrollExpenseForRange(expense: ExpenseRecord | undefined, employee: EmployeeRecord, range: { start: string; end: string }) {
-  if (!expense || expense.target !== employee.name) return false;
-  const parsed = extractPayrollDateRange(expense.remark, expense.detail, expense.expense_type);
-  return Boolean(parsed && parsed.start === range.start && parsed.end === range.end);
-}
-
-function buildPayrollKey(employeeId: string, range: { start: string; end: string }) {
-  return `PAYROLL:${employeeId}:${range.start}:${range.end}`;
-}
-
-function buildPayrollExpenseDetail(range: { start: string; end: string }) {
-  return `${compactIsoDate(range.start)}-${compactIsoDate(range.end)}`;
-}
-
-function buildPayrollExpenseRemark(range: { start: string; end: string }) {
-  return `${range.start} ~ ${range.end}`;
-}
-
-function isPayrollLinkedExpense(item: ExpenseRecord, payrolls: PayrollRecord[]) {
-  return item.source_type === "payroll" || payrolls.some((payroll) => payroll.expense_id === item.id);
-}
-
-function findAttendanceRecord(attendances: AttendanceRecord[], employee: EmployeeRecord | undefined, date: string) {
-  if (!employee || !date) return undefined;
-  return attendances.find((item) => item.note !== "__deleted__" && item.date === date && (item.employee_id === employee.id || item.employee_name === employee.name));
-}
-
 function getWeekdayKey(value: string) {
   return ["Sun", "Mon", "Tue", "Wed", "Thu", "Fri", "Sat"][parseIsoDate(value).getDay()] ?? "Mon";
 }
@@ -6600,62 +6457,7 @@ function ensureAttendanceRows(employees: EmployeeRecord[], attendances: Attendan
   });
 }
 
-function resolvePayrollLink(
-  employee: EmployeeRecord,
-  range: { start: string; end: string },
-  payrolls: PayrollRecord[],
-  expenses: ExpenseRecord[],
-) {
-  const payrollId = `PAY-${range.start}-${employee.id}`;
-  const payrollKey = buildPayrollKey(employee.id, range);
-  const expenseById = new Map(expenses.map((item) => [item.id, item]));
-  const exactPayroll = payrolls.find((item) => item.id === payrollId);
-  const exactExpense = exactPayroll?.expense_id ? expenseById.get(exactPayroll.expense_id) : undefined;
-  if (exactPayroll) {
-    return { payrollId, payrollKey, payroll: exactPayroll, expense: exactExpense };
-  }
-
-  const employeePayrolls = payrolls.filter((item) => item.employee_id === employee.id || item.employee_name === employee.name);
-  for (const payroll of employeePayrolls) {
-    const linkedExpense = payroll.expense_id ? expenseById.get(payroll.expense_id) : undefined;
-    if (matchesPayrollExpenseForRange(linkedExpense, employee, range)) {
-      return { payrollId, payrollKey, payroll, expense: linkedExpense };
-    }
-  }
-
-  const linkedExpense = expenses.find((item) => {
-    if (item.source_type === "payroll" && item.source_id === payrollKey) return true;
-    return matchesPayrollExpenseForRange(item, employee, range);
-  });
-  const linkedPayroll = linkedExpense ? employeePayrolls.find((item) => item.expense_id === linkedExpense.id) : undefined;
-  return { payrollId, payrollKey, payroll: linkedPayroll, expense: linkedExpense };
-}
-
-function EmployeesSection({ employees, setEmployees, attendances, setAttendances, payrolls, setPayrolls, expenses, setExpenses, settings, setSettings, storeRevision, onAutoSave }: { employees: EmployeeRecord[]; setEmployees: React.Dispatch<React.SetStateAction<EmployeeRecord[]>>; attendances: AttendanceRecord[]; setAttendances: React.Dispatch<React.SetStateAction<AttendanceRecord[]>>; payrolls: PayrollRecord[]; setPayrolls: React.Dispatch<React.SetStateAction<PayrollRecord[]>>; expenses: ExpenseRecord[]; setExpenses: React.Dispatch<React.SetStateAction<ExpenseRecord[]>>; settings: BizSettings; setSettings: React.Dispatch<React.SetStateAction<BizSettings>>; storeRevision: string; onAutoSave?: () => void; }) {
-  async function saveOneAttendance(record: AttendanceRecord) {
-    try {
-      const res = await fetch("/api/attendance", {
-        method: "PUT",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
-          employee_id: record.employee_id,
-          date: record.date,
-          leave_minutes: record.leave_minutes ?? 0,
-          overtime_minutes: record.overtime_minutes ?? 0,
-          meal_allowance: record.meal_allowance ?? false,
-        }),
-      });
-      if (!res.ok) return;
-      // Directly GET fresh data — do NOT call onAutoSave (which would PUT stale state first)
-      const refreshRes = await fetch("/api/biz-store", { cache: "no-store" });
-      if (!refreshRes.ok) return;
-      const payload = (await refreshRes.json()) as { ok: boolean; data: import("@/lib/biz-store").BizStoreSnapshot };
-      if (!payload?.data) return;
-      const refreshed = buildBizSnapshot(payload.data);
-      setAttendances(refreshed.attendances);
-      setPayrolls(refreshed.payrolls);
-    } catch {}
-  }
+function EmployeesSection({ employees, setEmployees, attendances, setAttendances, payrolls, setPayrolls, expenses, setExpenses, settings, setSettings, onAutoSave }: { employees: EmployeeRecord[]; setEmployees: React.Dispatch<React.SetStateAction<EmployeeRecord[]>>; attendances: AttendanceRecord[]; setAttendances: React.Dispatch<React.SetStateAction<AttendanceRecord[]>>; payrolls: PayrollRecord[]; setPayrolls: React.Dispatch<React.SetStateAction<PayrollRecord[]>>; expenses: ExpenseRecord[]; setExpenses: React.Dispatch<React.SetStateAction<ExpenseRecord[]>>; settings: BizSettings; setSettings: React.Dispatch<React.SetStateAction<BizSettings>>; onAutoSave?: () => void; }) {
   const [sub, setSub] = useState<StaffSub>("profiles");
   const [profileEthnicityFilter, setProfileEthnicityFilter] = useState("全部");
   const [profileSearch, setProfileSearch] = useState("");
@@ -6768,18 +6570,21 @@ function EmployeesSection({ employees, setEmployees, attendances, setAttendances
       const mealCount = rows.filter((item) => item.meal_allowance).length;
       const hourlyRate = employee.hourly_rate || 0;
       const wage = Number((minutesToHours(totalMinutes) * hourlyRate + mealCount * mealAllowanceAmount).toFixed(2));
-      const payrollLink = resolvePayrollLink(employee, payrollRange, payrolls, expenses);
+      const payrollId = `PAY-${payrollRange.start}-${employee.id}`;
+      const existing = payrolls.find((item) => item.id === payrollId);
+      const linkedExpense = existing?.expense_id
+        ? expenses.find((item) => item.id === existing.expense_id)
+        : expenses.find((item) => item.expense_type === "工资"
+            && item.target === employee.name
+            && item.remark === `${payrollRange.start} ~ ${payrollRange.end}`);
       return {
         employee,
         totalMinutes,
         mealCount,
         hourlyRate,
         wage,
-        payrollId: payrollLink.payrollId,
-        payrollKey: payrollLink.payrollKey,
-        payrollRecord: payrollLink.payroll,
-        linkedExpense: payrollLink.expense,
-        paid: payrollLink.payroll?.payment_status === "已发放" || Boolean(payrollLink.expense),
+        payrollId,
+        paid: existing?.payment_status === "已发放" && Boolean(linkedExpense),
       };
     }), [normalizedEmployees, attendances, payrollRange, payrolls, payrollEthnicityFilter, mealAllowanceAmount, expenses]);
   const payrollPageSize = 10;
@@ -6788,19 +6593,7 @@ function EmployeesSection({ employees, setEmployees, attendances, setAttendances
   useEffect(() => { setPayrollPage(1); }, [payrollRows]);
 
   const [employeeDraft, setEmployeeDraft] = useState({ name: "", phone: "", hourly_rate: "", workdays: ["Mon", "Tue", "Wed", "Thu", "Fri"], meal_allowance_eligible: true, ethnicity: "华人" });
-  const [attendanceDraft, setAttendanceDraft] = useState({ employee_id: "", date: today, leave_minutes: "0", overtime_minutes: "0", meal_allowance: true });
-  const [attendanceDraftRecordId, setAttendanceDraftRecordId] = useState<string | null>(null);
-  const [attendanceDraftLoadedKey, setAttendanceDraftLoadedKey] = useState("");
-
-  function openAttendanceEditor(employeeId?: string, date?: string) {
-    const targetEmployeeId = employeeId || normalizedEmployees[0]?.id || "";
-    const targetDate = date || today;
-    setAttendanceDraft({ employee_id: targetEmployeeId, date: targetDate, leave_minutes: "0", overtime_minutes: "0", meal_allowance: true });
-    setAttendanceDraftRecordId(null);
-    setAttendanceDraftLoadedKey("");
-    setAttendanceDraftError("");
-    setShowAttendanceModal(true);
-  }
+  const [attendanceDraft, setAttendanceDraft] = useState({ employee_id: "", date: today, leave_minutes: "0", overtime_minutes: "0" });
 
   function openCreateEmployee() {
     setEditingEmployeeId(null);
@@ -6820,36 +6613,6 @@ function EmployeesSection({ employees, setEmployees, attendances, setAttendances
     });
     setShowEmployeeModal(true);
   }
-
-  useEffect(() => {
-    if (!showAttendanceModal) return;
-    const employee = normalizedEmployees.find((item) => item.id === attendanceDraft.employee_id) || normalizedEmployees[0];
-    const lookupKey = `${employee?.id || ""}|${attendanceDraft.date}`;
-    if (!employee || !attendanceDraft.date || attendanceDraftLoadedKey === lookupKey) return;
-    const existing = findAttendanceRecord(attendances, employee, attendanceDraft.date);
-    if (existing) {
-      setAttendanceDraft({
-        employee_id: employee.id,
-        date: attendanceDraft.date,
-        leave_minutes: String(existing.leave_minutes || 0),
-        overtime_minutes: String(existing.overtime_minutes || 0),
-        meal_allowance: Boolean(existing.meal_allowance),
-      });
-      setAttendanceDraftRecordId(existing.id);
-    } else {
-      const defaultMeal = Boolean(employee.meal_allowance_eligible);
-      setAttendanceDraft((draft) => ({
-        ...draft,
-        employee_id: employee.id,
-        date: attendanceDraft.date,
-        leave_minutes: "0",
-        overtime_minutes: "0",
-        meal_allowance: defaultMeal,
-      }));
-      setAttendanceDraftRecordId(null);
-    }
-    setAttendanceDraftLoadedKey(lookupKey);
-  }, [showAttendanceModal, attendanceDraft.employee_id, attendanceDraft.date, attendanceDraftLoadedKey, attendances, normalizedEmployees]);
 
   function saveEmployee() {
     if (!employeeDraft.name.trim()) return;
@@ -6894,7 +6657,7 @@ function EmployeesSection({ employees, setEmployees, attendances, setAttendances
         leave_minutes: leaveMinutes,
         overtime_minutes: overtimeMinutes,
         worked_minutes: workedMinutes,
-        meal_allowance: (workedMinutes > 300 && leaveMinutes < 300) ? manualMeal : false,
+        meal_allowance: (workedMinutes > 300 && leaveMinutes < 300) ? (employee?.meal_allowance_eligible ? manualMeal : false) : false,
       };
     }));
   }
@@ -6902,20 +6665,16 @@ function EmployeesSection({ employees, setEmployees, attendances, setAttendances
   function saveAttendanceDraft() {
     const employee = normalizedEmployees.find((item) => item.id === attendanceDraft.employee_id) || normalizedEmployees[0];
     if (!employee) return;
-    const existing = findAttendanceRecord(attendances, employee, attendanceDraft.date);
-    const duplicateExists = Boolean(existing && existing.id !== attendanceDraftRecordId);
+    const duplicateExists = attendances.some((item) => item.note !== "__deleted__" && item.date === attendanceDraft.date && (item.employee_id === employee.id || item.employee_name === employee.name));
     if (duplicateExists) {
-      setAttendanceDraftError(`{employee.name} 在 ${attendanceDraft.date} 已有考勤,已自动切到这条记录,请直接修改后保存。`.replace("{employee.name}", employee.name));
-      setAttendanceDraftRecordId(existing?.id || null);
-      setAttendanceDraftLoadedKey("");
+      setAttendanceDraftError(`{employee.name} 在 ${attendanceDraft.date} 已有考勤,不能重复新增,请直接编辑原记录。`.replace("{employee.name}", employee.name));
       return;
     }
     const leaveMinutes = Number(attendanceDraft.leave_minutes) || 0;
     const overtimeMinutes = Number(attendanceDraft.overtime_minutes) || 0;
     const workedMinutes = calcWorkedMinutes(leaveMinutes, overtimeMinutes);
-    const mealAllowance = workedMinutes > 300 && leaveMinutes < 300 ? attendanceDraft.meal_allowance : false;
     const nextRecord: AttendanceRecord = {
-      id: attendanceDraftRecordId || existing?.id || `ATT-${attendanceDraft.date.replaceAll("-", "")}-${employee.code || employee.id}`,
+      id: `ATT-${attendanceDraft.date.replaceAll("-", "")}-${employee.code || employee.id}`,
       date: attendanceDraft.date,
       employee_id: employee.id,
       employee_name: employee.name,
@@ -6923,21 +6682,13 @@ function EmployeesSection({ employees, setEmployees, attendances, setAttendances
       leave_minutes: leaveMinutes,
       overtime_minutes: overtimeMinutes,
       worked_minutes: workedMinutes,
-      meal_allowance: mealAllowance,
-      generated_by: existing?.generated_by === "auto" ? existing.generated_by : "manual",
-      note: attendanceDraftRecordId || existing ? (existing?.note === "__deleted__" ? "手工改回" : (existing?.note || "手工修改")) : "手工补录",
+      meal_allowance: workedMinutes > 300 && leaveMinutes < 300 && Boolean(employee.meal_allowance_eligible),
+      generated_by: "manual",
+      note: "手工补录",
     };
-    setAttendances((prev) => {
-      const hasExisting = prev.some((item) => item.id === nextRecord.id);
-      if (hasExisting) {
-        return prev.map((item) => item.id === nextRecord.id ? nextRecord : item);
-      }
-      return [nextRecord, ...prev];
-    });
+    setAttendances((prev) => [nextRecord, ...prev]);
     setAttendanceDraftError("");
-    setAttendanceDraftRecordId(null);
-    setAttendanceDraftLoadedKey("");
-    setAttendanceDraft({ employee_id: normalizedEmployees[0]?.id || "", date: today, leave_minutes: "0", overtime_minutes: "0", meal_allowance: true });
+    setAttendanceDraft({ employee_id: normalizedEmployees[0]?.id || "", date: today, leave_minutes: "0", overtime_minutes: "0" });
     setShowAttendanceModal(false);
     onAutoSave?.();
   }
@@ -6973,10 +6724,10 @@ function EmployeesSection({ employees, setEmployees, attendances, setAttendances
   function deleteAttendance(id: string) {
     setAttendances((prev) => prev.map((item) => {
       if (item.id !== id) return item;
-      return item.generated_by?.startsWith("auto")
+      return item.generated_by?.startsWith("auto-rule:")
         ? { ...item, note: "__deleted__", meal_allowance: false }
         : item;
-    }).filter((item) => item.id !== id || item.generated_by?.startsWith("auto")));
+    }).filter((item) => item.id !== id || item.generated_by?.startsWith("auto-rule:")));
     setEditingAttendanceId((current) => current === id ? null : current);
     setConfirmingAttendanceId(null);
     onAutoSave?.();
@@ -6986,62 +6737,44 @@ function EmployeesSection({ employees, setEmployees, attendances, setAttendances
     const visible = payrollRows.filter((item) => !item.paid && item.wage > 0);
     if (!visible.length) return;
     const paidAt = todayIso();
-    const year = new Date().getFullYear();
-    const generatedExpenseIds: string[] = [];
-    const nextExpenseId = (existingId?: string) => {
-      if (existingId) return existingId;
-      const id = nextYearScopedId([...expenses.map((item) => item.id), ...generatedExpenseIds], "EXP", year, 3, generatedExpenseIds.length + 1);
-      generatedExpenseIds.push(id);
-      return id;
-    };
-
+    const expenseIds = visible.map((_, index) => nextYearScopedId(expenses.map((item) => item.id), "EXP", new Date().getFullYear(), 3, index + 1));
     setPayrolls((prev) => {
-      const nextMap = new Map(prev.map((item) => [item.id, item]));
-      visible.forEach((row) => {
-        const expenseId = nextExpenseId(row.linkedExpense?.id);
-        const recordId = row.payrollRecord?.id || row.payrollId;
-        nextMap.set(recordId, {
-          ...(row.payrollRecord || {}),
-          id: recordId,
-          month: payrollRange.start.slice(0, 7),
-          employee_id: row.employee.id,
-          employee_name: row.employee.name,
-          employee_code: row.employee.code,
-          employee_ethnicity: row.employee.ethnicity,
-          total_hours: minutesToHours(row.totalMinutes),
-          hourly_rate: row.hourlyRate,
-          meal_allowance_total: row.mealCount * mealAllowanceAmount,
-          base_salary: row.wage,
-          bonus: row.payrollRecord?.bonus ?? 0,
-          deduction: row.payrollRecord?.deduction ?? 0,
-          net_salary: row.wage,
-          payment_status: "已发放",
-          paid_at: paidAt,
-          expense_id: expenseId,
-        } satisfies PayrollRecord);
-      });
-      return Array.from(nextMap.values()).sort((a, b) => String(b.paid_at || "").localeCompare(String(a.paid_at || "")) || String(b.id).localeCompare(String(a.id)));
+      const rest = prev.filter((item) => !visible.some((row) => row.payrollId === item.id));
+      const next = visible.map((row, index) => ({
+        id: row.payrollId,
+        month: payrollRange.start.slice(0, 7),
+        employee_id: row.employee.id,
+        employee_name: row.employee.name,
+        employee_code: row.employee.code,
+        employee_ethnicity: row.employee.ethnicity,
+        total_hours: minutesToHours(row.totalMinutes),
+        hourly_rate: row.hourlyRate,
+        meal_allowance_total: row.mealCount * mealAllowanceAmount,
+        base_salary: row.wage,
+        bonus: 0,
+        deduction: 0,
+        net_salary: row.wage,
+        payment_status: "已发放",
+        paid_at: paidAt,
+        expense_id: expenseIds[index],
+      } satisfies PayrollRecord));
+      return [...next, ...rest];
     });
-    setExpenses((prev) => {
-      const nextMap = new Map(prev.map((item) => [item.id, item]));
-      visible.forEach((row) => {
-        const expenseId = nextExpenseId(row.linkedExpense?.id);
-        nextMap.set(expenseId, {
-          ...(row.linkedExpense || {}),
-          id: expenseId,
-          target: row.employee.name,
-          detail: buildPayrollExpenseDetail(payrollRange),
-          amount: row.wage,
-          expense_type: "工资",
-          payment_method: row.linkedExpense?.payment_method || "转账",
-          expense_date: paidAt,
-          remark: buildPayrollExpenseRemark(payrollRange),
-          source_type: "payroll",
-          source_id: row.payrollKey,
-        } satisfies ExpenseRecord);
-      });
-      return Array.from(nextMap.values()).sort((a, b) => String(b.expense_date || "").localeCompare(String(a.expense_date || "")) || String(b.id).localeCompare(String(a.id)));
-    });
+    setExpenses((prev) => [
+      ...visible.map((row, index) => ({
+        id: expenseIds[index],
+        target: row.employee.name,
+        detail: `${payrollRange.label}工资发放`,
+        amount: row.wage,
+        expense_type: "工资",
+        payment_method: "转账",
+        expense_date: paidAt,
+        remark: `${payrollRange.start} ~ ${payrollRange.end}`,
+        source_type: "payroll",
+        source_id: row.payrollId,
+      } satisfies ExpenseRecord)),
+      ...prev,
+    ]);
     onAutoSave?.();
   }
 
@@ -7091,9 +6824,7 @@ function EmployeesSection({ employees, setEmployees, attendances, setAttendances
         title="员工管理"
         actions={
           <>
-            {sub === "profiles" ? <ActionBtn tone="primary" onClick={openCreateEmployee}>+ 新建员工</ActionBtn> : null}
-            {sub === "attendance" ? <ActionBtn tone="primary" onClick={() => openAttendanceEditor()}>+ 补录/编辑任意日期</ActionBtn> : null}
-            {sub === "attendance" ? <ActionBtn onClick={() => { setQuickPunchEmployeeId(normalizedEmployees[0]?.id || ""); setQuickPunchError(""); setShowQuickPunchModal(true); }}>一键签到</ActionBtn> : null}
+            {sub === "profiles" ? <ActionBtn tone="primary" onClick={openCreateEmployee}>+ 新建员工</ActionBtn> : null}            {sub === "attendance" ? <ActionBtn tone="primary" onClick={() => { setAttendanceDraft({ employee_id: normalizedEmployees[0]?.id || "", date: today, leave_minutes: "0", overtime_minutes: "0" }); setAttendanceDraftError(""); setShowAttendanceModal(true); }}>+ 手工补录</ActionBtn> : null}            {sub === "attendance" ? <ActionBtn onClick={() => { setQuickPunchEmployeeId(normalizedEmployees[0]?.id || ""); setQuickPunchError(""); setShowQuickPunchModal(true); }}>一键签到</ActionBtn> : null}
             {sub === "payroll" ? <ActionBtn tone="success" onClick={markAllVisiblePaid}>一键发放当前工资</ActionBtn> : null}
           </>
         }
@@ -7105,7 +6836,7 @@ function EmployeesSection({ employees, setEmployees, attendances, setAttendances
         <div className="space-y-4">
           <PanelCard title="员工档案" note="员工工号自动递增,员工档案单独管理,不再和考勤或规则混在一起。">
             <div className="mb-3 flex flex-wrap items-center justify-between gap-3"><div className="flex flex-wrap items-center gap-2"><div className="relative min-w-[180px] flex-1"><span className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-700 text-xs">⌕</span><input value={profileSearch} onChange={(e) => setProfileSearch(e.target.value)} placeholder="筛选员工 / 工号 / 电话 / 分组" className="h-8 w-full rounded-lg border border-slate-300 bg-white pl-8 pr-3 text-xs text-slate-700" /></div><span className="text-xs text-slate-700">员工分组</span><select value={profileEthnicityFilter} onChange={(e) => setProfileEthnicityFilter(e.target.value)} className="h-8 rounded-lg border border-slate-300 bg-white px-2 text-xs text-slate-700"><option>全部</option>{EMPLOYEE_GROUP_OPTIONS.map((option) => <option key={option}>{option}</option>)}</select></div><div className="text-xs text-slate-700">共 {profileRows.length} 名员工</div></div>
-            <div className="overflow-x-auto rounded-xl border border-gray-200 bg-gray-50"><table className="w-full text-left text-xs"><thead><tr className="border-b border-gray-200 bg-gray-50"><th className="px-4 py-2 font-semibold text-slate-600">工号</th><th className="px-4 py-2 font-semibold text-slate-600">姓名</th><th className="px-4 py-2 font-semibold text-slate-600">电话</th><th className="px-4 py-2 font-semibold text-slate-600">时薪</th><th className="px-4 py-2 font-semibold text-slate-600">工作日</th><th className="px-4 py-2 font-semibold text-slate-600">饭补资格</th><th className="px-4 py-2 font-semibold text-slate-600">分组</th><th className="px-4 py-2 font-semibold text-slate-600">操作</th></tr></thead><tbody>{pagedProfileRows.map((item) => <tr key={item.id} className="border-b border-gray-200 last:border-b-0"><td className="px-4 py-2 font-medium text-slate-700">{item.code}</td><td className="px-4 py-2 text-slate-700">{item.name}</td><td className="px-4 py-2 text-slate-600">{item.phone || "-"}</td><td className="px-4 py-2 text-slate-700">{formatMoney(item.hourly_rate || 0)}</td><td className="px-4 py-2 text-slate-600">{(item.workdays || []).map((day) => WORKDAY_OPTIONS.find((option) => option.key === day)?.label || day).join("、")}</td><td className="px-4 py-2 text-slate-600">{item.meal_allowance_eligible ? "可用" : "关闭"}</td><td className="px-4 py-2 text-slate-600">{item.ethnicity}</td><td className="px-4 py-2"><div className="flex gap-2"><ActionBtn onClick={() => openEditEmployee(item)}>编辑</ActionBtn><ActionBtn onClick={() => { setSub("attendance"); openAttendanceEditor(item.id); }}>考勤</ActionBtn><button onClick={() => { setEmployees((prev) => prev.map((e) => e.id === item.id ? { ...e, status: '离职' } : e)); onAutoSave?.(); }} className="rounded border border-rose-100 px-2 py-1 text-[11px] text-rose-500 hover:border-rose-300 hover:bg-rose-50 transition-colors">删除</button></div></td></tr>)}</tbody></table></div>
+            <div className="overflow-x-auto rounded-xl border border-gray-200 bg-gray-50"><table className="w-full text-left text-xs"><thead><tr className="border-b border-gray-200 bg-gray-50"><th className="px-4 py-2 font-semibold text-slate-600">工号</th><th className="px-4 py-2 font-semibold text-slate-600">姓名</th><th className="px-4 py-2 font-semibold text-slate-600">电话</th><th className="px-4 py-2 font-semibold text-slate-600">时薪</th><th className="px-4 py-2 font-semibold text-slate-600">工作日</th><th className="px-4 py-2 font-semibold text-slate-600">饭补资格</th><th className="px-4 py-2 font-semibold text-slate-600">分组</th><th className="px-4 py-2 font-semibold text-slate-600">操作</th></tr></thead><tbody>{pagedProfileRows.map((item) => <tr key={item.id} className="border-b border-gray-200 last:border-b-0"><td className="px-4 py-2 font-medium text-slate-700">{item.code}</td><td className="px-4 py-2 text-slate-700">{item.name}</td><td className="px-4 py-2 text-slate-600">{item.phone || "-"}</td><td className="px-4 py-2 text-slate-700">{formatMoney(item.hourly_rate || 0)}</td><td className="px-4 py-2 text-slate-600">{(item.workdays || []).map((day) => WORKDAY_OPTIONS.find((option) => option.key === day)?.label || day).join("、")}</td><td className="px-4 py-2 text-slate-600">{item.meal_allowance_eligible ? "可用" : "关闭"}</td><td className="px-4 py-2 text-slate-600">{item.ethnicity}</td><td className="px-4 py-2"><div className="flex gap-2"><ActionBtn onClick={() => openEditEmployee(item)}>编辑</ActionBtn><button onClick={() => { setEmployees((prev) => prev.filter((e) => e.id !== item.id)); onAutoSave?.(); }} className="rounded border border-rose-100 px-2 py-1 text-[11px] text-rose-500 hover:border-rose-300 hover:bg-rose-50 transition-colors">删除</button></div></td></tr>)}</tbody></table></div>
             <div className="flex flex-wrap items-center justify-between gap-3 rounded-xl border border-gray-200 bg-gray-50 px-4 py-3 text-xs text-slate-600"><span>第 {profilePage} / {profilePageCount} 页,共 {profileRows.length} 名员工</span><div className="flex items-center gap-2"><button type="button" onClick={() => setProfilePage((p) => Math.max(1, p - 1))} disabled={profilePage <= 1} className="rounded-lg border border-slate-200 px-3 py-1.5 disabled:cursor-not-allowed disabled:opacity-40">上一页</button><button type="button" onClick={() => setProfilePage((p) => Math.min(profilePageCount, p + 1))} disabled={profilePage >= profilePageCount} className="rounded-lg border border-slate-200 px-3 py-1.5 disabled:cursor-not-allowed disabled:opacity-40">下一页</button></div></div>
           </PanelCard>
         </div>
@@ -7115,7 +6846,7 @@ function EmployeesSection({ employees, setEmployees, attendances, setAttendances
         <div className="space-y-4">
           <div className="flex flex-wrap items-center gap-3"><SegmentedControl options={[{ key: "today", label: "今天" }, { key: "thisWeek", label: "本周" }, { key: "lastWeek", label: "上周" }, { key: "all", label: "全部" }]} value={attendanceFilter} onChange={setAttendanceFilter} /><div className="relative min-w-[140px]"><span className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-700 text-xs">⌕</span><input value={attendanceSearch} onChange={(e) => setAttendanceSearch(e.target.value)} placeholder="搜索员工" className="h-8 w-full rounded-lg border border-slate-300 bg-white pl-8 pr-3 text-xs text-slate-700" /></div><div className="flex items-center gap-2"><span className="text-xs text-slate-700">分组</span><select value={attendanceEthnicityFilter} onChange={(e) => setAttendanceEthnicityFilter(e.target.value)} className="h-8 rounded-lg border border-slate-300 bg-white px-2 text-xs text-slate-700"><option>全部</option>{EMPLOYEE_GROUP_OPTIONS.map((option) => <option key={option}>{option}</option>)}</select></div><span className="text-xs text-slate-700">{attendanceRange.start} ~ {attendanceRange.end}</span></div>
           <PanelCard title="考勤规则说明" note="当天工作时长 = 10小时 + 加班时长 - 请假时长。工时小于等于 5 小时时强制取消饭补。"><div className="text-xs text-slate-700">缺失考勤会按员工工作日和自动规则补齐,支持逐行人工修正。当前饭补金额 {formatMoney(mealAllowanceAmount)} / 次。</div></PanelCard>
-          <div className="overflow-x-auto rounded-xl border border-gray-200 bg-gray-50"><table className="w-full text-left text-xs"><thead><tr className="border-b border-gray-200 bg-gray-50"><th className="px-3 py-2 font-semibold text-slate-600">日期</th><th className="px-3 py-2 font-semibold text-slate-600">工号</th><th className="px-3 py-2 font-semibold text-slate-600">人名</th><th className="px-3 py-2 font-semibold text-slate-600">工作时长</th><th className="px-3 py-2 font-semibold text-slate-600">请假时长</th><th className="px-3 py-2 font-semibold text-slate-600">加班时长</th><th className="px-3 py-2 font-semibold text-slate-600">饭补</th><th className="px-3 py-2 font-semibold text-slate-600">操作</th></tr></thead><tbody>{pagedAttendanceRows.map((item) => { const employee = normalizedEmployees.find((row) => row.id === item.employee_id || row.name === item.employee_name); const editing = editingAttendanceId === item.id; return <tr key={item.id} className="border-b border-gray-200 last:border-b-0"><td className="px-3 py-2 text-slate-600">{item.date}</td><td className="px-3 py-2 text-slate-700">{item.employee_code || employee?.code || "-"}</td><td className="px-3 py-2 font-medium text-slate-700">{item.employee_name}</td><td className="px-3 py-2 text-slate-700">{formatMinutes(item.worked_minutes)}</td>{editing ? <><td className="px-3 py-2"><HourMinuteInput minutes={item.leave_minutes} onChange={(v) => setAttendanceField(item.id, "leave_minutes", v)} /></td><td className="px-3 py-2"><HourMinuteInput minutes={item.overtime_minutes} onChange={(v) => setAttendanceField(item.id, "overtime_minutes", v)} /></td><td className="px-3 py-2"><label className="flex items-center gap-2 text-slate-600"><input type="checkbox" checked={item.meal_allowance} disabled={item.worked_minutes <= 300} onChange={(e) => setAttendanceField(item.id, "meal_allowance", e.target.checked)} /> 饭补</label></td><td className="px-3 py-2"><div className="flex gap-2"><ActionBtn tone="success" onClick={() => { setEditingAttendanceId(null); saveOneAttendance(item); }}>完成</ActionBtn><ActionBtn onClick={() => setEditingAttendanceId(null)}>取消</ActionBtn></div></td></> : <><td className="px-3 py-2 text-slate-600">{formatMinutes(item.leave_minutes)}</td><td className="px-3 py-2 text-slate-600">{formatMinutes(item.overtime_minutes)}</td><td className="px-3 py-2 text-slate-600">{item.meal_allowance ? `是 · 当前饭补金额 ${formatMoney(mealAllowanceAmount)} / 次` : "否"}</td><td className="px-3 py-2"><div className="flex gap-2">{confirmingAttendanceId === item.id ? <><button onClick={() => deleteAttendance(item.id)} className="rounded border border-red-400 bg-red-500 px-2 py-1 text-[11px] font-semibold text-slate-700 hover:bg-red-600 transition-colors">确认</button><button onClick={() => setConfirmingAttendanceId(null)} className="rounded border border-slate-200 px-2 py-1 text-[11px] text-slate-700 hover:border-slate-300 transition-colors">取消</button></> : <><ActionBtn onClick={() => setEditingAttendanceId(item.id)}>编辑</ActionBtn><button onClick={() => setConfirmingAttendanceId(item.id)} className="rounded border border-rose-100 px-2 py-1 text-[11px] text-rose-500 hover:border-rose-300 hover:bg-rose-50 transition-colors">删除</button></>}</div></td></>}</tr>; })}</tbody></table></div>
+          <div className="overflow-x-auto rounded-xl border border-gray-200 bg-gray-50"><table className="w-full text-left text-xs"><thead><tr className="border-b border-gray-200 bg-gray-50"><th className="px-3 py-2 font-semibold text-slate-600">日期</th><th className="px-3 py-2 font-semibold text-slate-600">工号</th><th className="px-3 py-2 font-semibold text-slate-600">人名</th><th className="px-3 py-2 font-semibold text-slate-600">工作时长</th><th className="px-3 py-2 font-semibold text-slate-600">请假时长</th><th className="px-3 py-2 font-semibold text-slate-600">加班时长</th><th className="px-3 py-2 font-semibold text-slate-600">饭补</th><th className="px-3 py-2 font-semibold text-slate-600">操作</th></tr></thead><tbody>{pagedAttendanceRows.map((item) => { const employee = normalizedEmployees.find((row) => row.id === item.employee_id || row.name === item.employee_name); const editing = editingAttendanceId === item.id; return <tr key={item.id} className="border-b border-gray-200 last:border-b-0"><td className="px-3 py-2 text-slate-600">{item.date}</td><td className="px-3 py-2 text-slate-700">{item.employee_code || employee?.code || "-"}</td><td className="px-3 py-2 font-medium text-slate-700">{item.employee_name}</td><td className="px-3 py-2 text-slate-700">{formatMinutes(item.worked_minutes)}</td>{editing ? <><td className="px-3 py-2"><SmallInput value={String(item.leave_minutes)} onChange={(v) => setAttendanceField(item.id, "leave_minutes", Number(v) || 0)} type="number" /></td><td className="px-3 py-2"><SmallInput value={String(item.overtime_minutes)} onChange={(v) => setAttendanceField(item.id, "overtime_minutes", Number(v) || 0)} type="number" /></td><td className="px-3 py-2"><label className="flex items-center gap-2 text-slate-600"><input type="checkbox" checked={item.meal_allowance} disabled={item.worked_minutes <= 300 || !employee?.meal_allowance_eligible} onChange={(e) => setAttendanceField(item.id, "meal_allowance", e.target.checked)} /> 饭补</label></td><td className="px-3 py-2"><div className="flex gap-2"><ActionBtn tone="success" onClick={() => setEditingAttendanceId(null)}>完成</ActionBtn><ActionBtn onClick={() => setEditingAttendanceId(null)}>取消</ActionBtn></div></td></> : <><td className="px-3 py-2 text-slate-600">{formatMinutes(item.leave_minutes)}</td><td className="px-3 py-2 text-slate-600">{formatMinutes(item.overtime_minutes)}</td><td className="px-3 py-2 text-slate-600">{item.meal_allowance ? `是 · 当前饭补金额 ${formatMoney(mealAllowanceAmount)} / 次` : "否"}</td><td className="px-3 py-2"><div className="flex gap-2">{confirmingAttendanceId === item.id ? <><button onClick={() => deleteAttendance(item.id)} className="rounded border border-red-400 bg-red-500 px-2 py-1 text-[11px] font-semibold text-slate-700 hover:bg-red-600 transition-colors">确认</button><button onClick={() => setConfirmingAttendanceId(null)} className="rounded border border-slate-200 px-2 py-1 text-[11px] text-slate-700 hover:border-slate-300 transition-colors">取消</button></> : <><ActionBtn onClick={() => setEditingAttendanceId(item.id)}>编辑</ActionBtn><button onClick={() => setConfirmingAttendanceId(item.id)} className="rounded border border-rose-100 px-2 py-1 text-[11px] text-rose-500 hover:border-rose-300 hover:bg-rose-50 transition-colors">删除</button></>}</div></td></>}</tr>; })}</tbody></table></div>
           <div className="flex flex-wrap items-center justify-between gap-3 rounded-xl border border-gray-200 bg-gray-50 px-4 py-3 text-xs text-slate-600"><span>第 {attendancePage} / {attendancePageCount} 页,共 {attendanceRows.length} 条考勤</span><div className="flex items-center gap-2"><button type="button" onClick={() => setAttendancePage((page) => Math.max(1, page - 1))} disabled={attendancePage <= 1} className="rounded-lg border border-slate-200 px-3 py-1.5 disabled:cursor-not-allowed disabled:opacity-40">上一页</button><button type="button" onClick={() => setAttendancePage((page) => Math.min(attendancePageCount, page + 1))} disabled={attendancePage >= attendancePageCount} className="rounded-lg border border-slate-200 px-3 py-1.5 disabled:cursor-not-allowed disabled:opacity-40">下一页</button></div></div>
         </div>
       ) : null}
@@ -7124,7 +6855,7 @@ function EmployeesSection({ employees, setEmployees, attendances, setAttendances
         <div className="space-y-4">
           <div className="flex flex-wrap items-center gap-3"><SegmentedControl options={[{ key: "lastWeek", label: "上周" }, { key: "thisWeek", label: "本周" }]} value={payrollWeekFilter} onChange={setPayrollWeekFilter} /><div className="relative min-w-[140px]"><span className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-700 text-xs">⌕</span><input value={payrollSearch} onChange={(e) => setPayrollSearch(e.target.value)} placeholder="搜索员工" className="h-8 w-full rounded-lg border border-slate-300 bg-white pl-8 pr-3 text-xs text-slate-700" /></div><div className="flex items-center gap-2"><span className="text-xs text-slate-700">分组</span><select value={payrollEthnicityFilter} onChange={(e) => setPayrollEthnicityFilter(e.target.value)} className="h-8 rounded-lg border border-slate-300 bg-white px-2 text-xs text-slate-700"><option>全部</option>{EMPLOYEE_GROUP_OPTIONS.map((option) => <option key={option}>{option}</option>)}</select></div><span className="text-xs text-slate-700">{payrollRange.start} ~ {payrollRange.end}</span></div>
           <PanelCard title="工资说明" note={`工资 = 总工时 × 时薪 + 饭补次数 × 当前饭补金额。点击一键发放后,会自动落一笔"工资"支出。`}><div className="text-xs text-slate-700">当前饭补金额 {formatMoney(mealAllowanceAmount)} / 次,保留周维度发放,本周 / 上周两档。</div></PanelCard>
-          <div className="overflow-x-auto rounded-xl border border-gray-200 bg-gray-50"><table className="w-full text-left text-xs"><thead><tr className="border-b border-gray-200 bg-gray-50"><th className="px-4 py-2 font-semibold text-slate-600">姓名</th><th className="px-4 py-2 font-semibold text-slate-600">时薪</th><th className="px-4 py-2 font-semibold text-slate-600">总工时</th><th className="px-4 py-2 font-semibold text-slate-600">饭补说明</th><th className="px-4 py-2 font-semibold text-slate-600">应发工资</th><th className="px-4 py-2 font-semibold text-slate-600">是否已发放工资</th></tr></thead><tbody>{pagedPayrollRows.map((item) => <tr key={item.employee.id} className="border-b border-gray-200 last:border-b-0"><td className="px-4 py-2 font-medium text-slate-700">{item.employee.name}</td><td className="px-4 py-2 text-slate-700">{formatMoney(item.hourlyRate)}</td><td className="px-4 py-2 text-slate-600">{formatMinutes(item.totalMinutes)}</td><td className="px-4 py-2 text-slate-600">{item.mealCount > 0 ? `${item.mealCount} 次,当前饭补金额 ${formatMoney(mealAllowanceAmount)} / 次` : "无"}</td><td className="px-4 py-2 font-semibold text-slate-700">{formatMoney(item.wage)}</td><td className="px-4 py-2 text-slate-600">{item.paid ? <div className="space-y-1"><div className="font-semibold text-emerald-600">已发放</div><div className="text-[11px] text-slate-500">{item.linkedExpense?.expense_date || item.payrollRecord?.paid_at || "-"}{item.linkedExpense?.id ? ` · ${item.linkedExpense.id}` : ""}</div></div> : <span className="text-rose-600">未发放</span>}</td></tr>)}</tbody></table></div>
+          <div className="overflow-x-auto rounded-xl border border-gray-200 bg-gray-50"><table className="w-full text-left text-xs"><thead><tr className="border-b border-gray-200 bg-gray-50"><th className="px-4 py-2 font-semibold text-slate-600">姓名</th><th className="px-4 py-2 font-semibold text-slate-600">时薪</th><th className="px-4 py-2 font-semibold text-slate-600">总工时</th><th className="px-4 py-2 font-semibold text-slate-600">饭补说明</th><th className="px-4 py-2 font-semibold text-slate-600">应发工资</th><th className="px-4 py-2 font-semibold text-slate-600">是否已发放工资</th></tr></thead><tbody>{pagedPayrollRows.map((item) => <tr key={item.employee.id} className="border-b border-gray-200 last:border-b-0"><td className="px-4 py-2 font-medium text-slate-700">{item.employee.name}</td><td className="px-4 py-2 text-slate-700">{formatMoney(item.hourlyRate)}</td><td className="px-4 py-2 text-slate-600">{formatMinutes(item.totalMinutes)}</td><td className="px-4 py-2 text-slate-600">{item.mealCount > 0 ? `${item.mealCount} 次,当前饭补金额 ${formatMoney(mealAllowanceAmount)} / 次` : "无"}</td><td className="px-4 py-2 font-semibold text-slate-700">{formatMoney(item.wage)}</td><td className="px-4 py-2 text-slate-600">{item.paid ? "已发放" : "未发放"}</td></tr>)}</tbody></table></div>
           <div className="flex flex-wrap items-center justify-between gap-3 rounded-xl border border-gray-200 bg-gray-50 px-4 py-3 text-xs text-slate-600"><span>第 {payrollPage} / {payrollPageCount} 页,共 {payrollRows.length} 条工资</span><div className="flex items-center gap-2"><button type="button" onClick={() => setPayrollPage((p) => Math.max(1, p - 1))} disabled={payrollPage <= 1} className="rounded-lg border border-slate-200 px-3 py-1.5 disabled:cursor-not-allowed disabled:opacity-40">上一页</button><button type="button" onClick={() => setPayrollPage((p) => Math.min(payrollPageCount, p + 1))} disabled={payrollPage >= payrollPageCount} className="rounded-lg border border-slate-200 px-3 py-1.5 disabled:cursor-not-allowed disabled:opacity-40">下一页</button></div></div>
         </div>
       ) : null}
@@ -7144,7 +6875,7 @@ function EmployeesSection({ employees, setEmployees, attendances, setAttendances
       ) : null}
 
       {showQuickPunchModal ? <div className="fixed inset-0 z-50 flex items-center justify-center bg-slate-950/45 px-4"><div className="w-full max-w-sm rounded-2xl border border-gray-200 bg-gray-50 p-5 shadow-2xl"><div className="mb-4 flex items-start justify-between gap-3"><div><h3 className="text-base font-semibold text-slate-700">一键签到</h3><p className="mt-1 text-xs text-slate-700">为员工创建今日考勤记录(默认 10 小时),同一员工今日已有记录则跳过。</p></div><button onClick={() => { setShowQuickPunchModal(false); setQuickPunchError(""); }} className="rounded-lg border border-slate-200 px-2.5 py-1 text-xs text-slate-700 hover:border-slate-300 hover:text-slate-700 transition-colors">关闭</button></div><div><p className="mb-1 text-[11px] font-semibold text-slate-700">员工</p><SmallSelect value={quickPunchEmployeeId} onChange={(v) => { setQuickPunchEmployeeId(v); setQuickPunchError(""); }} options={normalizedEmployees.map((item) => item.id)} labels={Object.fromEntries(normalizedEmployees.map((item) => [item.id, `${item.code} · ${item.name}`]))} /></div>{quickPunchError ? <div className="mt-3 rounded-lg border border-rose-200 bg-rose-50 px-3 py-2 text-xs text-rose-600">{quickPunchError}</div> : null}<div className="mt-5 flex justify-end gap-2"><ActionBtn onClick={() => { setShowQuickPunchModal(false); setQuickPunchError(""); }}>取消</ActionBtn><ActionBtn tone="primary" onClick={quickPunchIn}>确认签到</ActionBtn></div></div></div> : null}
-      {showAttendanceModal ? <div className="fixed inset-0 z-50 flex items-center justify-center bg-slate-950/45 px-4"><div className="w-full max-w-xl rounded-2xl border border-gray-200 bg-gray-50 p-5 shadow-2xl"><div className="mb-4 flex items-start justify-between gap-3"><div><h3 className="text-base font-semibold text-slate-700">按员工编辑任意日期考勤</h3><p className="mt-1 text-xs text-slate-700">先选员工和日期。如果这一天已有考勤，会自动载入原记录并直接修改；没有则新增。</p></div><button onClick={() => { setShowAttendanceModal(false); setAttendanceDraftRecordId(null); setAttendanceDraftLoadedKey(""); setAttendanceDraftError(""); }} className="rounded-lg border border-slate-200 px-2.5 py-1 text-xs text-slate-700 hover:border-slate-300 hover:text-slate-700 transition-colors">关闭</button></div><div className="grid gap-3 sm:grid-cols-2"><div><p className="mb-1 text-[11px] font-semibold text-slate-700">员工</p><SmallSelect value={attendanceDraft.employee_id} onChange={(v) => { setAttendanceDraftError(""); setAttendanceDraftRecordId(null); setAttendanceDraftLoadedKey(""); setAttendanceDraft((draft) => ({ ...draft, employee_id: v })); }} options={normalizedEmployees.map((item) => item.id)} labels={Object.fromEntries(normalizedEmployees.map((item) => [item.id, `${item.code} · ${item.name}`]))} /></div><div><p className="mb-1 text-[11px] font-semibold text-slate-700">日期</p><SmallInput value={attendanceDraft.date} onChange={(v) => { setAttendanceDraftError(""); setAttendanceDraftRecordId(null); setAttendanceDraftLoadedKey(""); setAttendanceDraft((draft) => ({ ...draft, date: v })); }} type="date" /></div><div><p className="mb-1 text-[11px] font-semibold text-slate-700">请假时长</p><HourMinuteInput minutes={Number(attendanceDraft.leave_minutes) || 0} onChange={(v) => setAttendanceDraft((draft) => ({ ...draft, leave_minutes: String(v) }))} /></div><div><p className="mb-1 text-[11px] font-semibold text-slate-700">加班时长</p><HourMinuteInput minutes={Number(attendanceDraft.overtime_minutes) || 0} onChange={(v) => setAttendanceDraft((draft) => ({ ...draft, overtime_minutes: String(v) }))} /></div></div><label className="mt-3 flex items-center gap-2 text-xs text-slate-600"><input type="checkbox" checked={attendanceDraft.meal_allowance} disabled={calcWorkedMinutes(Number(attendanceDraft.leave_minutes) || 0, Number(attendanceDraft.overtime_minutes) || 0) <= 300 || !normalizedEmployees.find((item) => item.id === attendanceDraft.employee_id)?.meal_allowance_eligible} onChange={(e) => setAttendanceDraft((draft) => ({ ...draft, meal_allowance: e.target.checked }))} /> 饭补</label>{attendanceDraftError ? <div className="mt-3 rounded-lg border border-rose-200 bg-rose-50 px-3 py-2 text-xs text-rose-600">{attendanceDraftError}</div> : null}<div className="mt-3 rounded-lg border border-slate-200 bg-slate-50 px-3 py-2 text-xs text-slate-600">{attendanceDraftRecordId ? "当前正在修改已有考勤。" : "当前会新增一条该员工该日期的考勤。"} 计算后工作时长: {formatMinutes(calcWorkedMinutes(Number(attendanceDraft.leave_minutes) || 0, Number(attendanceDraft.overtime_minutes) || 0))}</div><div className="mt-5 flex justify-end gap-2"><ActionBtn onClick={() => { setShowAttendanceModal(false); setAttendanceDraftRecordId(null); setAttendanceDraftLoadedKey(""); setAttendanceDraftError(""); }}>取消</ActionBtn><ActionBtn tone="primary" onClick={saveAttendanceDraft}>{attendanceDraftRecordId ? "保存修改" : "保存考勤"}</ActionBtn></div></div></div> : null}{showEmployeeModal ? <div className="fixed inset-0 z-50 flex items-center justify-center bg-slate-950/45 px-4"><div className="w-full max-w-3xl rounded-2xl border border-gray-200 bg-gray-50 p-5 shadow-2xl"><div className="mb-4 flex items-start justify-between gap-3"><div><h3 className="text-base font-semibold text-slate-700">{editingEmployeeId ? "编辑员工" : "新建员工"}</h3><p className="mt-1 text-xs text-slate-700">工号自动递增,从 001 开始。</p></div><button onClick={() => setShowEmployeeModal(false)} className="rounded-lg border border-slate-200 px-2.5 py-1 text-xs text-slate-700 hover:border-slate-300 hover:text-slate-700 transition-colors">关闭</button></div><div className="grid gap-3 sm:grid-cols-2"><div><p className="mb-1 text-[11px] font-semibold text-slate-700">姓名</p><SmallInput value={employeeDraft.name} onChange={(v) => setEmployeeDraft((draft) => ({ ...draft, name: v }))} /></div><div><p className="mb-1 text-[11px] font-semibold text-slate-700">电话</p><SmallInput value={employeeDraft.phone} onChange={(v) => setEmployeeDraft((draft) => ({ ...draft, phone: v }))} /></div><div><p className="mb-1 text-[11px] font-semibold text-slate-700">时薪</p><SmallInput value={employeeDraft.hourly_rate} onChange={(v) => setEmployeeDraft((draft) => ({ ...draft, hourly_rate: v }))} type="number" /></div><div><p className="mb-1 text-[11px] font-semibold text-slate-700">分组</p><SmallSelect value={employeeDraft.ethnicity} onChange={(v) => setEmployeeDraft((draft) => ({ ...draft, ethnicity: v }))} options={[...EMPLOYEE_GROUP_OPTIONS]} /></div></div><div className="mt-4"><p className="mb-2 text-[11px] font-semibold text-slate-700">工作日</p><div className="flex flex-wrap gap-2">{WORKDAY_OPTIONS.map((option) => { const checked = employeeDraft.workdays.includes(option.key); return <label key={option.key} className={`rounded-lg border px-3 py-2 text-xs ${checked ? "border-gray-200 bg-gray-50 text-slate-800" : "border-gray-200 bg-gray-50 text-slate-600"}`}><input type="checkbox" className="mr-2" checked={checked} onChange={(e) => setEmployeeDraft((draft) => ({ ...draft, workdays: e.target.checked ? [...draft.workdays, option.key] : draft.workdays.filter((day) => day !== option.key) }))} />{option.label}</label>; })}</div></div><label className="mt-4 flex items-center gap-2 text-xs text-slate-600"><input type="checkbox" checked={employeeDraft.meal_allowance_eligible} onChange={(e) => setEmployeeDraft((draft) => ({ ...draft, meal_allowance_eligible: e.target.checked }))} /> 饭补资格</label><div className="mt-5 flex justify-end gap-2"><ActionBtn onClick={() => setShowEmployeeModal(false)}>取消</ActionBtn><ActionBtn tone="primary" onClick={saveEmployee}>保存员工</ActionBtn></div></div></div> : null}
+      {showAttendanceModal ? <div className="fixed inset-0 z-50 flex items-center justify-center bg-slate-950/45 px-4"><div className="w-full max-w-xl rounded-2xl border border-gray-200 bg-gray-50 p-5 shadow-2xl"><div className="mb-4 flex items-start justify-between gap-3"><div><h3 className="text-base font-semibold text-slate-700">手工补录考勤</h3><p className="mt-1 text-xs text-slate-700">可以指定员工和日期新增考勤,但同一员工同一天不能重复新增。</p></div><button onClick={() => setShowAttendanceModal(false)} className="rounded-lg border border-slate-200 px-2.5 py-1 text-xs text-slate-700 hover:border-slate-300 hover:text-slate-700 transition-colors">关闭</button></div><div className="grid gap-3 sm:grid-cols-2"><div><p className="mb-1 text-[11px] font-semibold text-slate-700">员工</p><SmallSelect value={attendanceDraft.employee_id} onChange={(v) => { setAttendanceDraftError(""); setAttendanceDraft((draft) => ({ ...draft, employee_id: v })); }} options={normalizedEmployees.map((item) => item.id)} labels={Object.fromEntries(normalizedEmployees.map((item) => [item.id, `${item.code} · ${item.name}`]))} /></div><div><p className="mb-1 text-[11px] font-semibold text-slate-700">日期</p><SmallInput value={attendanceDraft.date} onChange={(v) => { setAttendanceDraftError(""); setAttendanceDraft((draft) => ({ ...draft, date: v })); }} type="date" /></div><div><p className="mb-1 text-[11px] font-semibold text-slate-700">请假时长(分钟)</p><SmallInput value={attendanceDraft.leave_minutes} onChange={(v) => setAttendanceDraft((draft) => ({ ...draft, leave_minutes: v }))} type="number" /></div><div><p className="mb-1 text-[11px] font-semibold text-slate-700">加班时长(分钟)</p><SmallInput value={attendanceDraft.overtime_minutes} onChange={(v) => setAttendanceDraft((draft) => ({ ...draft, overtime_minutes: v }))} type="number" /></div></div>{attendanceDraftError ? <div className="mt-3 rounded-lg border border-rose-200 bg-rose-50 px-3 py-2 text-xs text-rose-600">{attendanceDraftError}</div> : null}<div className="mt-3 rounded-lg border border-slate-200 bg-slate-50 px-3 py-2 text-xs text-slate-600">计算后工作时长:{formatMinutes(calcWorkedMinutes(Number(attendanceDraft.leave_minutes) || 0, Number(attendanceDraft.overtime_minutes) || 0))}</div><div className="mt-5 flex justify-end gap-2"><ActionBtn onClick={() => setShowAttendanceModal(false)}>取消</ActionBtn><ActionBtn tone="primary" onClick={saveAttendanceDraft}>保存考勤</ActionBtn></div></div></div> : null}{showEmployeeModal ? <div className="fixed inset-0 z-50 flex items-center justify-center bg-slate-950/45 px-4"><div className="w-full max-w-3xl rounded-2xl border border-gray-200 bg-gray-50 p-5 shadow-2xl"><div className="mb-4 flex items-start justify-between gap-3"><div><h3 className="text-base font-semibold text-slate-700">{editingEmployeeId ? "编辑员工" : "新建员工"}</h3><p className="mt-1 text-xs text-slate-700">工号自动递增,从 001 开始。</p></div><button onClick={() => setShowEmployeeModal(false)} className="rounded-lg border border-slate-200 px-2.5 py-1 text-xs text-slate-700 hover:border-slate-300 hover:text-slate-700 transition-colors">关闭</button></div><div className="grid gap-3 sm:grid-cols-2"><div><p className="mb-1 text-[11px] font-semibold text-slate-700">姓名</p><SmallInput value={employeeDraft.name} onChange={(v) => setEmployeeDraft((draft) => ({ ...draft, name: v }))} /></div><div><p className="mb-1 text-[11px] font-semibold text-slate-700">电话</p><SmallInput value={employeeDraft.phone} onChange={(v) => setEmployeeDraft((draft) => ({ ...draft, phone: v }))} /></div><div><p className="mb-1 text-[11px] font-semibold text-slate-700">时薪</p><SmallInput value={employeeDraft.hourly_rate} onChange={(v) => setEmployeeDraft((draft) => ({ ...draft, hourly_rate: v }))} type="number" /></div><div><p className="mb-1 text-[11px] font-semibold text-slate-700">分组</p><SmallSelect value={employeeDraft.ethnicity} onChange={(v) => setEmployeeDraft((draft) => ({ ...draft, ethnicity: v }))} options={[...EMPLOYEE_GROUP_OPTIONS]} /></div></div><div className="mt-4"><p className="mb-2 text-[11px] font-semibold text-slate-700">工作日</p><div className="flex flex-wrap gap-2">{WORKDAY_OPTIONS.map((option) => { const checked = employeeDraft.workdays.includes(option.key); return <label key={option.key} className={`rounded-lg border px-3 py-2 text-xs ${checked ? "border-gray-200 bg-gray-50 text-slate-800" : "border-gray-200 bg-gray-50 text-slate-600"}`}><input type="checkbox" className="mr-2" checked={checked} onChange={(e) => setEmployeeDraft((draft) => ({ ...draft, workdays: e.target.checked ? [...draft.workdays, option.key] : draft.workdays.filter((day) => day !== option.key) }))} />{option.label}</label>; })}</div></div><label className="mt-4 flex items-center gap-2 text-xs text-slate-600"><input type="checkbox" checked={employeeDraft.meal_allowance_eligible} onChange={(e) => setEmployeeDraft((draft) => ({ ...draft, meal_allowance_eligible: e.target.checked }))} /> 饭补资格</label><div className="mt-5 flex justify-end gap-2"><ActionBtn onClick={() => setShowEmployeeModal(false)}>取消</ActionBtn><ActionBtn tone="primary" onClick={saveEmployee}>保存员工</ActionBtn></div></div></div> : null}
     </div>
   );
 }
@@ -7254,8 +6985,8 @@ function SettingsSection({ settings, setSettings, saveState, isDirty, lastSavedA
     { key: "company-base", label: "1. 公司基础 + 打印模板", note: "公司信息、打印标题、模板备注、预览" },
     { key: "company-contact", label: "2. 联系方式", note: "电话、邮箱、网站、 Logo" },
     { key: "finance", label: "3. 财务收款", note: "税率默认值、收款方式" },
-    { key: "lists", label: "4. 分类列表", note: "支付类别和供应商类别" },
-    { key: "categories", label: "5. 物料类别", note: "物料管理类别列表" },
+    { key: "lists", label: "4. 分类列表", note: "支付类型和供应商分类" },
+    { key: "categories", label: "5. 物料分类", note: "物料管理分类列表" },
   ]
   const [page, setPage] = useState<SettingsPageKey>("company-base");
   const pageIndex = pages.findIndex((item) => item.key === page);
@@ -7272,13 +7003,6 @@ function SettingsSection({ settings, setSettings, saveState, isDirty, lastSavedA
 
   const expenseTypeValue = settings.expense_types || "采购\n工资\n物流\n办公\n其他";
   const supplierCategoryValue = settings.supplier_categories || "布料\n五金\n玻璃\n物流\n其他";
-
-  function parseTagList(raw: string | null | undefined): string[] {
-    return (raw || "").split(/[\n,，]+/).map((t) => t.trim()).filter(Boolean);
-  }
-  function serializeTagList(tags: string[]): string {
-    return tags.join("\n");
-  }
   const saveTone = saveState === "error" || saveState === "conflict"
     ? "border-rose-200 bg-rose-50 text-rose-700"
     : saveState === "saving"
@@ -7376,15 +7100,17 @@ function SettingsSection({ settings, setSettings, saveState, isDirty, lastSavedA
         {page === "company-contact" ? (
           <div className="grid gap-3 xl:grid-cols-2">
             <SettingsGroup title="联系方式">
-              <SettingsField label="后台电话" value={settings.phone} onChange={(value) => update("phone", value)} note="后台客户详情页、订单详情显示。" />
-              <SettingsField label="打印电话" value={settings.phones ?? ""} onChange={(value) => update("phones", value)} note="出库单/发票/报价单底部显示。多行时会合并为一行显示。" />
-              <SettingsField label="电子邮箱" value={settings.email} onChange={(value) => update("email", value)} note="出库单/发票/报价单底部显示。" />
-              <SettingsField label="网站" value={settings.website} onChange={(value) => update("website", value)} note="出库单/发票/报价单底部显示。默认 WWW.JYCNYC.NET" />
+              <SettingsField label="后台电话" value={settings.phone} onChange={(value) => update("phone", value)} />
+              <SettingsField label="打印电话" value={settings.phones ?? ""} onChange={(value) => update("phones", value)} />
+              <SettingsField label="电子邮箱" value={settings.email} onChange={(value) => update("email", value)} />
+              <SettingsField label="网站" value={settings.website} onChange={(value) => update("website", value)} />
+              <SettingsField label="Logo URL" value={settings.logo_url ?? ""} onChange={(value) => update("logo_url", value)} />
             </SettingsGroup>
             <SettingsGroup title="保存确认">
               <div className="space-y-3 text-xs text-slate-600">
                 <p>这里不再自动保存,改完后请点页面上方的"保存更改"。</p>
                 <p>看到 <span className="font-semibold text-emerald-700">设置已保存成功</span>,才表示服务端真的写入成功。</p>
+                <p>考勤工资规则已经从系统设置移走,只在员工管理里维护。</p>
               </div>
             </SettingsGroup>
           </div>
@@ -7392,12 +7118,19 @@ function SettingsSection({ settings, setSettings, saveState, isDirty, lastSavedA
 
         {page === "finance" ? (
           <div className="grid gap-3 xl:grid-cols-2">
-            <SettingsGroup title="打印用收款方式">
-              <SettingsField label="Zelle / 电话" value={settings.zelle ?? ""} onChange={(value) => update("zelle", value)} note="出库单/发票/报价单底部显示。默认 3478227777" />
+            <SettingsGroup title="税务与默认值">
+              <SettingsField label="税号 (BN)" value={settings.tax_number} note="Business Number" onChange={(value) => update("tax_number", value)} />
+              <SettingsField label="默认税率" value={String(settings.default_tax_rate)} onChange={(value) => update("default_tax_rate", value)} type="number" />
+              <SettingsField label="默认货币" value={settings.default_currency} onChange={(value) => update("default_currency", value)} />
+              <SettingsField label="财年开始月" value={String(settings.fiscal_start_month)} onChange={(value) => update("fiscal_start_month", value)} type="number" />
+              <SettingsField label="报价默认有效期" value={String(settings.quote_valid_days ?? 30)} onChange={(value) => update("quote_valid_days", value)} type="number" />
             </SettingsGroup>
-            <SettingsGroup title="税与默认值">
-              <SettingsField label="默认税率" value={String(settings.default_tax_rate)} onChange={(value) => update("default_tax_rate", value)} type="number" note="创建新订单时默认填入的税率。" />
-              <SettingsField label="报价默认有效期" value={String(settings.quote_valid_days ?? 30)} onChange={(value) => update("quote_valid_days", value)} type="number" note="报价单上的有效天数。" />
+            <SettingsGroup title="收款方式">
+              <SettingsField label="银行账户" value={settings.bank_account} onChange={(value) => update("bank_account", value)} />
+              <SettingsField label="支付宝" value={settings.alipay} onChange={(value) => update("alipay", value)} />
+              <SettingsField label="微信收款" value={settings.wechat_pay} onChange={(value) => update("wechat_pay", value)} />
+              <SettingsField label="其他方式" value={settings.other_payment} onChange={(value) => update("other_payment", value)} />
+              <SettingsField label="Zelle" value={settings.zelle ?? ""} onChange={(value) => update("zelle", value)} />
             </SettingsGroup>
           </div>
         ) : null}
@@ -7406,49 +7139,27 @@ function SettingsSection({ settings, setSettings, saveState, isDirty, lastSavedA
 
         {page === "lists" ? (
           <div className="grid gap-3 xl:grid-cols-2">
-            <div>
-              <h3 className="mb-1.5 text-sm font-semibold text-slate-700">支出类别</h3>
-              <p className="mb-2 text-[11px] text-slate-400">录入支出时直接读取。</p>
-              <InlineTagEditor
-                tags={parseTagList(settings.expense_types || "采购\n工资\n物流\n办公\n其他")}
-                onChange={(tags) => update("expense_types", serializeTagList(tags))}
-              />
-            </div>
-            <div>
-              <h3 className="mb-1.5 text-sm font-semibold text-slate-700">供应商类别</h3>
-              <p className="mb-2 text-[11px] text-slate-400">供应商新增/编辑会直接读取。</p>
-              <InlineTagEditor
-                tags={parseTagList(settings.supplier_categories || "布料\n五金\n玻璃\n物流\n其他")}
-                onChange={(tags) => update("supplier_categories", serializeTagList(tags))}
-              />
-            </div>
-            <div>
-              <h3 className="mb-1.5 text-sm font-semibold text-slate-700">收入类别</h3>
-              <p className="mb-2 text-[11px] text-slate-400">杂项收入时直接读取。</p>
-              <InlineTagEditor
-                tags={parseTagList(settings.income_categories || "杂项收入,收入尾款,加工,来料加工,供应商退料,运费收退")}
-                onChange={(tags) => update("income_categories", serializeTagList(tags))}
-              />
-            </div>
+            <SettingsGroup title="支出类型">
+              <SettingsTextArea label="支出类型列表" value={expenseTypeValue} rows={8} onChange={(value) => update("expense_types", value)} note="一行一个,或者用逗号分隔。收支管理会直接读取这里。" />
+            </SettingsGroup>
+            <SettingsGroup title="供应商分类">
+              <SettingsTextArea label="供应商分类列表" value={supplierCategoryValue} rows={8} onChange={(value) => update("supplier_categories", value)} note="一行一个,或者用逗号分隔。供应商新增/编辑会直接读取这里。" />
+            </SettingsGroup>
           </div>
         ) : null}
 
         {page === "categories" ? (
           <div className="grid gap-3 xl:grid-cols-2">
-            <div>
-              <h3 className="mb-1.5 text-sm font-semibold text-slate-700">物料类别</h3>
-              <p className="mb-2 text-[11px] text-slate-400">采购单和物料管理会直接读取。</p>
-              <InlineTagEditor
-                tags={parseTagList(settings.material_categories)}
-                onChange={(tags) => update("material_categories", serializeTagList(tags))}
-              />
-            </div>
+            <SettingsGroup title="物料分类">
+              <SettingsField label="物料分类" value={settings.material_categories ?? ""} onChange={(value) => update("material_categories", value)} note="用逗号分隔,例如:布料,五金,配件" />
+              <div className="flex flex-wrap gap-1.5 mt-2">
+                {(settings.material_categories || "").split(/[,，]+/).map((tag) => tag.trim()).filter(Boolean).map((tag) => (
+                  <span key={tag} className="rounded-full bg-slate-100 px-2.5 py-0.5 text-xs text-slate-700 border border-slate-200">{tag}</span>
+                ))}
+              </div>
+            </SettingsGroup>
           </div>
         ) : null}
-
-        {/* ── 类别合并区域 ── */}
-        <CategoryMerge settings={settings} setSettings={setSettings} />
-
       </div>
     </div>
   );
@@ -7537,8 +7248,6 @@ export default function DashboardBizPage() {
     settings,
   }), [storeRevision, orders, clients, suppliers, expenses, cashEntries, materials, purchases, employees, attendances, appointments, payrolls, printArchives, settings]);
   const snapshotJson = useMemo(() => serializeBizSnapshot(snapshot), [snapshot]);
-  const snapshotJsonRef = useRef(snapshotJson);
-  snapshotJsonRef.current = snapshotJson;
   const isDirty = isHydrated && snapshotJson !== savedSnapshotJson;
 
   useEffect(() => {
@@ -7558,9 +7267,6 @@ export default function DashboardBizPage() {
         if (!response.ok) throw new Error("load failed");
         const payload = (await response.json()) as { ok: boolean; data: BizStoreSnapshot };
         if (cancelled || !payload?.data) return;
-        // Skip overwriting local state if a save is in-flight or queued — avoids race condition
-        // where poll returns stale data and wipes an unsaved edit.
-        if (saveStateRef.current === "saving" || pendingSaveRef.current) return;
         const loadedSnapshot = buildBizSnapshot(payload.data);
         setStoreRevision(loadedSnapshot.revision);
         setOrders(loadedSnapshot.orders);
@@ -7650,84 +7356,53 @@ export default function DashboardBizPage() {
 
   const persistSnapshotRef = useRef(persistSnapshot);
   persistSnapshotRef.current = persistSnapshot;
-  const saveStateRef = useRef(saveState);
-  saveStateRef.current = saveState;
-  // Pending save flag: if a save is in-flight when autoSave is called, queue one more run
-  const pendingSaveRef = useRef(false);
 
-  async function persistSnapshot(overrideJson?: string) {
-    if (!isHydrated) return;
-    if (saveState === "saving") {
-      // Another save in-flight; mark as pending so we retry after it finishes
-      pendingSaveRef.current = true;
-      return;
-    }
-    pendingSaveRef.current = false;
+  async function persistSnapshot() {
+    if (!isHydrated || saveState === "saving") return;
 
     try {
       setSaveState("saving");
       const response = await fetch("/api/biz-store", {
         method: "PUT",
         headers: { "Content-Type": "application/json" },
-        body: overrideJson ?? snapshotJson,
+        body: snapshotJson,
       });
       if (response.status === 409) {
         setSaveState("conflict");
         return;
       }
       if (!response.ok) throw new Error("save failed");
-      const putPayload = (await response.json()) as { ok: boolean; data: BizStoreSnapshot };
-      // After a successful PUT, immediately GET the latest from DB to ensure
-      // the UI reflects the true persisted state (desktop-app style refresh).
-      let refreshed: BizStoreSnapshot | null = null;
-      try {
-        const refreshResponse = await fetch("/api/biz-store", { cache: "no-store" });
-        if (refreshResponse.ok) {
-          const refreshPayload = (await refreshResponse.json()) as { ok: boolean; data: BizStoreSnapshot };
-          if (refreshPayload?.data) refreshed = buildBizSnapshot(refreshPayload.data);
-        }
-      } catch {}
-      const finalSnapshot = refreshed ?? buildBizSnapshot({ ...snapshot, revision: putPayload.data?.revision ?? snapshot.revision });
-      const finalJson = serializeBizSnapshot(finalSnapshot);
-      if (refreshed) {
-        setOrders(refreshed.orders);
-        setClients(refreshed.clients);
-        setSuppliers(refreshed.suppliers);
-        setExpenses(refreshed.expenses);
-        setCashEntries(refreshed.cashEntries);
-        setMaterials(refreshed.materials);
-        setPurchases(refreshed.purchases ?? []);
-        setEmployees(refreshed.employees);
-        setAttendances(refreshed.attendances);
-        setAppointments(refreshed.appointments ?? []);
-        setPayrolls(refreshed.payrolls);
-        setPrintArchives(refreshed.printArchives);
-        setSettings(refreshed.settings);
-      }
-      setStoreRevision(finalSnapshot.revision);
-      setSavedSnapshotJson(finalJson);
+      const payload = (await response.json()) as { ok: boolean; data: BizStoreSnapshot };
+      // Use API response as source of truth to avoid stale state overwrites
+      const nextSnapshot = buildBizSnapshot({ ...payload.data, revision: payload.data.revision ?? snapshot.revision });
+      const nextSnapshotJson = serializeBizSnapshot(nextSnapshot);
+      setStoreRevision(nextSnapshot.revision);
+      setSavedSnapshotJson(nextSnapshotJson);
       setLastSavedAt(new Date().toLocaleTimeString("zh-CN", { hour12: false }));
+      setClients(nextSnapshot.clients);
+      setSuppliers(nextSnapshot.suppliers);
+      setOrders(nextSnapshot.orders);
+      setExpenses(nextSnapshot.expenses);
+      setCashEntries(nextSnapshot.cashEntries);
+      setMaterials(nextSnapshot.materials);
+      setPurchases(nextSnapshot.purchases ?? []);
+      setEmployees(nextSnapshot.employees);
+      setAttendances(nextSnapshot.attendances);
+      setPayrolls(nextSnapshot.payrolls);
+      setPrintArchives(nextSnapshot.printArchives ?? []);
+      setSettings(nextSnapshot.settings);
       try {
-        localStorage.setItem("biz-store-backup", finalJson);
-        localStorage.setItem("biz-store-live-backup", finalJson);
+        localStorage.setItem("biz-store-backup", nextSnapshotJson);
+        localStorage.setItem("biz-store-live-backup", nextSnapshotJson);
       } catch {}
       setSaveState("saved");
-      // If another save was requested while this one was in-flight, run it now
-      if (pendingSaveRef.current) {
-        pendingSaveRef.current = false;
-        queueMicrotask(() => persistSnapshotRef.current(snapshotJsonRef.current));
-      }
     } catch {
       setSaveState("error");
     }
   }
 
   const autoSave = useCallback(() => {
-    // Mark pending immediately so poll doesn't overwrite state before save runs
-    pendingSaveRef.current = true;
-    // queueMicrotask runs after React flushes the current state batch,
-    // so snapshotJsonRef.current will contain the latest serialized state.
-    queueMicrotask(() => persistSnapshotRef.current(snapshotJsonRef.current));
+    setTimeout(() => persistSnapshotRef.current(), 0);
   }, []);
 
   const isSaving = saveState === "saving";
@@ -7748,20 +7423,6 @@ export default function DashboardBizPage() {
         title="业务管理"
         description="订单、财务、客户、物料、员工与设置的统一操作界面。"
       />
-      {isHydrated && (
-        <div className={`px-1 py-1 text-xs flex items-center gap-1 ${
-          saveState === 'saving' ? 'text-sky-600' :
-          saveState === 'saved' ? 'text-emerald-600' :
-          saveState === 'error' ? 'text-rose-600' :
-          isDirty ? 'text-amber-600' : 'text-slate-400'
-        }`}>
-          {saveState === 'saving' && '⏳ 正在保存...'}
-          {saveState === 'saved' && `✅ 已保存 ${lastSavedAt}`}
-          {saveState === 'error' && '❌ 保存失败，请刷新页面'}
-          {saveState === 'idle' && isDirty && '○ 有未保存改动...'}
-          {saveState === 'idle' && !isDirty && lastSavedAt && `✓ 数据已同步 ${lastSavedAt}`}
-        </div>
-      )}
 
       <div className="mt-3 flex flex-wrap items-center justify-between gap-3 rounded-[18px] border border-gray-200 bg-gray-50 px-4 py-3 shadow-sm">
         <div className="flex flex-wrap items-center gap-2">
@@ -7868,7 +7529,6 @@ export default function DashboardBizPage() {
               appointments={appointments}
               setAppointments={setAppointments}
               clients={clients}
-              onAutoSave={autoSave}
             />
           )}
           {section === "install" && (
@@ -7905,7 +7565,6 @@ export default function DashboardBizPage() {
               setExpenses={setExpenses}
               settings={settings}
               setSettings={setSettings}
-              storeRevision={storeRevision}
               onAutoSave={autoSave}
             />
           )}
@@ -7919,7 +7578,7 @@ export default function DashboardBizPage() {
   );
 }
 
-function AppointmentsSection({ appointments, setAppointments, clients, onAutoSave }: { appointments: MeasurementAppointmentRecord[]; setAppointments: (v: MeasurementAppointmentRecord[]) => void; clients: ContactRecord[]; onAutoSave?: () => void }) {
+function AppointmentsSection({ appointments, setAppointments, clients }: { appointments: MeasurementAppointmentRecord[]; setAppointments: (v: MeasurementAppointmentRecord[]) => void; clients: ContactRecord[] }) {
   const [search, setSearch] = useState("");
   const [page, setPage] = useState(1);
   const pageSize = 15;
@@ -7979,29 +7638,9 @@ function AppointmentsSection({ appointments, setAppointments, clients, onAutoSav
     ? filteredByDate.filter((a) => a.client_name.toLowerCase().includes(search.toLowerCase()) || (a.phone ?? "").includes(search))
     : filteredByDate;
 
-  const sorted = [...filtered].sort((a, b) => String(a.appointment_date).localeCompare(String(b.appointment_date)) || String(a.appointment_time ?? "").localeCompare(String(b.appointment_time ?? "")));
+  const sorted = [...filtered].sort((a, b) => String(b.appointment_date).localeCompare(String(a.appointment_date)));
   const pageCount = Math.max(1, Math.ceil(sorted.length / pageSize));
   const paged = sorted.slice((page - 1) * pageSize, page * pageSize);
-  // Group by date for calendar view
-  const groupedByDate = sorted.reduce<Record<string, typeof sorted>>((acc, item) => {
-    const d = item.appointment_date || "未知日期";
-    if (!acc[d]) acc[d] = [];
-    acc[d].push(item);
-    return acc;
-  }, {});
-  const dateGroups = Object.keys(groupedByDate).sort();
-  function formatCalendarDate(d: string) {
-    if (!d || d.length < 10) return d;
-    const dt = new Date(`${d}T00:00:00`);
-    const weekdays = ["周日", "周一", "周二", "周三", "周四", "周五", "周六"];
-    const m = dt.getMonth() + 1;
-    const day = dt.getDate();
-    const wd = weekdays[dt.getDay()];
-    const today = new Date().toISOString().slice(0, 10);
-    const tmr = new Date(Date.now() + 86400000).toISOString().slice(0, 10);
-    const tag = d === today ? " · 今天" : d === tmr ? " · 明天" : "";
-    return `${m}月${day}日 ${wd}${tag}`;
-  }
 
   function openNew() {
     setEditing(null);
@@ -8033,7 +7672,6 @@ function AppointmentsSection({ appointments, setAppointments, clients, onAutoSav
     }
     setShowModal(false);
     setEditing(null);
-    onAutoSave?.();
   }
 
   function copyToClipboard(text: string, onSuccess: () => void) {
@@ -8094,52 +7732,55 @@ function AppointmentsSection({ appointments, setAppointments, clients, onAutoSav
           <ActionBtn onClick={openNew} tone="primary">+ 新建预约</ActionBtn>
         </div>
       } />
-      {/* Calendar card view */}
-      {sorted.length === 0 ? (
-        <div className="py-12 text-center text-xs text-slate-400">{search ? "没有匹配的预约" : "还没有任何量尺寸预约"}</div>
-      ) : (
-        <div className="space-y-6">
-          {dateGroups.map((date) => (
-            <div key={date}>
-              <div className="mb-2 flex items-center gap-2">
-                <span className={`text-sm font-bold ${
-                  date === todayStr ? "text-sky-600" : date === tomorrowStr ? "text-emerald-600" : "text-slate-700"
-                }`}>{formatCalendarDate(date)}</span>
-                <span className="text-xs text-slate-400">{groupedByDate[date].length} 条预约</span>
-              </div>
-              <div className="grid grid-cols-1 gap-2 sm:grid-cols-2 lg:grid-cols-3">
-                {groupedByDate[date].map((item) => (
-                  <div key={item.id} className={`rounded-xl border p-3 shadow-sm ${
-                    date === todayStr ? "border-sky-200 bg-sky-50" :
-                    date === tomorrowStr ? "border-emerald-200 bg-emerald-50" :
-                    "border-gray-200 bg-white"
-                  }`}>
-                    <div className="flex items-start justify-between gap-2 mb-1">
-                      <div>
-                        <span className="font-semibold text-slate-800 text-sm">{item.client_name}</span>
-                        {item.appointment_time && <span className="ml-2 text-xs text-slate-500">{format12h(item.appointment_time)}</span>}
-                      </div>
-                      <div className="flex gap-1 shrink-0">
-                        <button onClick={() => handleCopy(item)} className="rounded border border-slate-200 px-1.5 py-0.5 text-[10px] text-slate-500 hover:border-slate-300">{copiedId === item.id ? "✓" : "复制"}</button>
-                        <button onClick={() => openEdit(item)} className="rounded border border-slate-200 px-1.5 py-0.5 text-[10px] text-slate-600 hover:border-slate-400">编辑</button>
-                        {confirmDelete === item.id ? (
-                          <>
-                            <button onClick={() => { setAppointments(appointments.filter((a) => a.id !== item.id)); setConfirmDelete(null); onAutoSave?.(); }} className="rounded border border-red-400 bg-red-50 px-1.5 py-0.5 text-[10px] font-semibold text-red-600">确认</button>
-                            <button onClick={() => setConfirmDelete(null)} className="rounded border border-slate-200 px-1.5 py-0.5 text-[10px] text-slate-600">取消</button>
-                          </>
-                        ) : (
-                          <button onClick={() => setConfirmDelete(item.id)} className="rounded border border-slate-200 px-1.5 py-0.5 text-[10px] text-slate-500 hover:border-rose-300 hover:text-rose-500">删除</button>
-                        )}
-                      </div>
-                    </div>
-                    {item.phone && <div className="text-xs text-slate-500">📞 {item.phone}</div>}
-                    {item.address && <div className="text-xs text-slate-500 truncate">📍 {item.address}</div>}
-                    {item.description && <div className="mt-1 text-xs text-slate-600 line-clamp-2">{item.description}</div>}
+      <div className="overflow-x-auto rounded-xl border border-gray-200 bg-gray-50">
+        <table className="w-full text-left text-xs">
+          <thead>
+            <tr className="border-b border-gray-200 bg-gray-50">
+              <th className="px-3 py-2 font-semibold text-slate-600">日期</th>
+              <th className="px-3 py-2 font-semibold text-slate-600">时间</th>
+              <th className="px-3 py-2 font-semibold text-slate-600">客户</th>
+              <th className="px-3 py-2 font-semibold text-slate-600">电话</th>
+              <th className="px-3 py-2 font-semibold text-slate-600">地址</th>
+              <th className="px-3 py-2 font-semibold text-slate-600">描述</th>
+              <th className="px-3 py-2 font-semibold text-slate-600">操作</th>
+            </tr>
+          </thead>
+          <tbody>
+            {paged.map((item) => (
+              <tr key={item.id} className="border-b border-gray-200 last:border-b-0">
+                <td className="px-3 py-2 text-slate-700">{item.appointment_date}</td>
+                <td className="px-3 py-2 text-slate-600">{item.appointment_time ?? "-"}</td>
+                <td className="px-3 py-2 font-medium text-slate-700">{item.client_name}</td>
+                <td className="px-3 py-2 text-slate-600">{item.phone ?? "-"}</td>
+                <td className="px-3 py-2 text-slate-600 max-w-[160px] truncate">{item.address ?? "-"}</td>
+                <td className="px-3 py-2 text-slate-600 max-w-[120px] truncate">{item.description ?? "-"}</td>
+                <td className="px-3 py-2">
+                  <div className="flex flex-wrap items-center gap-1">
+                    <button onClick={() => handleCopy(item)} className="rounded-md border border-gray-200 bg-gray-50 px-2 py-1 text-[11px] text-slate-600 hover:border-slate-300 transition-colors">{copiedId === item.id ? "已复制 ✓" : "复制"}</button>
+                    <button onClick={() => openEdit(item)} className="rounded-md border border-gray-200 bg-gray-50 px-2 py-1 text-[11px] font-semibold text-slate-600 hover:border-slate-400 transition-colors">编辑</button>
+                    {confirmDelete === item.id ? (
+                      <>
+                        <button onClick={() => { setAppointments(appointments.filter((a) => a.id !== item.id)); setConfirmDelete(null); }} className="rounded-md border border-red-400 bg-red-50 px-2 py-1 text-[11px] font-semibold text-red-700 hover:bg-red-100">确认</button>
+                        <button onClick={() => setConfirmDelete(null)} className="rounded-md border border-slate-200 px-2 py-1 text-[11px] text-slate-700 hover:border-slate-300">取消</button>
+                      </>
+                    ) : (
+                      <button onClick={() => setConfirmDelete(item.id)} className="rounded-md border border-gray-200 bg-gray-50 px-2 py-1 text-[11px] text-slate-700 hover:border-rose-300 hover:text-rose-600 transition-colors">删除</button>
+                    )}
                   </div>
-                ))}
-              </div>
-            </div>
-          ))}
+                </td>
+              </tr>
+            ))}
+          </tbody>
+        </table>
+        {!paged.length ? <div className="py-10 text-center text-xs text-slate-700">{search ? "没有匹配的预约" : "还没有任何量尺寸预约"}</div> : null}
+      </div>
+      {pageCount > 1 && (
+        <div className="flex items-center justify-between text-xs text-slate-700">
+          <span>第 {page} / {pageCount} 页,共 {sorted.length} 条</span>
+          <div className="flex gap-1">
+            <ActionBtn onClick={() => setPage((p) => Math.max(1, p - 1))} disabled={page <= 1}>上一页</ActionBtn>
+            <ActionBtn onClick={() => setPage((p) => Math.min(pageCount, p + 1))} disabled={page >= pageCount}>下一页</ActionBtn>
+          </div>
         </div>
       )}
       {showModal && (
@@ -8234,27 +7875,9 @@ function InstallSection({ orders, setOrders, clients, onAutoSave }: { orders: Bi
       )
     : filteredByDate;
 
-  const sorted = [...filtered].sort((a, b) => String(a.order_date || "").localeCompare(String(b.order_date || "")));
+  const sorted = [...filtered].sort((a, b) => String(b.order_date || "").localeCompare(String(a.order_date || "")));
   const totalPages = Math.max(1, Math.ceil(sorted.length / pageSize));
   const paginated = sorted.slice((page - 1) * pageSize, page * pageSize);
-  // Group by install date for calendar view
-  const installGroups = sorted.reduce<Record<string, typeof sorted>>((acc, o) => {
-    const d = o.order_date || "未知日期";
-    if (!acc[d]) acc[d] = [];
-    acc[d].push(o);
-    return acc;
-  }, {});
-  const installDateKeys = Object.keys(installGroups).sort();
-  function formatInstallDate(d: string) {
-    if (!d || d.length < 10) return d;
-    const dt = new Date(`${d}T00:00:00`);
-    const weekdays = ["周日", "周一", "周二", "周三", "周四", "周五", "周六"];
-    const m = dt.getMonth() + 1;
-    const day = dt.getDate();
-    const wd = weekdays[dt.getDay()];
-    const tag = d === todayStr ? " · 今天" : d === tomorrowStr ? " · 明天" : "";
-    return `${m}月${day}日 ${wd}${tag}`;
-  }
 
   function formatInstallItem(order: BizOrder) {
     const parts = [
@@ -8335,277 +7958,64 @@ function InstallSection({ orders, setOrders, clients, onAutoSave }: { orders: Bi
           <ActionBtn onClick={handleCopyAll}>{sorted.length > 0 ? `一键复制全部 (${sorted.length})` : "一键复制全部"}</ActionBtn>
         </div>
       } />
-      {/* Calendar card view */}
-      {sorted.length === 0 ? (
-        <div className="py-12 text-center text-xs text-slate-400">{search || dateFilter !== "all" ? "没有匹配的安装信息" : "暂无定制订单"}</div>
-      ) : (
-        <div className="space-y-6">
-          {installDateKeys.map((date) => (
-            <div key={date}>
-              <div className="mb-2 flex items-center gap-2">
-                <span className={`text-sm font-bold ${
-                  date === todayStr ? "text-sky-600" : date === tomorrowStr ? "text-emerald-600" : "text-slate-700"
-                }`}>{formatInstallDate(date)}</span>
-                <span className="text-xs text-slate-400">{installGroups[date].length} 单</span>
-              </div>
-              <div className="grid grid-cols-1 gap-2 sm:grid-cols-2 lg:grid-cols-3">
-                {installGroups[date].map((order) => (
-                  <div key={order.order_number} className={`rounded-xl border p-3 shadow-sm ${
-                    date === todayStr ? "border-sky-200 bg-sky-50" :
-                    date === tomorrowStr ? "border-emerald-200 bg-emerald-50" :
-                    "border-gray-200 bg-white"
-                  }`}>
-                    <div className="flex items-start justify-between gap-2 mb-1">
-                      <div>
-                        <span className="font-semibold text-slate-800 text-sm">{order.client_name || "-"}</span>
-                        <span className="ml-2 text-xs text-slate-400">#{order.order_number}</span>
-                      </div>
-                      <div className="flex gap-1 shrink-0">
-                        <button onClick={() => handleCopy(order)} className="rounded border border-slate-200 px-1.5 py-0.5 text-[10px] text-slate-500 hover:border-slate-300">{copiedId === order.order_number ? "✓" : "复制"}</button>
-                        {editingId === order.order_number ? (
-                          <>
-                            <button onClick={() => handleSaveInstall(order.order_number, editText)} className="rounded border border-green-400 bg-green-50 px-1.5 py-0.5 text-[10px] font-semibold text-green-600">保存</button>
-                            <button onClick={() => setEditingId(null)} className="rounded border border-slate-200 px-1.5 py-0.5 text-[10px] text-slate-600">取消</button>
-                          </>
-                        ) : (
-                          <button onClick={() => { setEditingId(order.order_number); setEditText(order.install_info || ""); }} className="rounded border border-slate-200 px-1.5 py-0.5 text-[10px] text-slate-600 hover:border-slate-400">编辑</button>
-                        )}
-                      </div>
-                    </div>
-                    {order.phone && <div className="text-xs text-slate-500">📞 {order.phone}</div>}
-                    {order.address && <div className="text-xs text-slate-500 truncate">📍 {order.address}</div>}
-                    {order.installers && <div className="text-xs text-slate-500">👷 {order.installers}</div>}
+      <div className="overflow-x-auto rounded-xl border border-gray-200 bg-gray-50">
+        <table className="w-full text-left text-xs">
+          <thead>
+            <tr className="border-b border-gray-200 bg-gray-50">
+              <th className="px-3 py-2 font-semibold text-slate-600">单号</th>
+              <th className="px-3 py-2 font-semibold text-slate-600">日期</th>
+              <th className="px-3 py-2 font-semibold text-slate-600">客户</th>
+              <th className="px-3 py-2 font-semibold text-slate-600">电话</th>
+              <th className="px-3 py-2 font-semibold text-slate-600">地址</th>
+              <th className="px-3 py-2 font-semibold text-slate-600">安装人员</th>
+              <th className="px-3 py-2 font-semibold text-slate-600">安装内容</th>
+              <th className="px-3 py-2 font-semibold text-slate-600">操作</th>
+            </tr>
+          </thead>
+          <tbody>
+            {paginated.map((order) => (
+              <tr key={order.order_number} className="border-b border-gray-200 last:border-b-0">
+                <td className="px-3 py-2 font-semibold text-slate-700">{order.order_number}</td>
+                <td className="px-3 py-2 text-slate-600">{order.order_date || "-"}</td>
+                <td className="px-3 py-2 font-medium text-slate-700">{order.client_name || "-"}</td>
+                <td className="px-3 py-2 text-slate-600">{order.phone || "-"}</td>
+                <td className="px-3 py-2 text-slate-600 max-w-[140px] truncate" title={order.address || ""}>{order.address || "-"}</td>
+                <td className="px-3 py-2 text-slate-600">{order.installers || "-"}</td>
+                <td className="px-3 py-2 text-slate-600 max-w-[200px]">
+                  {editingId === order.order_number ? (
+                    <textarea value={editText} onChange={(e) => setEditText(e.target.value)} rows={2} className="w-full rounded border border-blue-300 bg-white p-1 text-[11px] text-slate-700" />
+                  ) : (
+                    <span className="line-clamp-2 text-[11px]" title={order.install_info || ""}>{order.install_info || <span className="text-slate-400">-</span>}</span>
+                  )}
+                </td>
+                <td className="px-3 py-2">
+                  <div className="flex flex-wrap items-center gap-1">
+                    <button onClick={() => handleCopy(order)} className="rounded-md border border-gray-200 bg-gray-50 px-2 py-1 text-[11px] text-slate-600 hover:border-slate-300 transition-colors">{copiedId === order.order_number ? "已复制 ✓" : "复制"}</button>
                     {editingId === order.order_number ? (
-                      <textarea value={editText} onChange={(e) => setEditText(e.target.value)} rows={3} className="mt-1 w-full rounded border border-blue-300 bg-white p-1 text-[11px] text-slate-700" placeholder="安装内容" />
+                      <>
+                        <button onClick={() => handleSaveInstall(order.order_number, editText)} className="rounded-md border border-green-400 bg-green-50 px-2 py-1 text-[11px] font-semibold text-green-700 hover:bg-green-100">保存</button>
+                        <button onClick={() => setEditingId(null)} className="rounded-md border border-slate-200 px-2 py-1 text-[11px] text-slate-700 hover:border-slate-300">取消</button>
+                      </>
                     ) : (
-                      order.install_info ? <div className="mt-1 text-xs text-slate-700 line-clamp-3 whitespace-pre-wrap">{order.install_info}</div> : <div className="mt-1 text-xs text-slate-400">暂无安装内容</div>
+                      <button onClick={() => { setEditingId(order.order_number); setEditText(order.install_info || ""); }} className="rounded-md border border-gray-200 bg-gray-50 px-2 py-1 text-[11px] font-semibold text-slate-600 hover:border-slate-400 transition-colors">编辑</button>
                     )}
-                    <div className="mt-2 flex items-center justify-between text-[10px] text-slate-400">
-                      <span>总价 ${Number(order.total_after_tax || 0).toFixed(2)}</span>
-                      {Number(order.balance || 0) > 0 && <span className="text-rose-500">余款 ${Number(order.balance || 0).toFixed(2)}</span>}
-                    </div>
                   </div>
-                ))}
-              </div>
-            </div>
-          ))}
+                </td>
+              </tr>
+            ))}
+          </tbody>
+        </table>
+        {!paginated.length ? <div className="py-10 text-center text-xs text-slate-700">{search || dateFilter !== "all" ? "没有匹配的安装信息" : "暂无定制订单"}</div> : null}
+      </div>
+      {totalPages > 1 && (
+        <div className="flex items-center justify-between text-xs text-slate-700">
+          <span>第 {page} / {totalPages} 页,共 {sorted.length} 条</span>
+          <div className="flex gap-1">
+            <ActionBtn onClick={() => setPage((p) => Math.max(1, p - 1))} disabled={page <= 1}>上一页</ActionBtn>
+            <ActionBtn onClick={() => setPage((p) => Math.min(totalPages, p + 1))} disabled={page >= totalPages}>下一页</ActionBtn>
+          </div>
         </div>
       )}
     </>
   );
 }
-
-// ─── 类别合并组件 ──────────────────────────────────────────
-
-const MERGE_TABLE_COLUMNS: Record<string, { table: string; column: string; label: string }[]> = {
-  expense: [
-    { table: "a3s_expenses", column: "expense_type", label: "支出类别" },
-  ],
-  income: [
-    { table: "a3s_misc_income", column: "category", label: "收入类别（杂项）" },
-  ],
-  office: [
-    { table: "a3s_cash_entries", column: "category", label: "办公室类别" },
-  ],
-  material: [
-    { table: "a3s_materials", column: "category", label: "物料类别" },
-  ],
-  supplier: [
-    { table: "a3s_suppliers", column: "category", label: "供应商类别" },
-  ],
-};
-
-const MERGE_CATEGORIES = [
-  { key: "expense", label: "支出类别" },
-  { key: "income", label: "收入类别" },
-  { key: "office", label: "办公室类别" },
-  { key: "material", label: "物料类别" },
-  { key: "supplier", label: "供应商类别" },
-];
-
-function _catDefault(key: string): string {
-  const defaults: Record<string, string> = {
-    expense: "采购\n工资\n物流\n办公\n其他",
-    supplier: "布料\n五金\n玻璃\n物流\n其他",
-    material: "",
-    income: "杂项收入,收入尾款,加工,来料加工,供应商退料,运费收退",
-  };
-  return defaults[key] || "";
-}
-
-function getSettingsCategoryList(settings: BizSettings, key: string): string[] {
-  const fieldMap: Record<string, string | undefined> = {
-    expense: settings.expense_types,
-    income: settings.income_categories,
-    office: settings.expense_types,
-    material: settings.material_categories,
-    supplier: settings.supplier_categories,
-  };
-  const raw = fieldMap[key] || _catDefault(key);
-  return raw.split(/[\n,，]+/).map((s: string) => s.trim()).filter(Boolean);
-}
-
-function CategoryMerge({ settings, setSettings }: { settings: BizSettings; setSettings: (fn: React.SetStateAction<BizSettings>) => void }) {
-  const [catKey, setCatKey] = useState("expense");
-  const [fromValue, setFromValue] = useState("");
-  const [toValue, setToValue] = useState("");
-  const [status, setStatus] = useState<{ type: "idle" | "loading" | "done" | "error"; msg: string }>({ type: "idle", msg: "" });
-
-  const categoryList = getSettingsCategoryList(settings, catKey);
-  const targets = MERGE_TABLE_COLUMNS[catKey] || [];
-
-  async function handleMerge() {
-    if (!fromValue || !toValue) {
-      setStatus({ type: "error", msg: "请选择源类别和目标类别" });
-      return;
-    }
-    if (fromValue === toValue) {
-      setStatus({ type: "error", msg: "源类别和目标类别相同，无需合并" });
-      return;
-    }
-    setStatus({ type: "loading", msg: "正在合并..." });
-    let total = 0;
-    let errors: string[] = [];
-    const results: string[] = [];
-    for (const t of targets) {
-      try {
-        const res = await fetch("/api/biz-store/merge-categories", {
-          method: "POST",
-          headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({ table: t.table, column: t.column, fromValue, toValue }),
-        });
-        const json = await res.json();
-        if (json.ok) {
-          total += json.affected || 0;
-          results.push(`${t.label}: ${json.affected} 条`);
-        } else {
-          errors.push(`${t.label}: ${json.error}`);
-        }
-      } catch (e: any) {
-        errors.push(`${t.label}: ${e.message}`);
-      }
-    }
-
-    // Also update settings (remove fromValue from settings list)
-    const fieldMap: Record<string, keyof BizSettings> = {
-      expense: "expense_types",
-      income: "income_categories",
-      office: "expense_types",
-      material: "material_categories",
-      supplier: "supplier_categories",
-    };
-    const field = fieldMap[catKey];
-    const currentList = getSettingsCategoryList(settings, catKey);
-    const newList = currentList.filter((s: string) => s !== fromValue);
-    if (newList.length < currentList.length) {
-      setSettings((prev: BizSettings) => ({ ...prev, [field]: newList.join("\n") }));
-    }
-
-    if (errors.length > 0) {
-      setStatus({
-        type: "error",
-        msg: `合并完成（${total} 条），但有错误: ${errors.join("; ")}`,
-      });
-    } else if (total === 0) {
-      setStatus({
-        type: "done",
-        msg: `没有找到 "${fromValue}" 的记录，但已从设置列表中移除`,
-      });
-    } else {
-      setStatus({
-        type: "done",
-        msg: `合并完成！${results.join(" / ")}，已从设置列表中移除 "${fromValue}"`,
-      });
-    }
-
-    setFromValue("");
-    setToValue("");
-  }
-
-  const statusColor =
-    status.type === "error"
-      ? "border-rose-200 bg-rose-50 text-rose-700"
-      : status.type === "done"
-        ? "border-emerald-200 bg-emerald-50 text-emerald-700"
-        : status.type === "loading"
-          ? "border-sky-200 bg-sky-50 text-sky-700"
-          : "border-slate-200 bg-slate-50 text-slate-500";
-
-  // Remove duplicates for display
-  const uniqueList = Array.from(new Set(categoryList));
-
-  return (
-    <div className="rounded-xl border border-red-200 bg-red-50/50 p-4">
-      <SectionHeader eyebrow="Danger Zone" title="类别合并" />
-      <p className="mb-3 text-xs text-slate-500">
-        将选定的类别合并到另一个类别中。此操作会影响所有历史记录，不可撤销。合并后源类别将从设置列表中移除。
-      </p>
-
-      <div className="mb-3 flex flex-wrap items-center gap-2">
-        <span className="text-xs font-medium text-slate-600">类别类型:</span>
-        {MERGE_CATEGORIES.map((c) => (
-          <button
-            key={c.key}
-            onClick={() => { setCatKey(c.key); setFromValue(""); setToValue(""); setStatus({ type: "idle", msg: "" }); }}
-            className={`rounded-lg px-3 py-1.5 text-xs font-medium transition-colors ${
-              catKey === c.key
-                ? "bg-red-500 text-white"
-                : "border border-slate-200 bg-white text-slate-600 hover:border-red-300"
-            }`}
-          >
-            {c.label}
-          </button>
-        ))}
-      </div>
-
-      <div className="flex flex-wrap items-end gap-3">
-        <div className="flex-1 min-w-[150px]">
-          <label className="mb-1 block text-xs font-medium text-slate-600">源类别（将被替换）</label>
-          <select
-            value={fromValue}
-            onChange={(e) => setFromValue(e.target.value)}
-            className="w-full rounded-lg border border-slate-200 px-3 py-2 text-xs focus:border-red-400 focus:outline-none"
-          >
-            <option value="">-- 选择源类别 --</option>
-            {uniqueList.map((c) => (
-              <option key={c} value={c}>
-                {c}
-              </option>
-            ))}
-          </select>
-        </div>
-
-        <div className="flex-1 min-w-[150px]">
-          <label className="mb-1 block text-xs font-medium text-slate-600">目标类别（替换为）</label>
-          <select
-            value={toValue}
-            onChange={(e) => setToValue(e.target.value)}
-            className="w-full rounded-lg border border-slate-200 px-3 py-2 text-xs focus:border-red-400 focus:outline-none"
-          >
-            <option value="">-- 选择目标类别 --</option>
-            {uniqueList.filter((c) => c !== fromValue).map((c) => (
-              <option key={c} value={c}>
-                {c}
-              </option>
-            ))}
-          </select>
-        </div>
-
-        <button
-          onClick={handleMerge}
-          disabled={!fromValue || !toValue || status.type === "loading"}
-          className="flex items-center gap-1.5 rounded-lg border border-red-300 bg-red-500 px-4 py-2 text-xs font-semibold text-white hover:bg-red-600 disabled:cursor-not-allowed disabled:opacity-50 transition-colors"
-        >
-          {status.type === "loading" ? "合并中..." : "执行合并"}
-        </button>
-      </div>
-
-      {status.msg && (
-        <div className={`mt-3 rounded-lg border px-3 py-2 text-xs ${statusColor}`}>
-          {status.msg}
-        </div>
-      )}
-    </div>
-  );
-}
-

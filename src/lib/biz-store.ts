@@ -214,6 +214,7 @@ async function mysqlRead(): Promise<BizStoreSnapshot> {
 
 async function mysqlWrite(snapshot: BizStoreSnapshot): Promise<void> {
   const { executeStmt, queryRows } = await import("@/lib/db-mysql");
+  console.log(`[mysqlWrite] clients=${snapshot.clients.length} suppliers=${snapshot.suppliers.length} orders=${snapshot.orders.length}`);
 
   // Settings
   const s = snapshot.settings;
@@ -272,6 +273,7 @@ async function mysqlWrite(snapshot: BizStoreSnapshot): Promise<void> {
     const placeholders = rows.map(() => `(${cols.map(() => '?').join(',')})`).join(',');
     const updateSet = cols.filter(c => c !== keyCol).map(c => `${c}=VALUES(${c})`).join(',');
     const values = rows.flatMap(r => cols.map(c => r[c] ?? null));
+    console.log(`[batchUpsert] table=${table} rows=${rows.length} cols=${cols.join(',')}`);
     try {
       await executeStmt(
         `INSERT INTO ${table}(${cols.join(',')}) VALUES${placeholders} ON DUPLICATE KEY UPDATE ${updateSet}`,
@@ -303,7 +305,7 @@ async function mysqlWrite(snapshot: BizStoreSnapshot): Promise<void> {
     id: c.id, name: c.name || '', contact: c.contact || null,
     phone: c.phone || null, email: c.email || null, website: c.website || null,
     address: c.address || null,
-    created_at: c.created_at || null, note: c.note || null, remark: c.remark || null,
+    created_at: c.created_at || new Date().toISOString(), note: c.note || null, remark: c.remark || null,
     is_vip: c.is_vip ? 1 : 0, balance: c.balance ?? 0, wechat: c.wechat || null,
     roles: c.roles?.length ? JSON.stringify(c.roles) : null,
     master_id: c.master_id || null,
@@ -312,20 +314,26 @@ async function mysqlWrite(snapshot: BizStoreSnapshot): Promise<void> {
   })), 'id');
 
   // Suppliers: write only supplier-specific fields.
-  // Never overwrite shared fields (name, contact, balance, is_vip, wechat, roles).
+  // For records that also appear in clients (dual-role), skip supplier write
+  // so clients batchUpsert takes priority and shared fields aren't overwritten.
   if (snapshot.suppliers.length) {
-    await batchUpsert('a3s_clients', snapshot.suppliers.map(s => ({
-      id: s.id,
-      category: s.category || null,
-      contact_person: s.contact_person || null,
-      phone: s.phone || null,
-      email: s.email || null,
-      website: s.website || null,
-      address: s.address || null,
-      last_purchase_date: s.last_purchase_date || null,
-      remark: s.remark || null,
-      master_id: s.master_id || null,
-    })), 'id');
+    const clientIds = new Set(snapshot.clients.map(c => c.id));
+    const pureSuppliers = snapshot.suppliers.filter(s => !clientIds.has(s.id));
+    if (pureSuppliers.length) {
+      await batchUpsert('a3s_clients', pureSuppliers.map(s => ({
+        id: s.id,
+        category: s.category || null,
+        contact_person: s.contact_person || null,
+        phone: s.phone || null,
+        email: s.email || null,
+        website: s.website || null,
+        address: s.address || null,
+        last_purchase_date: s.last_purchase_date || null,
+        remark: s.remark || null,
+        roles: JSON.stringify(s.roles?.length ? s.roles : ['供应商']),
+        master_id: s.master_id || null,
+      })), 'id');
+    }
   }
 
   // Expenses

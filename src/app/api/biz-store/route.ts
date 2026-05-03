@@ -1,9 +1,20 @@
 import { NextResponse } from "next/server";
-import { createStoreRevision, readBizStore, writeBizStore, type BizStoreSnapshot } from "@/lib/biz-store";
+import { createStoreRevision, invalidateBizStoreCache, readBizStore, writeBizStore, type BizStoreSnapshot } from "@/lib/biz-store";
 
 export async function GET() {
   const data = await readBizStore();
   return NextResponse.json({ ok: true, data });
+}
+
+export async function DELETE(request: Request) {
+  const body = (await request.json()) as { action: "client" | "supplier"; id: string };
+  if (!body?.id) return NextResponse.json({ ok: false, error: "missing id" }, { status: 400 });
+  const { deleteBizClient, deleteBizSupplier } = await import("@/lib/biz-store");
+  if (body.action === "client") await deleteBizClient(body.id);
+  else if (body.action === "supplier") await deleteBizSupplier(body.id);
+  else return NextResponse.json({ ok: false, error: "unknown action" }, { status: 400 });
+  invalidateBizStoreCache();
+  return NextResponse.json({ ok: true, data: await readBizStore() });
 }
 
 export async function PUT(request: Request) {

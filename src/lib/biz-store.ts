@@ -218,17 +218,17 @@ async function mysqlWrite(snapshot: BizStoreSnapshot): Promise<void> {
   // Settings
   const s = snapshot.settings;
   await executeStmt(
-    `INSERT INTO a3s_settings(id,company_name,company_name_zh,address,company_address,
+    `INSERT INTO a3s_settings(id,company_name,company_name_zh,address,
       phone,phones,email,website,tax_number,default_tax_rate,default_currency,
       fiscal_start_month,bank_account,alipay,wechat_pay,other_payment,
       invoice_title,picking_title,zelle,invoice_note,quote_valid_days,
       quote_footer,logo_url,expense_types,supplier_categories,meal_allowance_amount,
       auto_attendance_timezone,auto_attendance_run_time,auto_attendance_default_minutes,
       auto_attendance_note,work_start,work_end,break_start,break_end,material_categories,income_categories)
-    VALUES(1,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)
+    VALUES(1,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)
     ON DUPLICATE KEY UPDATE
       company_name=VALUES(company_name),company_name_zh=VALUES(company_name_zh),
-      address=VALUES(address),company_address=VALUES(company_address),
+      address=VALUES(address),
       phone=VALUES(phone),phones=VALUES(phones),email=VALUES(email),
       website=VALUES(website),tax_number=VALUES(tax_number),
       default_tax_rate=VALUES(default_tax_rate),default_currency=VALUES(default_currency),
@@ -244,8 +244,10 @@ async function mysqlWrite(snapshot: BizStoreSnapshot): Promise<void> {
       auto_attendance_run_time=VALUES(auto_attendance_run_time),
       auto_attendance_default_minutes=VALUES(auto_attendance_default_minutes),
       auto_attendance_note=VALUES(auto_attendance_note),
+      work_start=VALUES(work_start),work_end=VALUES(work_end),
+      break_start=VALUES(break_start),break_end=VALUES(break_end),
       material_categories=VALUES(material_categories),income_categories=VALUES(income_categories)`,
-    [s.company_name, s.company_name_zh ?? null, s.address, s.company_address ?? null,
+    [s.company_name, s.company_name_zh ?? null, s.address,
       s.phone, s.phones ?? null, s.email, s.website, s.tax_number,
       s.default_tax_rate, s.default_currency, s.fiscal_start_month,
       s.bank_account, s.alipay, s.wechat_pay, s.other_payment,
@@ -309,8 +311,22 @@ async function mysqlWrite(snapshot: BizStoreSnapshot): Promise<void> {
     last_purchase_date: c.last_purchase_date || null,
   })), 'id');
 
-  // Suppliers are derived from a3s_clients rows via roles.
-  // Do not write them separately, otherwise shared client fields can be overwritten.
+  // Suppliers: write only supplier-specific fields.
+  // Never overwrite shared fields (name, contact, balance, is_vip, wechat, roles).
+  if (snapshot.suppliers.length) {
+    await batchUpsert('a3s_clients', snapshot.suppliers.map(s => ({
+      id: s.id,
+      category: s.category || null,
+      contact_person: s.contact_person || null,
+      phone: s.phone || null,
+      email: s.email || null,
+      website: s.website || null,
+      address: s.address || null,
+      last_purchase_date: s.last_purchase_date || null,
+      remark: s.remark || null,
+      master_id: s.master_id || null,
+    })), 'id');
+  }
 
   // Expenses
   await batchUpsert('a3s_expenses', snapshot.expenses.map(e => ({
